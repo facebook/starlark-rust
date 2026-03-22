@@ -1,20 +1,21 @@
 /*
  * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
- * This source code is licensed under both the MIT license found in the
- * LICENSE-MIT file in the root directory of this source tree and the Apache
+ * This source code is dual-licensed under either the MIT license found in the
+ * LICENSE-MIT file in the root directory of this source tree or the Apache
  * License, Version 2.0 found in the LICENSE-APACHE file in the root directory
- * of this source tree.
+ * of this source tree. You may select, at your option, one of the
+ * above-listed licenses.
  */
 
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::parse_macro_input;
-use syn::parse_quote;
 use syn::DeriveInput;
 use syn::Ident;
 use syn::Type;
 use syn::TypeParamBound;
+use syn::parse_macro_input;
+use syn::parse_quote;
 
 use crate::util::add_trait_bounds;
 use crate::util::extract_all_field_tys;
@@ -53,11 +54,11 @@ fn derive_dupe_explicit(
     let check_each_field_dupe = check_each_field_dupe(all_fields);
 
     let check_func_name = Ident::new(
-        &format!("__implicit_dupe_check_for_fields_of_{}", name),
+        &format!("__implicit_dupe_check_for_fields_of_{name}"),
         name.span(),
     );
 
-    let gen = quote! {
+    let generated = quote! {
         impl #impl_generics dupe::Dupe for #name #ty_generics #where_clause {
         }
 
@@ -68,7 +69,7 @@ fn derive_dupe_explicit(
         }
     };
 
-    gen.into()
+    generated.into()
 }
 
 fn check_each_field_dupe<'a>(tys: impl IntoIterator<Item = &'a Type>) -> TokenStream {

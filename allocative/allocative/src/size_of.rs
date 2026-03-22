@@ -1,17 +1,18 @@
 /*
  * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
- * This source code is licensed under both the MIT license found in the
- * LICENSE-MIT file in the root directory of this source tree and the Apache
+ * This source code is dual-licensed under either the MIT license found in the
+ * LICENSE-MIT file in the root directory of this source tree or the Apache
  * License, Version 2.0 found in the LICENSE-APACHE file in the root directory
- * of this source tree.
+ * of this source tree. You may select, at your option, one of the
+ * above-listed licenses.
  */
 
-use crate::visitor::NodeKind;
-use crate::visitor::VisitorImpl;
 use crate::Allocative;
 use crate::Key;
 use crate::Visitor;
+use crate::visitor::NodeKind;
+use crate::visitor::VisitorImpl;
 
 /// Size of data allocated in unique pointers in the struct.
 ///
@@ -123,6 +124,7 @@ mod tests {
     #[test]
     fn test_box() {
         #[derive(Allocative)]
+        #[expect(dead_code)]
         struct Boxed {
             data: Box<u32>,
         }
@@ -140,6 +142,7 @@ mod tests {
     #[test]
     fn test_box_slice() {
         #[derive(Allocative)]
+        #[expect(dead_code)]
         struct Boxed {
             data: Box<[u32]>,
         }
@@ -162,12 +165,14 @@ mod tests {
     #[test]
     fn test_struct_in_box() {
         #[derive(Allocative)]
+        #[expect(dead_code)]
         struct Data {
             a: u8,
             b: Box<u32>,
         }
 
         #[derive(Allocative)]
+        #[expect(dead_code)]
         struct Boxed {
             data: Box<Data>,
         }

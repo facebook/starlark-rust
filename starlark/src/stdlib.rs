@@ -160,9 +160,9 @@ mod tests {
     use allocative::Allocative;
     use derive_more::Display;
     use dupe::Dupe;
+    use starlark_derive::NoSerialize;
     use starlark_derive::starlark_module;
     use starlark_derive::starlark_value;
-    use starlark_derive::NoSerialize;
 
     use crate as starlark;
     use crate::any::ProvidesStaticType;
@@ -172,11 +172,11 @@ mod tests {
     use crate::environment::MethodsBuilder;
     use crate::environment::MethodsStatic;
     use crate::starlark_simple_value;
-    use crate::values::none::NoneType;
     use crate::values::StarlarkValue;
     use crate::values::UnpackValue;
     use crate::values::Value;
     use crate::values::ValueLike;
+    use crate::values::none::NoneType;
 
     #[test]
     fn test_no_arg() {
@@ -211,7 +211,7 @@ mod tests {
         impl<'v> StarlarkValue<'v> for Bool2 {
             fn get_methods() -> Option<&'static Methods> {
                 static RES: MethodsStatic = MethodsStatic::new();
-                RES.methods(methods)
+                RES.methods_for_type::<Self::Canonical>(methods)
             }
 
             fn equals(&self, other: Value<'v>) -> crate::Result<bool> {

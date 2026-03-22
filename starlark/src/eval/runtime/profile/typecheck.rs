@@ -25,12 +25,12 @@ use starlark_map::Hashed;
 use starlark_map::StarlarkHasherBuilder;
 
 use crate::collections::SmallMap;
+use crate::eval::ProfileMode;
 use crate::eval::runtime::profile::csv::CsvWriter;
 use crate::eval::runtime::profile::data::ProfileData;
 use crate::eval::runtime::profile::data::ProfileDataImpl;
 use crate::eval::runtime::profile::profiler_type::ProfilerType;
 use crate::eval::runtime::small_duration::SmallDuration;
-use crate::eval::ProfileMode;
 use crate::util::arc_str::ArcStr;
 use crate::values::FrozenStringValue;
 
@@ -107,7 +107,7 @@ impl TypecheckProfile {
         *self.by_function.entry(function.get_hashed()).or_default() += time;
     }
 
-    pub(crate) fn gen(&self) -> crate::Result<ProfileData> {
+    pub(crate) fn r#gen(&self) -> crate::Result<ProfileData> {
         if !self.enabled {
             return Err(crate::Error::new_other(TypecheckProfileError::NotEnabled));
         }
@@ -129,21 +129,21 @@ mod tests {
 
     use crate::environment::Globals;
     use crate::environment::Module;
+    use crate::eval::Evaluator;
     use crate::eval::runtime::profile::mode::ProfileMode;
     use crate::eval::runtime::profile::profiler_type::ProfilerType;
     use crate::eval::runtime::profile::typecheck::TypecheckProfileData;
     use crate::eval::runtime::profile::typecheck::TypecheckProfilerType;
     use crate::eval::runtime::small_duration::SmallDuration;
-    use crate::eval::Evaluator;
     use crate::syntax::AstModule;
     use crate::syntax::Dialect;
     use crate::util::arc_str::ArcStr;
 
     #[test]
     fn test_typecheck_profile() -> crate::Result<()> {
-        let module = Module::new();
-        let mut eval = Evaluator::new(&module);
-        let program = r#"
+        Module::with_temp_heap(|module| {
+            let mut eval = Evaluator::new(&module);
+            let program = r#"
 def f(s: str):
     return int(s)
 
@@ -153,22 +153,23 @@ def g():
 
 g()
 "#;
-        let program = AstModule::parse(
-            "test.star",
-            program.to_owned(),
-            &Dialect::AllOptionsInternal,
-        )?;
-        eval.enable_profile(&ProfileMode::Typecheck)?;
-        eval.eval_module(program, &Globals::extended_internal())?;
+            let program = AstModule::parse(
+                "test.star",
+                program.to_owned(),
+                &Dialect::AllOptionsInternal,
+            )?;
+            eval.enable_profile(&ProfileMode::Typecheck)?;
+            eval.eval_module(program, &Globals::extended_internal())?;
 
-        let csv = eval.typecheck_profile.gen()?.gen()?;
-        let lines: Vec<&str> = csv.lines().collect();
-        assert_eq!("Function,Time (s)", lines[0]);
-        assert!(lines[1].starts_with("\"TOTAL\","), "{:?}", lines[1]);
-        assert!(lines[2].starts_with("\"f\","), "{:?}", lines[2]);
-        assert_eq!(3, lines.len());
+            let csv = eval.typecheck_profile.r#gen()?.gen_csv()?;
+            let lines: Vec<&str> = csv.lines().collect();
+            assert_eq!("Function,Time (s)", lines[0]);
+            assert!(lines[1].starts_with("\"TOTAL\","), "{:?}", lines[1]);
+            assert!(lines[2].starts_with("\"f\","), "{:?}", lines[2]);
+            assert_eq!(3, lines.len());
 
-        Ok(())
+            Ok(())
+        })
     }
 
     #[test]

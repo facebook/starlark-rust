@@ -1,18 +1,17 @@
 /*
  * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
- * This source code is licensed under both the MIT license found in the
- * LICENSE-MIT file in the root directory of this source tree and the Apache
+ * This source code is dual-licensed under either the MIT license found in the
+ * LICENSE-MIT file in the root directory of this source tree or the Apache
  * License, Version 2.0 found in the LICENSE-APACHE file in the root directory
- * of this source tree.
+ * of this source tree. You may select, at your option, one of the
+ * above-listed licenses.
  */
 
 use std::iter;
 
 use proc_macro2::TokenStream;
 use quote::quote;
-use quote::quote_spanned;
-use syn::spanned::Spanned;
 use syn::Data;
 use syn::DataEnum;
 use syn::DataStruct;
@@ -24,6 +23,7 @@ use syn::Index;
 use syn::Type;
 use syn::TypeParamBound;
 use syn::Variant;
+use syn::spanned::Spanned;
 
 // Add a bound to every type parameter.
 pub(crate) fn add_trait_bounds(mut generics: Generics, bound: &TypeParamBound) -> Generics {
@@ -41,7 +41,7 @@ fn duplicate_struct(data: &DataStruct, duplicate: &TokenStream) -> TokenStream {
             // Self {x: clone(self.x), y: clone(self.y)}
             let xs = fields.named.iter().map(|f| {
                 let name = &f.ident;
-                quote_spanned! {f.span() =>
+                quote! {
                     #name: #duplicate(&self.#name)
                 }
             });
@@ -51,9 +51,9 @@ fn duplicate_struct(data: &DataStruct, duplicate: &TokenStream) -> TokenStream {
         }
         Fields::Unnamed(ref fields) => {
             // Self(clone(self.0), clone(self.1))
-            let xs = fields.unnamed.iter().enumerate().map(|(i, f)| {
+            let xs = fields.unnamed.iter().enumerate().map(|(i, _)| {
                 let index = Index::from(i);
-                quote_spanned! {f.span()=>
+                quote! {
                     #duplicate(&self.#index)
                 }
             });
@@ -79,10 +79,10 @@ fn duplicate_variant(data: &Variant, duplicate: &TokenStream) -> TokenStream {
                 .map(|f| {
                     let name = &f.ident;
                     (
-                        quote_spanned! {f.span() =>
+                        quote! {
                             #name
                         },
-                        quote_spanned! {f.span() =>
+                        quote! {
                             #name: #duplicate(#name)
                         },
                     )
@@ -99,11 +99,8 @@ fn duplicate_variant(data: &Variant, duplicate: &TokenStream) -> TokenStream {
                 .iter()
                 .enumerate()
                 .map(|(i, f)| {
-                    let var = Ident::new(&format!("v{}", i), f.span());
-                    (
-                        quote_spanned! {f.span() => #var},
-                        quote_spanned! {f.span() => #duplicate(#var)},
-                    )
+                    let var = Ident::new(&format!("v{i}"), f.span());
+                    (quote! {#var}, quote! {#duplicate(#var)})
                 })
                 .unzip();
             quote! {

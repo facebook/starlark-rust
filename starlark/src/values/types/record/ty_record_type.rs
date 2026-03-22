@@ -17,20 +17,22 @@
 
 use allocative::Allocative;
 
+use crate::eval::ParametersSpec;
 use crate::typing::Ty;
-use crate::values::types::type_instance_id::TypeInstanceId;
+use crate::values::FrozenValue;
 
 #[derive(Allocative, Debug)]
 #[doc(hidden)]
 pub struct TyRecordData {
     /// Name of the record type.
     pub(crate) name: String,
-    /// Globally unique id of the record type.
-    pub(crate) id: TypeInstanceId,
     /// Type of record instance.
     pub(crate) ty_record: Ty,
     /// Type of record type.
     pub(crate) ty_record_type: Ty,
+    /// Creating these on every invoke is pretty expensive (profiling shows)
+    /// so compute them in advance and cache.
+    pub(crate) parameter_spec: ParametersSpec<FrozenValue>,
 }
 
 #[cfg(test)]

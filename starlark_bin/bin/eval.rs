@@ -25,6 +25,7 @@ use std::path::PathBuf;
 
 use itertools::Either;
 use lsp_types::Url;
+use starlark::StarlarkResultExt;
 use starlark::analysis::AstModuleLint;
 use starlark::docs::DocModule;
 use starlark::environment::FrozenModule;
@@ -35,7 +36,6 @@ use starlark::eval::Evaluator;
 use starlark::eval::FileLoader;
 use starlark::syntax::AstModule;
 use starlark::syntax::Dialect;
-use starlark::StarlarkResultExt;
 use starlark_lsp::error::eval_message_to_lsp_diagnostic;
 use starlark_lsp::server::LspContext;
 use starlark_lsp::server::LspEvalResult;
@@ -61,11 +61,11 @@ enum ContextError {
 }
 
 #[derive(Debug)]
-pub(crate) struct Context {
+pub(crate) struct Context<'v> {
     pub(crate) mode: ContextMode,
     pub(crate) print_non_none: bool,
     pub(crate) prelude: Vec<FrozenModule>,
-    pub(crate) module: Option<Module>,
+    pub(crate) module: Option<Module<'v>>,
     pub(crate) dialect: Dialect,
     pub(crate) globals: Globals,
     pub(crate) builtin_docs: HashMap<LspUrl, String>,
@@ -73,7 +73,7 @@ pub(crate) struct Context {
     pub(crate) suppression_rules: Vec<GlobLintSuppression>,
 }
 
-impl FileLoader for Context {
+impl<'v> FileLoader for Context<'v> {
     fn load(&self, path: &str) -> starlark::Result<FrozenModule> {
         self.load_path(Path::new(path))
     }
@@ -100,12 +100,12 @@ enum ResolveLoadError {
     WrongScheme(String, LspUrl),
 }
 
-impl Context {
+impl<'v> Context<'v> {
     pub(crate) fn new(
         mode: ContextMode,
         print_non_none: bool,
         prelude: &[PathBuf],
-        module: bool,
+        module: Option<Module<'v>>,
         dialect: Dialect,
         globals: Globals,
         suppression_rules: Vec<GlobLintSuppression>,
@@ -123,7 +123,7 @@ impl Context {
             mode,
             print_non_none,
             prelude: Vec::new(),
-            module: None,
+            module,
             dialect,
             globals,
             builtin_docs,
@@ -137,34 +137,32 @@ impl Context {
             .collect::<starlark::Result<_>>()
             .into_anyhow_result()?;
 
-        ctx.module = if module {
-            Some(Self::new_module(&ctx.prelude))
-        } else {
-            None
-        };
+        if let Some(module) = ctx.module.as_ref() {
+            for p in &ctx.prelude {
+                module.import_public_symbols(p);
+            }
+        }
 
         Ok(ctx)
     }
 
     fn load_path(&self, path: &Path) -> starlark::Result<FrozenModule> {
-        let env = Module::new();
-        let mut eval = Evaluator::new(&env);
-        eval.set_loader(self);
-        let module = AstModule::parse_file(path, &self.dialect).into_anyhow_result()?;
-        eval.eval_module(module, &self.globals)?;
-        drop(eval);
-        Ok(env.freeze()?)
+        Module::with_temp_heap(|env| {
+            {
+                let mut eval = Evaluator::new(&env);
+                eval.set_loader(self);
+                let module = AstModule::parse_file(path, &self.dialect).into_anyhow_result()?;
+                eval.eval_module(module, &self.globals)?;
+            }
+            Ok::<_, starlark::Error>(env.freeze()?)
+        })
     }
 
-    fn new_module(prelude: &[FrozenModule]) -> Module {
-        let module = Module::new();
-        for p in prelude {
-            module.import_public_symbols(p);
-        }
-        module
-    }
-
-    fn go(&self, file: &str, ast: AstModule) -> EvalResult<impl Iterator<Item = EvalMessage>> {
+    fn go(
+        &self,
+        file: &str,
+        ast: AstModule,
+    ) -> EvalResult<impl Iterator<Item = EvalMessage> + use<>> {
         let mut warnings = Either::Left(iter::empty());
         let mut errors = Either::Left(iter::empty());
         let final_ast = match self.mode {
@@ -184,10 +182,10 @@ impl Context {
     }
 
     // Convert a result over iterator of EvalMessage, into an iterator of EvalMessage
-    fn err(
+    fn err<T: Iterator<Item = EvalMessage>>(
         file: &str,
-        result: starlark::Result<EvalResult<impl Iterator<Item = EvalMessage>>>,
-    ) -> EvalResult<impl Iterator<Item = EvalMessage>> {
+        result: starlark::Result<EvalResult<T>>,
+    ) -> EvalResult<impl Iterator<Item = EvalMessage> + use<T>> {
         match result {
             Err(e) => EvalResult {
                 messages: Either::Left(iter::once(EvalMessage::from_error(Path::new(file), &e))),
@@ -203,7 +201,7 @@ impl Context {
     pub(crate) fn expression(
         &self,
         content: String,
-    ) -> EvalResult<impl Iterator<Item = EvalMessage>> {
+    ) -> EvalResult<impl Iterator<Item = EvalMessage> + use<>> {
         let file = "expression";
         Self::err(
             file,
@@ -213,7 +211,10 @@ impl Context {
         )
     }
 
-    pub(crate) fn file(&self, file: &Path) -> EvalResult<impl Iterator<Item = EvalMessage>> {
+    pub(crate) fn file(
+        &self,
+        file: &Path,
+    ) -> EvalResult<impl Iterator<Item = EvalMessage> + use<>> {
         let filename = &file.to_string_lossy();
         Self::err(
             filename,
@@ -227,7 +228,7 @@ impl Context {
         &self,
         filename: &str,
         content: String,
-    ) -> EvalResult<impl Iterator<Item = EvalMessage>> {
+    ) -> EvalResult<impl Iterator<Item = EvalMessage> + use<>> {
         Self::err(
             filename,
             AstModule::parse(filename, content, &self.dialect)
@@ -236,15 +237,28 @@ impl Context {
         )
     }
 
-    fn run(&self, file: &str, ast: AstModule) -> EvalResult<impl Iterator<Item = EvalMessage>> {
-        let new_module;
-        let module = match self.module.as_ref() {
-            Some(module) => module,
-            None => {
-                new_module = Self::new_module(&self.prelude);
-                &new_module
-            }
-        };
+    fn run(
+        &self,
+        file: &str,
+        ast: AstModule,
+    ) -> EvalResult<impl Iterator<Item = EvalMessage> + use<>> {
+        match self.module.as_ref() {
+            Some(module) => self.run_with_module(file, ast, module),
+            None => Module::with_temp_heap(|module| {
+                for p in &self.prelude {
+                    module.import_public_symbols(p);
+                }
+                self.run_with_module(file, ast, &module)
+            }),
+        }
+    }
+
+    fn run_with_module(
+        &self,
+        file: &str,
+        ast: AstModule,
+        module: &Module,
+    ) -> EvalResult<impl Iterator<Item = EvalMessage> + use<>> {
         let mut eval = Evaluator::new(module);
         eval.set_loader(self);
         eval.enable_terminal_breakpoint_console();
@@ -253,7 +267,7 @@ impl Context {
             eval.eval_module(ast, &self.globals)
                 .map(|v| {
                     if self.print_non_none && !v.is_none() {
-                        println!("{}", v);
+                        println!("{v}");
                     }
                     EvalResult {
                         messages: iter::empty(),
@@ -270,7 +284,7 @@ impl Context {
             .any(|rule| rule.is_suppressed(file, issue))
     }
 
-    fn check(&self, file: &str, module: &AstModule) -> impl Iterator<Item = EvalMessage> {
+    fn check(&self, file: &str, module: &AstModule) -> impl Iterator<Item = EvalMessage> + use<> {
         let globals = if self.prelude.is_empty() {
             None
         } else {
@@ -294,7 +308,7 @@ impl Context {
     }
 }
 
-impl LspContext for Context {
+impl<'v> LspContext for Context<'v> {
     fn parse_file_with_contents(&self, uri: &LspUrl, content: String) -> LspEvalResult {
         match uri {
             LspUrl::File(uri) => {
@@ -314,7 +328,7 @@ impl LspContext for Context {
         path: &str,
         current_file: &LspUrl,
         _workspace_root: Option<&Path>,
-    ) -> anyhow::Result<LspUrl> {
+    ) -> Result<LspUrl, String> {
         let path = PathBuf::from(path);
         match current_file {
             LspUrl::File(current_file_path) => {
@@ -322,12 +336,16 @@ impl LspContext for Context {
                 let absolute_path = match (current_file_dir, path.is_absolute()) {
                     (_, true) => Ok(path),
                     (Some(current_file_dir), false) => Ok(current_file_dir.join(&path)),
-                    (None, false) => Err(ResolveLoadError::MissingCurrentFilePath(path)),
+                    (None, false) => {
+                        Err(ResolveLoadError::MissingCurrentFilePath(path).to_string())
+                    }
                 }?;
-                Ok(Url::from_file_path(absolute_path).unwrap().try_into()?)
+                LspUrl::try_from(Url::from_file_path(absolute_path).unwrap())
+                    .map_err(|e| e.to_string())
             }
             _ => Err(
-                ResolveLoadError::WrongScheme("file://".to_owned(), current_file.clone()).into(),
+                ResolveLoadError::WrongScheme("file://".to_owned(), current_file.clone())
+                    .to_string(),
             ),
         }
     }
@@ -337,7 +355,7 @@ impl LspContext for Context {
         literal: &str,
         current_file: &LspUrl,
         workspace_root: Option<&Path>,
-    ) -> anyhow::Result<Option<StringLiteralResult>> {
+    ) -> Result<Option<StringLiteralResult>, String> {
         self.resolve_load(literal, current_file, workspace_root)
             .map(|url| {
                 Some(StringLiteralResult {
@@ -347,18 +365,18 @@ impl LspContext for Context {
             })
     }
 
-    fn get_load_contents(&self, uri: &LspUrl) -> anyhow::Result<Option<String>> {
+    fn get_load_contents(&self, uri: &LspUrl) -> Result<Option<String>, String> {
         match uri {
             LspUrl::File(path) => match path.is_absolute() {
                 true => match fs::read_to_string(path) {
                     Ok(contents) => Ok(Some(contents)),
                     Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
-                    Err(e) => Err(e.into()),
+                    Err(e) => Err(e.to_string()),
                 },
-                false => Err(ContextError::NotAbsolute(uri.clone()).into()),
+                false => Err(ContextError::NotAbsolute(uri.clone()).to_string()),
             },
             LspUrl::Starlark(_) => Ok(self.builtin_docs.get(uri).cloned()),
-            _ => Err(ContextError::WrongScheme("file://".to_owned(), uri.clone()).into()),
+            _ => Err(ContextError::WrongScheme("file://".to_owned(), uri.clone()).to_string()),
         }
     }
 
@@ -366,7 +384,7 @@ impl LspContext for Context {
         &self,
         _current_file: &LspUrl,
         symbol: &str,
-    ) -> anyhow::Result<Option<LspUrl>> {
+    ) -> Result<Option<LspUrl>, String> {
         Ok(self.builtin_symbols.get(symbol).cloned())
     }
 
@@ -375,8 +393,8 @@ impl LspContext for Context {
         _target: &LspUrl,
         _current_file: &LspUrl,
         _workspace_root: Option<&Path>,
-    ) -> anyhow::Result<String> {
-        Err(anyhow::anyhow!("Not yet implemented, render_as_load"))
+    ) -> Result<String, String> {
+        Err("Not yet implemented, render_as_load".to_owned())
     }
 
     fn get_environment(&self, _uri: &LspUrl) -> DocModule {

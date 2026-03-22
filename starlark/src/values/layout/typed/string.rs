@@ -30,8 +30,6 @@ use crate::coerce::Coerce;
 use crate::coerce::CoerceKey;
 use crate::collections::Hashed;
 use crate::sealed::Sealed;
-use crate::values::layout::static_string::VALUE_EMPTY_STRING;
-use crate::values::string::str_type::StarlarkStr;
 use crate::values::Freeze;
 use crate::values::FreezeResult;
 use crate::values::Freezer;
@@ -40,6 +38,8 @@ use crate::values::FrozenValueTyped;
 use crate::values::Trace;
 use crate::values::Value;
 use crate::values::ValueTyped;
+use crate::values::layout::static_string::VALUE_EMPTY_STRING;
+use crate::values::string::str_type::StarlarkStr;
 
 /// Convenient type alias.
 ///
@@ -147,11 +147,6 @@ impl<'v> StringValue<'v> {
         self.to_value()
             .unpack_frozen()
             .map(|s| unsafe { FrozenStringValue::new_unchecked(s) })
-    }
-
-    #[inline]
-    pub(crate) unsafe fn cast_lifetime<'w>(self) -> StringValue<'w> {
-        StringValue::new_unchecked(self.to_value().cast_lifetime())
     }
 }
 
@@ -262,12 +257,13 @@ mod tests {
     fn test_string_hashes() {
         let expected = Hashed::new("xyz").hash();
 
-        let heap = Heap::new();
-        let s: StringValue = heap.alloc_str("xyz");
-        assert_eq!(expected, Hashed::new(s).hash());
-        assert_eq!(s.get_hashed().hash(), s.hashed().unwrap().hash());
-        let v: Value = heap.alloc_str("xyz").to_value();
-        assert_eq!(expected, v.get_hashed().unwrap().hash());
+        Heap::temp(|heap| {
+            let s: StringValue = heap.alloc_str("xyz");
+            assert_eq!(expected, Hashed::new(s).hash());
+            assert_eq!(s.get_hashed().hash(), s.hashed().unwrap().hash());
+            let v: Value = heap.alloc_str("xyz").to_value();
+            assert_eq!(expected, v.get_hashed().unwrap().hash());
+        });
 
         let heap = FrozenHeap::new();
         let fs: FrozenStringValue = heap.alloc_str("xyz");

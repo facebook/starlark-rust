@@ -78,7 +78,7 @@ impl Symbol {
         let small_hash = x.hash();
         let hash = small_hash.promote();
         let len = x.key().len();
-        let len_words = (len + mem::size_of::<usize>() - 1) / mem::size_of::<usize>();
+        let len_words = len.div_ceil(mem::size_of::<usize>());
         let mut payload = vec![0; len_words]; // 0 pad it at the end
         unsafe {
             copy_nonoverlapping(x.key().as_ptr(), payload.as_mut_ptr() as *mut u8, len);
@@ -105,7 +105,7 @@ impl Symbol {
     }
 
     #[inline]
-    pub(crate) fn as_aligned_padded_str(&self) -> AlignedPaddedStr {
+    pub(crate) fn as_aligned_padded_str(&self) -> AlignedPaddedStr<'_> {
         unsafe { AlignedPaddedStr::new(self.len as usize, self.payload.as_ptr()) }
     }
 

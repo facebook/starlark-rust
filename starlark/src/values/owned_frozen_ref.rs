@@ -30,6 +30,7 @@ use dupe::Dupe_;
 use crate::values::FrozenHeap;
 use crate::values::FrozenHeapRef;
 use crate::values::FrozenRef;
+use crate::values::Heap;
 
 /// A reference to a value stored in a frozen heap with a reference to the heap.
 #[derive(Copy_, Clone_, Dupe_)]
@@ -76,6 +77,12 @@ impl<'f, T: ?Sized> OwnedRefFrozenRef<'f, T> {
         unsafe { mem::transmute::<&'f T, &'v T>(self.value.as_ref()) }
     }
 
+    /// Like `add_heap_ref`, but for an unfrozen heap.
+    pub fn add_unfrozen_heap_ref<'v>(self, heap: Heap<'v>) -> &'v T {
+        heap.add_reference(self.owner);
+        unsafe { mem::transmute::<&'f T, &'v T>(self.value.as_ref()) }
+    }
+
     /// Convert heap pointer to an owned one.
     pub fn to_owned(self) -> OwnedFrozenRef<T> {
         OwnedFrozenRef {
@@ -100,12 +107,8 @@ impl<'f, T: ?Sized> OwnedRefFrozenRef<'f, T> {
     where
         F: FnOnce(&'f T) -> &'f U,
     {
-        match self.try_map_result(|x| Ok(f(x))) {
+        match self.try_map_result(|x| Ok::<_, Infallible>(f(x))) {
             Ok(x) => x,
-            Err(e) => {
-                let e: Infallible = e;
-                match e {}
-            }
         }
     }
 
@@ -114,10 +117,7 @@ impl<'f, T: ?Sized> OwnedRefFrozenRef<'f, T> {
     where
         F: FnOnce(&'f T) -> Option<&'f U>,
     {
-        match self.try_map_result(|x| f(x).ok_or(())) {
-            Ok(x) => Some(x),
-            Err(()) => None,
-        }
+        self.try_map_result(|x| f(x).ok_or(())).ok()
     }
 }
 

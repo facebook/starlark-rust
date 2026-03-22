@@ -17,13 +17,13 @@
 
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
-use std::sync::mpsc::channel;
-use std::sync::mpsc::Receiver;
-use std::sync::mpsc::Sender;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
+use std::sync::mpsc::Receiver;
+use std::sync::mpsc::Sender;
+use std::sync::mpsc::channel;
 
 use debugserver_types::*;
 use dupe::Dupe;
@@ -37,8 +37,6 @@ use super::VariablePath;
 use crate::codemap::FileSpan;
 use crate::codemap::FileSpanRef;
 use crate::codemap::Span;
-use crate::debug::adapter::Breakpoint;
-use crate::debug::adapter::ResolvedBreakpoints;
 use crate::debug::DapAdapter;
 use crate::debug::DapAdapterClient;
 use crate::debug::DapAdapterEvalHook;
@@ -46,8 +44,11 @@ use crate::debug::ScopesInfo;
 use crate::debug::StepKind;
 use crate::debug::Variable;
 use crate::debug::VariablesInfo;
+use crate::debug::adapter::Breakpoint;
+use crate::debug::adapter::ResolvedBreakpoints;
 use crate::eval::BeforeStmtFuncDyn;
 use crate::eval::Evaluator;
+use crate::eval::runtime::before_stmt::BeforeStmtFunc;
 use crate::syntax::AstModule;
 use crate::syntax::Dialect;
 use crate::values::Value;
@@ -107,12 +108,20 @@ fn evaluate_expr<'v>(
     res
 }
 
-impl<'a, 'e: 'a> BeforeStmtFuncDyn<'a, 'e> for DapAdapterEvalHookImpl {
+impl<'e> BeforeStmtFuncDyn<'e> for DapAdapterEvalHookImpl {
     fn call<'v>(
         &mut self,
         span_loc: FileSpanRef,
-        eval: &mut Evaluator<'v, 'a, 'e>,
+        continued: bool,
+        eval: &mut Evaluator<'v, '_, 'e>,
     ) -> crate::Result<()> {
+        // The debug adapter should only break on the "initial" instruction that
+        // makes up any given statement. "Continued" instructions are part of
+        // the still-executing/previous statement, and should be ignored.
+        if continued {
+            return Ok(());
+        }
+
         let stop = if self.state.disable_breakpoints.load(Ordering::SeqCst) > 0 {
             false
         } else {
@@ -156,7 +165,7 @@ impl<'a, 'e: 'a> BeforeStmtFuncDyn<'a, 'e> for DapAdapterEvalHookImpl {
                         self.step = Some((kind, eval.call_stack_count()));
                         break;
                     }
-                    Ok(Next::RemainPaused) => continue,
+                    Ok(Next::RemainPaused) => {}
                     Err(..) => {
                         // DapAdapter has been dropped so we'll continue.
                         break;
@@ -186,7 +195,7 @@ impl DapAdapterEvalHookImpl {
 
 impl DapAdapterEvalHook for DapAdapterEvalHookImpl {
     fn add_dap_hooks(self: Box<Self>, eval: &mut Evaluator<'_, '_, '_>) {
-        eval.before_stmt_for_dap((self as Box<dyn BeforeStmtFuncDyn>).into());
+        eval.before_stmt_for_dap(BeforeStmtFunc::from_dyn(self as _));
     }
 }
 
@@ -346,7 +355,7 @@ impl DapAdapter for DapAdapterImpl {
                     // since vars is owned within this closure scope we can just remove value from the map
                     // obtaining owned variable as the rest of the map will be dropped anyway
                     vars.shift_remove(name).ok_or_else(|| {
-                        anyhow::Error::msg(format!("Local variable {} not found", name))
+                        anyhow::Error::msg(format!("Local variable {name} not found"))
                     })
                 }
                 super::Scope::Expr(expr) => evaluate_expr(&state, eval, expr.to_owned()),

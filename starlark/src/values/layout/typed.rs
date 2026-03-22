@@ -40,15 +40,6 @@ use crate::cast::transmute;
 use crate::coerce::Coerce;
 use crate::coerce::CoerceKey;
 use crate::typing::Ty;
-use crate::values::alloc_value::AllocFrozenStringValue;
-use crate::values::alloc_value::AllocStringValue;
-use crate::values::int::pointer_i32::PointerI32;
-use crate::values::layout::avalue::AValue;
-use crate::values::layout::avalue::AValueImpl;
-use crate::values::layout::heap::repr::AValueRepr;
-use crate::values::starlark_type_id::StarlarkTypeId;
-use crate::values::string::str_type::StarlarkStr;
-use crate::values::type_repr::StarlarkTypeRepr;
 use crate::values::AllocFrozenValue;
 use crate::values::AllocValue;
 use crate::values::Freeze;
@@ -69,14 +60,25 @@ use crate::values::UnpackValue;
 use crate::values::Value;
 use crate::values::ValueLike;
 use crate::values::ValueOfUnchecked;
+use crate::values::alloc_value::AllocFrozenStringValue;
+use crate::values::alloc_value::AllocStringValue;
+use crate::values::int::pointer_i32::PointerI32;
+use crate::values::layout::avalue::AValue;
+use crate::values::layout::avalue::AValueImpl;
+use crate::values::layout::heap::repr::AValueRepr;
+use crate::values::starlark_type_id::StarlarkTypeId;
+use crate::values::string::str_type::StarlarkStr;
+use crate::values::type_repr::StarlarkTypeRepr;
 
 /// [`Value`] wrapper which asserts contained value is of type `<T>`.
 #[derive(Copy_, Clone_, Dupe_, ProvidesStaticType, Allocative)]
 #[allocative(skip)] // Heap owns the value.
-pub struct ValueTyped<'v, T: StarlarkValue<'v>>(Value<'v>, marker::PhantomData<&'v T>);
+pub struct ValueTyped<'v, T: StarlarkValue<'v>>(Value<'v>, marker::PhantomData<T>);
 /// [`FrozenValue`] wrapper which asserts contained value is of type `<T>`.
 #[derive(Copy_, Clone_, Dupe_, ProvidesStaticType, Allocative)]
 #[allocative(skip)] // Heap owns the value.
+#[derive(pagable::PagablePanic)]
+#[repr(transparent)]
 pub struct FrozenValueTyped<'v, T: StarlarkValue<'v>>(FrozenValue, marker::PhantomData<&'v T>);
 
 unsafe impl<'v, T: StarlarkValue<'v>> Coerce<ValueTyped<'v, T>> for ValueTyped<'v, T> {}
@@ -184,7 +186,7 @@ impl<'v, T: StarlarkValue<'v>> ValueTyped<'v, T> {
 
     /// Downcast.
     #[inline]
-    pub fn new_err(value: Value<'v>) -> anyhow::Result<ValueTyped<'v, T>> {
+    pub fn new_err(value: Value<'v>) -> crate::Result<ValueTyped<'v, T>> {
         value.downcast_ref_err::<T>()?;
         Ok(ValueTyped(value, marker::PhantomData))
     }
@@ -258,7 +260,7 @@ impl<'v, T: StarlarkValue<'v>> FrozenValueTyped<'v, T> {
 
     /// Downcast.
     #[inline]
-    pub fn new_err(value: FrozenValue) -> anyhow::Result<FrozenValueTyped<'v, T>> {
+    pub fn new_err(value: FrozenValue) -> crate::Result<FrozenValueTyped<'v, T>> {
         value.downcast_ref_err::<T>()?;
         Ok(FrozenValueTyped(value, marker::PhantomData))
     }
@@ -388,13 +390,27 @@ impl<'v, T: StarlarkValue<'v>> UnpackValue<'v> for ValueTyped<'v, T> {
 }
 
 impl<'v, T: StarlarkValue<'v>> AllocValue<'v> for ValueTyped<'v, T> {
-    fn alloc_value(self, _heap: &'v Heap) -> Value<'v> {
+    fn alloc_value(self, _heap: Heap<'v>) -> Value<'v> {
         self.0
     }
 }
 
+impl<'v, T> Freeze for ValueTyped<'v, T>
+where
+    T: StarlarkValue<'v>,
+    T: Freeze,
+    <T as Freeze>::Frozen: StarlarkValue<'static>,
+{
+    type Frozen = FrozenValueTyped<'static, <T as Freeze>::Frozen>;
+
+    fn freeze(self, freezer: &Freezer) -> FreezeResult<Self::Frozen> {
+        Ok(FrozenValueTyped::new_err(self.0.freeze(freezer)?)
+            .expect("Freezing a value is known to be well-behaved"))
+    }
+}
+
 impl<'v> AllocStringValue<'v> for StringValue<'v> {
-    fn alloc_string_value(self, _heap: &'v Heap) -> StringValue<'v> {
+    fn alloc_string_value(self, _heap: Heap<'v>) -> StringValue<'v> {
         self
     }
 }
@@ -434,13 +450,13 @@ impl<'v, T: StarlarkValue<'v>> UnpackValue<'v> for FrozenValueTyped<'v, T> {
 }
 
 impl<'v, 'f, T: StarlarkValue<'f>> AllocValue<'v> for FrozenValueTyped<'f, T> {
-    fn alloc_value(self, _heap: &'v Heap) -> Value<'v> {
+    fn alloc_value(self, _heap: Heap<'v>) -> Value<'v> {
         self.0.to_value()
     }
 }
 
 impl<'v> AllocStringValue<'v> for FrozenStringValue {
-    fn alloc_string_value(self, _heap: &'v Heap) -> StringValue<'v> {
+    fn alloc_string_value(self, _heap: Heap<'v>) -> StringValue<'v> {
         self.to_string_value()
     }
 }
@@ -465,11 +481,11 @@ mod tests {
     use crate::assert::Assert;
     use crate::environment::GlobalsBuilder;
     use crate::tests::util::TestComplexValue;
-    use crate::values::int::pointer_i32::PointerI32;
-    use crate::values::none::NoneType;
     use crate::values::FrozenValue;
     use crate::values::FrozenValueTyped;
     use crate::values::Value;
+    use crate::values::int::pointer_i32::PointerI32;
+    use crate::values::none::NoneType;
 
     #[test]
     fn int() {

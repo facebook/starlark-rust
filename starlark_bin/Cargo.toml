@@ -6,7 +6,7 @@ authors = [
 categories = ["parser-implementations", "development-tools"]
 description = "starlark binary"
 documentation = "https://docs.rs/starlark"
-edition = "2021"
+edition = "2024"
 keywords = ["starlark", "skylark", "language", "interpreter"]
 license = "Apache-2.0"
 name = "starlark_bin"
@@ -21,16 +21,16 @@ starlark_lsp = { version = "0.13.0", path = "../starlark_lsp" }
 starlark_map = { version = "0.13.0", path = "../starlark_map" }
 
 anyhow = "1.0.65"
-argfile = "0.1.0"
+argfile = "0.2"
 clap = { version = "4.0.7", features = ["derive", "wrap_help"] }
 debugserver-types = "0.5.0"
 either = "1.8"
 globset = "0.4.13"
-itertools = "0.13.0"
+itertools = "0.14.0"
 lsp-types = "0.94.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-thiserror = "1.0.36"
+thiserror = "2.0.18"
 walkdir = "2.3"
 
 [[bin]]

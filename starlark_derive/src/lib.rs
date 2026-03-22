@@ -33,6 +33,7 @@ mod serde;
 mod starlark_type_repr;
 mod starlark_value;
 mod trace;
+mod type_matcher;
 mod unpack_value;
 mod util;
 mod v_lifetime;
@@ -60,7 +61,8 @@ mod vtable;
 /// There are a number of attributes that can be add to each parameter by writing attributes before the
 /// parameter name:
 ///
-/// * `#[starlark(default = "a default")]` - provide a deafult for the parameter if it is omitted.
+/// * `#[starlark(default = "a default")]` - provide a default for the parameter if it is omitted -- the value given here must
+///    be the exact same Rust type as the Rust argument
 /// * `#[starlark(require = pos)]` - require the parameter to be passed by position, not named.
 /// * `#[starlark(require = named)]` - require the parameter to be passed by name, not by position.
 /// * `#[starlark(args)]` - treat the argument as `*args` in Starlark, receiving all additional positional arguments as a tuple.
@@ -71,7 +73,6 @@ mod vtable;
 ///
 /// * `#[starlark(attribute_type = "foo")]` - if the function has `.type` applied, return this string. Usually used on
 ///   constructor functions so that `ctor.type` can be used in Starlark code.
-/// * `#[starlark(return_type = "foo")]` - the return type of the function used for documention.
 /// * `#[starlark(speculative_exec_safe)]` - the function
 ///   is considered safe to execute speculatively: the function should have
 ///   no global side effects, should not panic, and should finish in reasonable time.
@@ -85,7 +86,7 @@ mod vtable;
 ///
 /// There are two special arguments, distinguished by their type, which provides access to interpreter state:
 ///
-/// * `heap: &'v Heap` gives access to the Starlark heap, for allocating things.
+/// * `heap: Heap<'v>` gives access to the Starlark heap, for allocating things.
 /// * `eval: &mut Evaluator<'v, '_, '_>` gives access to the Starlark evaluator, which can be used to look at interpreter state.
 ///
 /// A module can be used to define globals (with `GlobalsBuilder`) or methods on an object (with `MethodsBuilder`).
@@ -103,7 +104,7 @@ mod vtable;
 ///     fn r#enum<'v>(
 ///         this: Value<'v>,
 ///         #[starlark(require = named, default = 3)] index: i32,
-///         heap: &'v Heap,
+///         heap: Heap<'v>,
 ///     ) -> anyhow::Result<StringValue<'v>> {
 ///         Ok(heap.alloc_str(&format!("{this} {index}")))
 ///     }
@@ -181,11 +182,11 @@ pub fn derive_alloc_frozen_value(input: proc_macro::TokenStream) -> proc_macro::
     alloc_value::derive_alloc_frozen_value(input)
 }
 
-/// Derive accessor methods that are designed to be used from {has,get,dir}_attr
-/// in an `impl StarlarkValue` block. All fields in the struct that are not
-/// marked with #[starlark(skip)] are exported to Starlark code as attributes.
-/// NOTE: Any usage must also call `starlark_attrs!()` in the impl block for
-/// `StarlarkValue`, otherwise the generated attr methods will not be used.
+/// Derive accessor methods that are designed to be used from {has,get,dir}_attr in an `impl StarlarkValue` block.
+///
+/// All fields in the struct that are not marked with #[starlark(skip)] are exported to Starlark code as
+/// attributes. NOTE: Any usage must also call `starlark_attrs!()` in the impl block for `StarlarkValue`,
+/// otherwise the generated attr methods will not be used.
 #[proc_macro_derive(StarlarkAttrs, attributes(starlark))]
 pub fn derive_starlark_attrs(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     attrs::derive_attrs(input)
@@ -219,4 +220,25 @@ pub fn derive_provides_static_type(input: proc_macro::TokenStream) -> proc_macro
 #[proc_macro_derive(Coerce)]
 pub fn derive_coerce(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     coerce::derive_coerce(input)
+}
+
+/// Attribute macro for `impl TypeMatcher for X` blocks.
+///
+/// This macro generates:
+/// 1. `impl TypeMatcherRegistered for X {}` - marks the type as registered
+/// 2. For non-generic types: vtable registration via `register_avalue_simple_frozen!`
+///
+/// Example:
+/// ```ignore
+/// #[type_matcher]
+/// impl TypeMatcher for IsAny {
+///     fn matches(&self, _value: Value) -> bool { true }
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn type_matcher(
+    attr: proc_macro::TokenStream,
+    input: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    type_matcher::derive_type_matcher(attr, input)
 }

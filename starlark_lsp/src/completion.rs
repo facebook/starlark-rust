@@ -29,10 +29,10 @@ use lsp_types::MarkupKind;
 use lsp_types::Range;
 use lsp_types::TextEdit;
 use starlark::codemap::ResolvedSpan;
-use starlark::docs::markdown::render_doc_item_no_link;
-use starlark::docs::markdown::render_doc_param;
 use starlark::docs::DocItem;
 use starlark::docs::DocMember;
+use starlark::docs::markdown::render_doc_item_no_link;
+use starlark::docs::markdown::render_doc_param;
 use starlark_syntax::codemap::ResolvedPos;
 use starlark_syntax::syntax::ast::StmtP;
 use starlark_syntax::syntax::module::AstModuleFields;
@@ -44,9 +44,10 @@ use crate::definition::LspModule;
 use crate::exported::SymbolKind as ExportedSymbolKind;
 use crate::server::Backend;
 use crate::server::LspContext;
+use crate::server::LspOpError;
 use crate::server::LspUrl;
-use crate::symbols::find_symbols_at_location;
 use crate::symbols::SymbolKind;
+use crate::symbols::find_symbols_at_location;
 
 /// The context in which to offer string completion options.
 #[derive(Debug, PartialEq)]
@@ -78,7 +79,7 @@ impl<T: LspContext> Backend<T> {
         line: u32,
         character: u32,
         workspace_root: Option<&Path>,
-    ) -> impl Iterator<Item = CompletionItem> + '_ {
+    ) -> impl Iterator<Item = CompletionItem> + '_ + use<'_, T> {
         let cursor_position = ResolvedPos {
             line: line as usize,
             column: character as usize,
@@ -174,7 +175,9 @@ impl<T: LspContext> Backend<T> {
     ) -> Vec<CompletionItem> {
         self.context
             .resolve_load(load_path, document_uri, workspace_root)
-            .and_then(|url| self.get_ast_or_load_from_disk(&url))
+            // FIXME(JakobDegen): Why are we throwing away errors?
+            .map_err(|_| ())
+            .and_then(|url| self.get_ast_or_load_from_disk(&url).map_err(|_| ()))
             .into_iter()
             .flatten()
             .flat_map(|ast| {
@@ -200,7 +203,7 @@ impl<T: LspContext> Backend<T> {
         document_uri: &LspUrl,
         previously_used_named_parameters: &[String],
         workspace_root: Option<&Path>,
-    ) -> impl Iterator<Item = CompletionItem> {
+    ) -> impl Iterator<Item = CompletionItem> + use<T> {
         match document.find_definition_at_location(
             function_name_span.begin.line as u32,
             function_name_span.begin.column as u32,
@@ -238,7 +241,7 @@ impl<T: LspContext> Backend<T> {
         document_uri: &LspUrl,
         previously_used_named_parameters: &[String],
         workspace_root: Option<&Path>,
-    ) -> anyhow::Result<Option<Vec<CompletionItem>>> {
+    ) -> Result<Option<Vec<CompletionItem>>, LspOpError> {
         Ok(match identifier_definition {
             IdentifierDefinition::Location {
                 destination, name, ..
@@ -334,10 +337,11 @@ impl<T: LspContext> Backend<T> {
         current_value: &str,
         current_span: ResolvedSpan,
         workspace_root: Option<&Path>,
-    ) -> anyhow::Result<Vec<CompletionItem>> {
+    ) -> Result<Vec<CompletionItem>, LspOpError> {
         Ok(self
             .context
-            .get_string_completion_options(document_uri, kind, current_value, workspace_root)?
+            .get_string_completion_options(document_uri, kind, current_value, workspace_root)
+            .map_err(LspOpError::FromContext)?
             .into_iter()
             .map(|result| {
                 let mut range: Range = current_span.into();

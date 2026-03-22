@@ -22,6 +22,7 @@ use std::alloc::Layout;
 use std::alloc::LayoutError;
 use std::cmp;
 use std::cmp::Ordering;
+use std::fmt;
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::hash::Hasher;
@@ -34,6 +35,14 @@ use std::slice;
 
 use allocative::Allocative;
 use allocative::Visitor;
+#[cfg(feature = "pagable_dep")]
+use pagable::PagableDeserialize;
+#[cfg(feature = "pagable_dep")]
+use pagable::PagableSerialize;
+use serde::Deserialize;
+use serde::Serialize;
+use serde::de::SeqAccess;
+use serde::ser::SerializeSeq;
 
 use crate::sorting::insertion::insertion_sort;
 use crate::sorting::insertion::slice_swap_shift;
@@ -52,10 +61,7 @@ struct Vec2Layout<A, B> {
 impl<A, B> Vec2Layout<A, B> {
     fn new(cap: usize) -> Vec2Layout<A, B> {
         Self::new_checked(cap).unwrap_or_else(|err| {
-            panic!(
-                "Vec2Layout failed with {:?} when allocating capacity of {}",
-                err, cap
-            )
+            panic!("Vec2Layout failed with {err:?} when allocating capacity of {cap}")
         })
     }
 
@@ -78,14 +84,18 @@ impl<A, B> Vec2Layout<A, B> {
     }
 
     unsafe fn alloc(&self) -> NonNull<B> {
-        let ptr: *mut u8 = alloc::alloc(self.layout);
-        let bbb_ptr: *mut B = ptr.add(self.offset_of_bbb).cast();
-        NonNull::new_unchecked(bbb_ptr)
+        unsafe {
+            let ptr: *mut u8 = alloc::alloc(self.layout);
+            let bbb_ptr: *mut B = ptr.add(self.offset_of_bbb).cast();
+            NonNull::new_unchecked(bbb_ptr)
+        }
     }
 
     unsafe fn dealloc(&self, bbb_ptr: NonNull<B>) {
-        let ptr: *mut u8 = bbb_ptr.as_ptr().cast::<u8>().sub(self.offset_of_bbb);
-        alloc::dealloc(ptr, self.layout)
+        unsafe {
+            let ptr: *mut u8 = bbb_ptr.as_ptr().cast::<u8>().sub(self.offset_of_bbb);
+            alloc::dealloc(ptr, self.layout)
+        }
     }
 }
 
@@ -101,6 +111,94 @@ pub struct Vec2<A, B> {
 
 unsafe impl<A: Send, B: Send> Send for Vec2<A, B> {}
 unsafe impl<A: Sync, B: Sync> Sync for Vec2<A, B> {}
+
+#[cfg(feature = "pagable_dep")]
+impl<A: PagableSerialize, B: PagableSerialize> PagableSerialize for Vec2<A, B> {
+    fn pagable_serialize(
+        &self,
+        serializer: &mut dyn pagable::PagableSerializer,
+    ) -> pagable::__internal::anyhow::Result<()> {
+        usize::serialize(&self.len, serializer.serde())?;
+        for v in self.iter() {
+            v.pagable_serialize(serializer)?;
+        }
+        Ok(())
+    }
+}
+
+#[cfg(feature = "pagable_dep")]
+impl<'de, A: PagableDeserialize<'de>, B: PagableDeserialize<'de>> PagableDeserialize<'de>
+    for Vec2<A, B>
+{
+    fn pagable_deserialize<D: pagable::PagableDeserializer<'de> + ?Sized>(
+        deserializer: &mut D,
+    ) -> pagable::Result<Self> {
+        let len = usize::deserialize(deserializer.serde())?;
+        let mut vec = Vec2::with_capacity(len);
+        for _ in 0..len {
+            let (a, b) = <(A, B)>::pagable_deserialize(deserializer)?;
+            vec.push(a, b);
+        }
+        Ok(vec)
+    }
+}
+
+impl<A: Serialize, B: Serialize> Serialize for Vec2<A, B> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut seq = serializer.serialize_seq(Some(self.len))?;
+        for v in self.iter() {
+            seq.serialize_element(&v)?;
+        }
+        seq.end()
+    }
+}
+
+impl<'de, A: Deserialize<'de>, B: Deserialize<'de>> Deserialize<'de> for Vec2<A, B> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct Vec2Visitor<A, B> {
+            marker: PhantomData<(A, B)>,
+        }
+
+        impl<'de, A, B> serde::de::Visitor<'de> for Vec2Visitor<A, B>
+        where
+            A: Deserialize<'de>,
+            B: Deserialize<'de>,
+        {
+            type Value = Vec2<A, B>;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a sequence")
+            }
+
+            fn visit_seq<S>(self, mut seq: S) -> Result<Self::Value, S::Error>
+            where
+                S: SeqAccess<'de>,
+            {
+                let capacity = seq
+                    .size_hint()
+                    .ok_or_else(|| serde::de::Error::custom("size hint missing"))?;
+                let mut values = Vec2::<A, B>::with_capacity(capacity);
+
+                while let Some((a, b)) = seq.next_element()? {
+                    values.push(a, b);
+                }
+
+                Ok(values)
+            }
+        }
+
+        let visitor = Vec2Visitor {
+            marker: PhantomData,
+        };
+        deserializer.deserialize_seq(visitor)
+    }
+}
 
 impl<A, B> Default for Vec2<A, B> {
     #[inline]
@@ -250,20 +348,26 @@ impl<A, B> Vec2<A, B> {
 
     #[inline]
     unsafe fn dealloc_impl(data: NonNull<B>, cap: usize) {
-        if cap != 0 {
-            Vec2Layout::<A, B>::new(cap).dealloc(data);
+        unsafe {
+            if cap != 0 {
+                Vec2Layout::<A, B>::new(cap).dealloc(data);
+            }
         }
     }
 
     /// Deallocate, but do not call destructors.
     #[inline]
     unsafe fn dealloc(&mut self) {
-        Self::dealloc_impl(self.bbb_ptr, self.cap);
+        unsafe {
+            Self::dealloc_impl(self.bbb_ptr, self.cap);
+        }
     }
 
     unsafe fn drop_in_place(&mut self) {
-        ptr::drop_in_place::<[A]>(self.aaa_mut());
-        ptr::drop_in_place::<[B]>(self.bbb_mut());
+        unsafe {
+            ptr::drop_in_place::<[A]>(self.aaa_mut());
+            ptr::drop_in_place::<[B]>(self.bbb_mut());
+        }
     }
 
     /// Push an element.
@@ -291,11 +395,13 @@ impl<A, B> Vec2<A, B> {
     /// Get an element reference by index skipping bounds check.
     #[inline]
     pub unsafe fn get_unchecked(&self, index: usize) -> (&A, &B) {
-        debug_assert!(index < self.len);
-        (
-            self.aaa().get_unchecked(index),
-            self.bbb().get_unchecked(index),
-        )
+        unsafe {
+            debug_assert!(index < self.len);
+            (
+                self.aaa().get_unchecked(index),
+                self.bbb().get_unchecked(index),
+            )
+        }
     }
 
     /// Get an element mutable reference by index.
@@ -311,17 +417,21 @@ impl<A, B> Vec2<A, B> {
     /// Get an element mutable reference by index.
     #[inline]
     pub unsafe fn get_unchecked_mut(&mut self, index: usize) -> (&mut A, &mut B) {
-        debug_assert!(index < self.len);
-        let k_ptr = self.aaa_ptr().as_ptr();
-        let v_ptr = self.bbb_ptr().as_ptr();
-        (&mut *k_ptr.add(index), &mut *v_ptr.add(index))
+        unsafe {
+            debug_assert!(index < self.len);
+            let k_ptr = self.aaa_ptr().as_ptr();
+            let v_ptr = self.bbb_ptr().as_ptr();
+            (&mut *k_ptr.add(index), &mut *v_ptr.add(index))
+        }
     }
 
     #[inline]
     unsafe fn read(&self, index: usize) -> (A, B) {
-        debug_assert!(index < self.len);
-        let (a, b) = self.get_unchecked(index);
-        (ptr::read(a), ptr::read(b))
+        unsafe {
+            debug_assert!(index < self.len);
+            let (a, b) = self.get_unchecked(index);
+            (ptr::read(a), ptr::read(b))
+        }
     }
 
     /// Remove an element by index.
@@ -431,7 +541,7 @@ impl<A, B> Vec2<A, B> {
             next: usize,
         }
 
-        impl<'a, A, B> Drop for Retain<'a, A, B> {
+        impl<A, B> Drop for Retain<'_, A, B> {
             fn drop(&mut self) {
                 debug_assert!(self.written <= self.next);
                 debug_assert!(self.next <= self.vec.len);

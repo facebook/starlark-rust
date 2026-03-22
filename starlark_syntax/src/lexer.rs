@@ -441,114 +441,128 @@ impl<'a> Lexer<'a> {
         loop {
             // Note that this function doesn't always return - a few branches use `continue`
             // to always go round the loop again.
-            return if let Some(x) = self.buffer.pop_front() {
-                Some(x)
-            } else if self.done {
-                None
-            } else {
-                match self.lexer.next() {
-                    None => {
-                        self.done = true;
-                        let pos = self.lexer.span().end;
-                        for _ in 0..self.indent_levels.len() {
-                            self.buffer.push_back(Ok((pos, Token::Dedent, pos)))
-                        }
-                        self.indent_levels.clear();
-                        self.wrap(Token::Newline)
-                    }
-                    Some(token) => match token {
-                        Token::Tabs => {
-                            self.buffer.push_back(
-                                self.err_pos(LexemeError::InvalidTab, self.lexer.span().start),
-                            );
-                            continue;
-                        }
-                        Token::Newline => {
-                            if self.parens == 0 {
-                                let span = self.lexer.span();
-                                if let Err(e) = self.calculate_indent() {
-                                    return Some(Err(e));
+            return match self.buffer.pop_front() {
+                Some(x) => Some(x),
+                _ => {
+                    if self.done {
+                        None
+                    } else {
+                        match self.lexer.next() {
+                            None => {
+                                self.done = true;
+                                let pos = self.lexer.span().end;
+                                for _ in 0..self.indent_levels.len() {
+                                    self.buffer.push_back(Ok((pos, Token::Dedent, pos)))
                                 }
-                                Some(Ok((span.start, Token::Newline, span.end)))
-                            } else {
-                                continue;
+                                self.indent_levels.clear();
+                                self.wrap(Token::Newline)
                             }
-                        }
-                        Token::Reserved => Some(self.err_now(LexemeError::ReservedKeyword)),
-                        Token::Error => Some(self.err_now(LexemeError::InvalidInput)),
-                        Token::RawDecInt => {
-                            let s = self.lexer.slice();
-                            if s.len() > 1 && &s[0..1] == "0" {
-                                return Some(self.err_now(LexemeError::StartsZero));
-                            }
-                            Some(self.int(s, 10))
-                        }
-                        Token::RawOctInt => {
-                            let s = self.lexer.slice();
-                            assert!(s.starts_with("0o") || s.starts_with("0O"));
-                            Some(self.int(&s[2..], 8))
-                        }
-                        Token::RawHexInt => {
-                            let s = self.lexer.slice();
-                            assert!(s.starts_with("0x") || s.starts_with("0X"));
-                            Some(self.int(&s[2..], 16))
-                        }
-                        Token::RawBinInt => {
-                            let s = self.lexer.slice();
-                            assert!(s.starts_with("0b") || s.starts_with("0B"));
-                            Some(self.int(&s[2..], 2))
-                        }
-                        Token::Int(..) => unreachable!("Lexer does not produce Int tokens"),
-                        Token::RawDoubleQuote => {
-                            let raw = self.lexer.span().len() == 2;
-                            self.parse_double_quoted_string(raw)
-                                .map(|lex| map_lexeme_t(lex, |(s, _offset)| Token::String(s)))
-                        }
-                        Token::RawSingleQuote => {
-                            let raw = self.lexer.span().len() == 2;
-                            self.parse_single_quoted_string(raw)
-                                .map(|lex| map_lexeme_t(lex, |(s, _offset)| Token::String(s)))
-                        }
-                        Token::String(_) => {
-                            unreachable!("The lexer does not produce String")
-                        }
-                        Token::RawFStringDoubleQuote => {
-                            let span_len = self.lexer.span().len();
-                            let raw = span_len == 3;
-                            self.parse_double_quoted_string(raw).map(|lex| {
-                                map_lexeme_t(lex, |(content, content_start_offset)| {
-                                    Token::FString(TokenFString {
-                                        content,
-                                        content_start_offset: content_start_offset + span_len,
+                            Some(Ok(token)) => match token {
+                                Token::Tabs => {
+                                    self.buffer.push_back(
+                                        self.err_pos(
+                                            LexemeError::InvalidTab,
+                                            self.lexer.span().start,
+                                        ),
+                                    );
+                                    continue;
+                                }
+                                Token::Newline => {
+                                    if self.parens == 0 {
+                                        let span = self.lexer.span();
+                                        if let Err(e) = self.calculate_indent() {
+                                            return Some(Err(e));
+                                        }
+                                        Some(Ok((span.start, Token::Newline, span.end)))
+                                    } else {
+                                        continue;
+                                    }
+                                }
+                                Token::Reserved => Some(self.err_now(LexemeError::ReservedKeyword)),
+                                Token::RawDecInt => {
+                                    let s = self.lexer.slice();
+                                    if s.len() > 1 && &s[0..1] == "0" {
+                                        return Some(self.err_now(LexemeError::StartsZero));
+                                    }
+                                    Some(self.int(s, 10))
+                                }
+                                Token::RawOctInt => {
+                                    let s = self.lexer.slice();
+                                    assert!(s.starts_with("0o") || s.starts_with("0O"));
+                                    Some(self.int(&s[2..], 8))
+                                }
+                                Token::RawHexInt => {
+                                    let s = self.lexer.slice();
+                                    assert!(s.starts_with("0x") || s.starts_with("0X"));
+                                    Some(self.int(&s[2..], 16))
+                                }
+                                Token::RawBinInt => {
+                                    let s = self.lexer.slice();
+                                    assert!(s.starts_with("0b") || s.starts_with("0B"));
+                                    Some(self.int(&s[2..], 2))
+                                }
+                                Token::Int(..) => unreachable!("Lexer does not produce Int tokens"),
+                                Token::RawDoubleQuote => {
+                                    let raw = self.lexer.span().len() == 2;
+                                    self.parse_double_quoted_string(raw).map(|lex| {
+                                        map_lexeme_t(lex, |(s, _offset)| Token::String(s))
                                     })
-                                })
-                            })
-                        }
-                        Token::RawFStringSingleQuote => {
-                            let span_len = self.lexer.span().len();
-                            let raw = span_len == 3;
-                            self.parse_single_quoted_string(raw).map(|lex| {
-                                map_lexeme_t(lex, |(content, content_start_offset)| {
-                                    Token::FString(TokenFString {
-                                        content,
-                                        content_start_offset: content_start_offset + span_len,
+                                }
+                                Token::RawSingleQuote => {
+                                    let raw = self.lexer.span().len() == 2;
+                                    self.parse_single_quoted_string(raw).map(|lex| {
+                                        map_lexeme_t(lex, |(s, _offset)| Token::String(s))
                                     })
-                                })
-                            })
+                                }
+                                Token::String(_) => {
+                                    unreachable!("The lexer does not produce String")
+                                }
+                                Token::RawFStringDoubleQuote => {
+                                    let span_len = self.lexer.span().len();
+                                    let raw = span_len == 3;
+                                    self.parse_double_quoted_string(raw).map(|lex| {
+                                        map_lexeme_t(lex, |(content, content_start_offset)| {
+                                            Token::FString(TokenFString {
+                                                content,
+                                                content_start_offset: content_start_offset
+                                                    + span_len,
+                                            })
+                                        })
+                                    })
+                                }
+                                Token::RawFStringSingleQuote => {
+                                    let span_len = self.lexer.span().len();
+                                    let raw = span_len == 3;
+                                    self.parse_single_quoted_string(raw).map(|lex| {
+                                        map_lexeme_t(lex, |(content, content_start_offset)| {
+                                            Token::FString(TokenFString {
+                                                content,
+                                                content_start_offset: content_start_offset
+                                                    + span_len,
+                                            })
+                                        })
+                                    })
+                                }
+                                Token::FString(_) => {
+                                    unreachable!("The lexer does not produce FString")
+                                }
+                                Token::OpeningCurly
+                                | Token::OpeningRound
+                                | Token::OpeningSquare => {
+                                    self.parens += 1;
+                                    self.wrap(token)
+                                }
+                                Token::ClosingCurly
+                                | Token::ClosingRound
+                                | Token::ClosingSquare => {
+                                    self.parens -= 1;
+                                    self.wrap(token)
+                                }
+                                _ => self.wrap(token),
+                            },
+                            Some(Err(_)) => Some(self.err_now(LexemeError::InvalidInput)),
                         }
-                        Token::FString(_) => {
-                            unreachable!("The lexer does not produce FString")
-                        }
-                        Token::OpeningCurly | Token::OpeningRound | Token::OpeningSquare => {
-                            self.parens += 1;
-                            self.wrap(token)
-                        }
-                        Token::ClosingCurly | Token::ClosingRound | Token::ClosingSquare => {
-                            self.parens -= 1;
-                            self.wrap(token)
-                        }
-                        _ => self.wrap(token),
-                    },
+                    }
                 }
             };
         }
@@ -619,13 +633,10 @@ pub struct TokenFString {
 
 /// All token that can be generated by the lexer
 #[derive(Logos, Debug, Clone, PartialEq)]
+#[logos(skip r" +")] // whitespace
+#[logos(skip r"\\\n")] // Escaped newline
+#[logos(skip r"\\\r\n")] // Escaped newline (Windows line ending)
 pub enum Token {
-    #[regex(" +", logos::skip)] // Whitespace
-    #[token("\\\n", logos::skip)] // Escaped newline
-    #[token("\\\r\n", logos::skip)] // Escaped newline (Windows line ending)
-    #[error]
-    Error,
-
     /// Comment as token.
     /// Span includes the leading `#`, but the content does not.
     #[regex(r#"#[^\r\n]*"#, |lex| lex.slice()[1..].to_owned())]
@@ -696,9 +707,10 @@ pub enum Token {
 
     Int(TokenInt), // An integer literal (123, 0x1, 0b1011, 0o755, ...)
 
-    #[regex("[0-9]+\\.[0-9]*([eE][-+]?[0-9]+)?", |lex| lex.slice().parse::<f64>())]
-    #[regex("[0-9]+[eE][-+]?[0-9]+", |lex| lex.slice().parse::<f64>())]
-    #[regex("\\.[0-9]+([eE][-+]?[0-9]+)?", |lex| lex.slice().parse::<f64>())]
+    // Returns closest f64. https://doc.rust-lang.org/std/primitive.f64.html#method.from_str
+    #[regex("[0-9]+\\.[0-9]*([eE][-+]?[0-9]+)?", |lex| lex.slice().parse::<f64>().ok())]
+    #[regex("[0-9]+[eE][-+]?[0-9]+", |lex| lex.slice().parse::<f64>().ok())]
+    #[regex("\\.[0-9]+([eE][-+]?[0-9]+)?", |lex| lex.slice().parse::<f64>().ok())]
     Float(f64), // A float literal (3.14, .3, 1e6, 0.)
 
     String(String), // A string literal
@@ -867,7 +879,6 @@ impl Token {
 impl Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Token::Error => write!(f, "lexical error"),
             Token::Indent => write!(f, "new indentation block"),
             Token::Dedent => write!(f, "end of indentation block"),
             Token::Newline => write!(f, "new line"),
@@ -930,20 +941,20 @@ impl Display for Token {
             Token::ClosingCurly => write!(f, "symbol '}}'"),
             Token::ClosingRound => write!(f, "symbol ')'"),
             Token::Reserved => write!(f, "reserved keyword"),
-            Token::Identifier(s) => write!(f, "identifier '{}'", s),
-            Token::Int(i) => write!(f, "integer literal '{}'", i),
+            Token::Identifier(s) => write!(f, "identifier '{s}'"),
+            Token::Int(i) => write!(f, "integer literal '{i}'"),
             Token::RawDecInt => write!(f, "decimal integer literal"),
             Token::RawHexInt => write!(f, "hexadecimal integer literal"),
             Token::RawOctInt => write!(f, "octal integer literal"),
             Token::RawBinInt => write!(f, "binary integer literal"),
-            Token::Float(n) => write!(f, "float literal '{}'", n),
-            Token::String(s) => write!(f, "string literal {:?}", s),
+            Token::Float(n) => write!(f, "float literal '{n}'"),
+            Token::String(s) => write!(f, "string literal {s:?}"),
             Token::RawSingleQuote => write!(f, "starting '"),
             Token::RawDoubleQuote => write!(f, "starting \""),
             Token::RawFStringDoubleQuote => write!(f, "starting f'"),
             Token::RawFStringSingleQuote => write!(f, "starting f\""),
             Token::FString(s) => write!(f, "f-string {:?}", &s.content),
-            Token::Comment(c) => write!(f, "comment '{}'", c),
+            Token::Comment(c) => write!(f, "comment '{c}'"),
             Token::Tabs => Ok(()),
         }
     }
@@ -960,7 +971,7 @@ impl<'a> Iterator for Lexer<'a> {
 pub fn lex_exactly_one_identifier(s: &str) -> Option<String> {
     let mut lexer = Token::lexer(s);
     match (lexer.next(), lexer.next()) {
-        (Some(Token::Identifier(ident)), None) => Some(ident),
+        (Some(Ok(Token::Identifier(ident))), None) => Some(ident),
         _ => None,
     }
 }

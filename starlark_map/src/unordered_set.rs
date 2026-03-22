@@ -21,11 +21,11 @@ use std::hash::Hash;
 
 use allocative::Allocative;
 
-use crate::unordered_map;
-use crate::unordered_map::UnorderedMap;
 use crate::Equivalent;
 use crate::Hashed;
 use crate::StarlarkHashValue;
+use crate::unordered_map;
+use crate::unordered_map::UnorderedMap;
 
 /// `HashSet` that does not expose insertion order.
 #[derive(Clone, Allocative, Debug)]
@@ -104,7 +104,7 @@ impl<T> UnorderedSet<T> {
 
     /// Lower-level access to the underlying map.
     #[inline]
-    pub fn raw_entry_mut(&mut self) -> RawEntryBuilderMut<T> {
+    pub fn raw_entry_mut(&mut self) -> RawEntryBuilderMut<'_, T> {
         RawEntryBuilderMut {
             entry: self.map.raw_entry_mut(),
         }
@@ -204,7 +204,7 @@ pub enum RawEntryMut<'a, T> {
     Vacant(RawVacantEntryMut<'a, T>),
 }
 
-impl<'a, T> RawOccupiedEntryMut<'a, T> {
+impl<T> RawOccupiedEntryMut<'_, T> {
     /// Remove the entry.
     #[inline]
     pub fn remove(self) -> T {
@@ -218,7 +218,7 @@ impl<'a, T> RawOccupiedEntryMut<'a, T> {
     }
 }
 
-impl<'a, T> RawVacantEntryMut<'a, T> {
+impl<T> RawVacantEntryMut<'_, T> {
     /// Insert an entry to the set. This function computes the hash of the key.
     #[inline]
     pub fn insert(self, value: T)

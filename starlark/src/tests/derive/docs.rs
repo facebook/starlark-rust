@@ -19,11 +19,11 @@ use allocative::Allocative;
 use derive_more::Display;
 use serde::Serialize;
 use serde::Serializer;
-use starlark_derive::starlark_module;
-use starlark_derive::starlark_value;
 use starlark_derive::Freeze;
 use starlark_derive::NoSerialize;
 use starlark_derive::Trace;
+use starlark_derive::starlark_module;
+use starlark_derive::starlark_value;
 
 use crate as starlark;
 use crate::any::ProvidesStaticType;
@@ -37,7 +37,6 @@ use crate::environment::MethodsBuilder;
 use crate::environment::MethodsStatic;
 use crate::starlark_complex_value;
 use crate::starlark_simple_value;
-use crate::values::FreezeResult;
 use crate::values::StarlarkValue;
 use crate::values::ValueLike;
 
@@ -63,7 +62,7 @@ impl<'v> StarlarkValue<'v> for TestExample {
         Self: Sized,
     {
         static RES: MethodsStatic = MethodsStatic::new();
-        RES.methods(object_docs_1)
+        RES.methods_for_type::<Self::Canonical>(object_docs_1)
     }
 }
 
@@ -104,7 +103,7 @@ where
         Self: Sized,
     {
         static RES: MethodsStatic = MethodsStatic::new();
-        RES.methods(object_docs_1)
+        RES.methods_for_type::<Self::Canonical>(object_docs_1)
     }
 }
 

@@ -30,31 +30,23 @@ use std::ops::Deref;
 use allocative::Allocative;
 use display_container::fmt_keyed_container;
 use serde::Serialize;
+use starlark::register_avalue_simple_frozen;
 use starlark_derive::starlark_value;
 use starlark_map::Equivalent;
 
 use crate as starlark;
 use crate::any::ProvidesStaticType;
 use crate::cast::transmute;
-use crate::coerce::coerce;
 use crate::coerce::Coerce;
+use crate::coerce::coerce;
 use crate::collections::Hashed;
 use crate::collections::SmallMap;
 use crate::environment::Methods;
 use crate::environment::MethodsStatic;
 use crate::hint::unlikely;
+use crate::static_starlark_value;
 use crate::typing::Ty;
 use crate::util::refcell::unleak_borrow;
-use crate::values::comparison::equals_small_map;
-use crate::values::dict::DictRef;
-use crate::values::error::ValueError;
-use crate::values::layout::avalue::alloc_static;
-use crate::values::layout::avalue::AValueImpl;
-use crate::values::layout::avalue::AValueSimple;
-use crate::values::layout::heap::repr::AValueRepr;
-use crate::values::string::str_type::hash_string_value;
-use crate::values::type_repr::StarlarkTypeRepr;
-use crate::values::types::dict::dict_type::DictType;
 use crate::values::AllocFrozenValue;
 use crate::values::AllocValue;
 use crate::values::Freeze;
@@ -69,6 +61,12 @@ use crate::values::StringValue;
 use crate::values::Trace;
 use crate::values::Value;
 use crate::values::ValueLike;
+use crate::values::comparison::equals_small_map;
+use crate::values::dict::DictRef;
+use crate::values::error::ValueError;
+use crate::values::string::str_type::hash_string_value;
+use crate::values::type_repr::StarlarkTypeRepr;
+use crate::values::types::dict::dict_type::DictType;
 
 #[derive(Clone, Default, Trace, Debug, ProvidesStaticType, Allocative)]
 pub(crate) struct DictGen<T>(pub(crate) T);
@@ -113,16 +111,16 @@ pub(crate) type FrozenDict = DictGen<FrozenDictData>;
 
 pub(crate) type MutableDict<'v> = DictGen<RefCell<Dict<'v>>>;
 
-pub(crate) static VALUE_EMPTY_FROZEN_DICT: AValueRepr<
-    AValueImpl<'static, AValueSimple<DictGen<FrozenDictData>>>,
-> = alloc_static(DictGen(FrozenDictData {
-    content: SmallMap::new(),
-}));
+static_starlark_value!(
+    pub(crate) VALUE_EMPTY_FROZEN_DICT: DictGen<FrozenDictData> = DictGen(FrozenDictData {
+        content: SmallMap::new(),
+    })
+);
 
 unsafe impl<'v> Coerce<Dict<'v>> for FrozenDictData {}
 
 impl<'v> AllocValue<'v> for Dict<'v> {
-    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
+    fn alloc_value(self, heap: Heap<'v>) -> Value<'v> {
         heap.alloc_complex(DictGen(RefCell::new(self)))
     }
 }
@@ -138,7 +136,7 @@ impl StarlarkTypeRepr for FrozenDictData {
 impl AllocFrozenValue for FrozenDictData {
     fn alloc_frozen_value(self, heap: &FrozenHeap) -> FrozenValue {
         if self.content.is_empty() {
-            FrozenValue::new_repr(&VALUE_EMPTY_FROZEN_DICT)
+            VALUE_EMPTY_FROZEN_DICT.to_frozen_value()
         } else {
             heap.alloc_simple(DictGen(self))
         }
@@ -152,8 +150,10 @@ impl<'v> Dict<'v> {
     }
 
     pub(crate) unsafe fn from_value_unchecked_mut(x: Value<'v>) -> RefMut<'v, Self> {
-        let dict = &x.downcast_ref_unchecked::<DictGen<RefCell<Dict<'v>>>>().0;
-        dict.borrow_mut()
+        unsafe {
+            let dict = &x.downcast_ref_unchecked::<DictGen<RefCell<Dict<'v>>>>().0;
+            dict.borrow_mut()
+        }
     }
 }
 
@@ -280,8 +280,8 @@ impl<'v> Dict<'v> {
     }
 
     /// Insert a key/value pair into the dictionary.
-    pub fn insert_hashed(&mut self, key: Hashed<Value<'v>>, value: Value<'v>) {
-        self.content.insert_hashed(key, value);
+    pub fn insert_hashed(&mut self, key: Hashed<Value<'v>>, value: Value<'v>) -> Option<Value<'v>> {
+        self.content.insert_hashed(key, value)
     }
 
     /// Remove given key from the dictionary.
@@ -331,7 +331,11 @@ trait DictLike<'v>: Debug + Allocative {
 }
 
 impl<'v> DictLike<'v> for RefCell<Dict<'v>> {
-    type ContentRef<'a> = Ref<'a, SmallMap<Value<'v>, Value<'v>>> where Self: 'a, 'v: 'a;
+    type ContentRef<'a>
+        = Ref<'a, SmallMap<Value<'v>, Value<'v>>>
+    where
+        Self: 'a,
+        'v: 'a;
 
     fn content<'a>(&'a self) -> Ref<'a, SmallMap<Value<'v>, Value<'v>>> {
         Ref::map(self.borrow(), |x| &x.content)
@@ -344,13 +348,17 @@ impl<'v> DictLike<'v> for RefCell<Dict<'v>> {
 
     #[inline]
     unsafe fn iter_stop(&self) {
-        unleak_borrow(self);
+        unsafe {
+            unleak_borrow(self);
+        }
     }
 
     #[inline]
     unsafe fn content_unchecked(&self) -> &SmallMap<Value<'v>, Value<'v>> {
-        // SAFETY: this function contract is, caller must ensure that the value is borrowed.
-        &self.try_borrow_unguarded().ok().unwrap_unchecked().content
+        unsafe {
+            // SAFETY: this function contract is, caller must ensure that the value is borrowed.
+            &self.try_borrow_unguarded().ok().unwrap_unchecked().content
+        }
     }
 
     fn set_at(&self, index: Hashed<Value<'v>>, alloc_value: Value<'v>) -> crate::Result<()> {
@@ -365,7 +373,11 @@ impl<'v> DictLike<'v> for RefCell<Dict<'v>> {
 }
 
 impl<'v> DictLike<'v> for FrozenDictData {
-    type ContentRef<'a> = &'a SmallMap<Value<'v>, Value<'v>> where Self: 'a, 'v: 'a;
+    type ContentRef<'a>
+        = &'a SmallMap<Value<'v>, Value<'v>>
+    where
+        Self: 'a,
+        'v: 'a;
 
     fn content<'a>(&'a self) -> &'a SmallMap<Value<'v>, Value<'v>> {
         coerce(&self.content)
@@ -386,10 +398,8 @@ impl<'v> DictLike<'v> for FrozenDictData {
     }
 }
 
-pub(crate) fn dict_methods() -> Option<&'static Methods> {
-    static RES: MethodsStatic = MethodsStatic::new();
-    RES.methods(crate::values::types::dict::methods::dict_methods)
-}
+// Register vtable for FrozenDict (special type not handled by #[starlark_value] macro, because V is not ValueLike).
+register_avalue_simple_frozen!(FrozenDict);
 
 #[starlark_value(type = Dict::TYPE)]
 impl<'v, T: DictLike<'v> + 'v> StarlarkValue<'v> for DictGen<T>
@@ -399,7 +409,8 @@ where
     type Canonical = FrozenDict;
 
     fn get_methods() -> Option<&'static Methods> {
-        dict_methods()
+        static RES: MethodsStatic = MethodsStatic::new();
+        RES.methods_for_type::<Self::Canonical>(crate::values::types::dict::methods::dict_methods)
     }
 
     fn collect_repr(&self, r: &mut String) {
@@ -433,7 +444,7 @@ where
         }
     }
 
-    fn at(&self, index: Value<'v>, _heap: &'v Heap) -> crate::Result<Value<'v>> {
+    fn at(&self, index: Value<'v>, _heap: Heap<'v>) -> crate::Result<Value<'v>> {
         match self.0.content().get_hashed_by_value(index.get_hashed()?) {
             Some(v) => Ok(v.to_value()),
             None => Err(crate::Error::new_other(ValueError::KeyNotFound(
@@ -453,9 +464,11 @@ where
             .contains_key_hashed_by_value(other.get_hashed()?))
     }
 
-    unsafe fn iterate(&self, me: Value<'v>, _heap: &'v Heap) -> crate::Result<Value<'v>> {
-        self.0.iter_start();
-        Ok(me)
+    unsafe fn iterate(&self, me: Value<'v>, _heap: Heap<'v>) -> crate::Result<Value<'v>> {
+        unsafe {
+            self.0.iter_start();
+            Ok(me)
+        }
     }
 
     unsafe fn iter_size_hint(&self, index: usize) -> (usize, Option<usize>) {
@@ -464,12 +477,14 @@ where
         (rem, Some(rem))
     }
 
-    unsafe fn iter_next(&self, index: usize, _heap: &'v Heap) -> Option<Value<'v>> {
-        self.0.content_unchecked().keys().nth(index).copied()
+    unsafe fn iter_next(&self, index: usize, _heap: Heap<'v>) -> Option<Value<'v>> {
+        unsafe { self.0.content_unchecked().keys().nth(index).copied() }
     }
 
     unsafe fn iter_stop(&self) {
-        self.0.iter_stop();
+        unsafe {
+            self.0.iter_stop();
+        }
     }
 
     fn set_at(&self, index: Value<'v>, alloc_value: Value<'v>) -> crate::Result<()> {
@@ -477,7 +492,7 @@ where
         self.0.set_at(index, alloc_value)
     }
 
-    fn bit_or(&self, rhs: Value<'v>, heap: &'v Heap) -> crate::Result<Value<'v>> {
+    fn bit_or(&self, rhs: Value<'v>, heap: Heap<'v>) -> crate::Result<Value<'v>> {
         let rhs = DictRef::from_value(rhs)
             .map_or_else(|| ValueError::unsupported_with(self, "|", rhs), Ok)?;
         if self.0.content().is_empty() {
@@ -501,9 +516,9 @@ where
         Ty::any_dict()
     }
 
-    fn try_freeze_static(&self) -> Option<FrozenValue> {
+    fn try_freeze_directly(&self, _freezer: &Freezer<'_>) -> Option<FreezeResult<FrozenValue>> {
         if self.0.content().is_empty() {
-            Some(FrozenValue::new_repr(&VALUE_EMPTY_FROZEN_DICT))
+            Some(Ok(VALUE_EMPTY_FROZEN_DICT.to_frozen_value()))
         } else {
             None
         }
@@ -524,8 +539,8 @@ mod tests {
     use crate::assert;
     use crate::coerce::coerce;
     use crate::collections::SmallMap;
-    use crate::values::dict::Dict;
     use crate::values::Heap;
+    use crate::values::dict::Dict;
 
     #[test]
     fn test_mutate_dict() {
@@ -544,19 +559,20 @@ b1 and b2 and b3
 
     #[test]
     fn test_get_str() -> crate::Result<()> {
-        let heap = Heap::new();
-        let k1 = heap.alloc_str("hello").get_hashed();
-        let k2 = heap.alloc_str("world").get_hashed();
-        let mut sm = SmallMap::new();
-        sm.insert_hashed(k1, heap.alloc(12));
-        sm.insert_hashed(k2, heap.alloc(56));
-        let d = Dict::new(coerce(sm));
+        Heap::temp(|heap| {
+            let k1 = heap.alloc_str("hello").get_hashed();
+            let k2 = heap.alloc_str("world").get_hashed();
+            let mut sm = SmallMap::new();
+            sm.insert_hashed(k1, heap.alloc(12));
+            sm.insert_hashed(k2, heap.alloc(56));
+            let d = Dict::new(coerce(sm));
 
-        assert_eq!(d.get(heap.alloc("hello"))?.unwrap().unpack_i32(), Some(12));
-        assert_eq!(d.get(heap.alloc("foo"))?, None);
-        assert_eq!(d.get_str("hello").unwrap().unpack_i32(), Some(12));
-        assert_eq!(d.get_str("foo"), None);
-        Ok(())
+            assert_eq!(d.get(heap.alloc("hello"))?.unwrap().unpack_i32(), Some(12));
+            assert_eq!(d.get(heap.alloc("foo"))?, None);
+            assert_eq!(d.get_str("hello").unwrap().unpack_i32(), Some(12));
+            assert_eq!(d.get_str("foo"), None);
+            Ok(())
+        })
     }
 
     #[test]

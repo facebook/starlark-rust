@@ -29,8 +29,8 @@ use std::slice;
 use allocative::Allocative;
 use display_container::fmt_container;
 use serde::Serialize;
-use starlark_derive::starlark_value;
 use starlark_derive::Trace;
+use starlark_derive::starlark_value;
 use starlark_syntax::slice_vec_ext::SliceExt;
 use starlark_syntax::slice_vec_ext::VecExt;
 
@@ -42,19 +42,8 @@ use crate::environment::MethodsStatic;
 use crate::hint::likely;
 use crate::hint::unlikely;
 use crate::private::Private;
+use crate::static_starlark_value;
 use crate::typing::Ty;
-use crate::values::array::Array;
-use crate::values::comparison::compare_slice;
-use crate::values::comparison::equals_slice;
-use crate::values::error::ValueError;
-use crate::values::index::apply_slice;
-use crate::values::index::convert_index;
-use crate::values::layout::avalue::alloc_static;
-use crate::values::layout::avalue::AValueFrozenList;
-use crate::values::layout::avalue::AValueImpl;
-use crate::values::layout::heap::repr::AValueRepr;
-use crate::values::list::ListRef;
-use crate::values::type_repr::StarlarkTypeRepr;
 use crate::values::AllocFrozenValue;
 use crate::values::AllocValue;
 use crate::values::FrozenHeap;
@@ -66,6 +55,14 @@ use crate::values::UnpackValue;
 use crate::values::Value;
 use crate::values::ValueLike;
 use crate::values::ValueTyped;
+use crate::values::array::Array;
+use crate::values::comparison::compare_slice;
+use crate::values::comparison::equals_slice;
+use crate::values::error::ValueError;
+use crate::values::index::apply_slice;
+use crate::values::index::convert_index;
+use crate::values::list::ListRef;
+use crate::values::type_repr::StarlarkTypeRepr;
 
 #[derive(Clone, Default, Trace, Debug, ProvidesStaticType, Allocative)]
 #[repr(transparent)]
@@ -101,8 +98,7 @@ pub(crate) type FrozenList = ListGen<FrozenListData>;
 
 pub(crate) type List<'v> = ListGen<ListData<'v>>;
 
-pub(crate) static VALUE_EMPTY_FROZEN_LIST: AValueRepr<AValueImpl<'static, AValueFrozenList>> =
-    alloc_static(unsafe { ListGen(FrozenListData::new(0)) });
+static_starlark_value!(pub(crate) VALUE_EMPTY_FROZEN_LIST: ListGen<FrozenListData> = unsafe { ListGen(FrozenListData::new(0)) });
 
 impl ListGen<FrozenListData> {
     pub(crate) fn offset_of_content() -> usize {
@@ -136,9 +132,11 @@ impl<'v> ListData<'v> {
     }
 
     pub(crate) unsafe fn from_value_unchecked_mut(x: Value<'v>) -> &'v Self {
-        let list = x.downcast_ref_unchecked::<ListGen<ListData<'v>>>();
-        debug_assert!(list.0.check_can_mutate().is_ok());
-        &list.0
+        unsafe {
+            let list = x.downcast_ref_unchecked::<ListGen<ListData<'v>>>();
+            debug_assert!(list.0.check_can_mutate().is_ok());
+            &list.0
+        }
     }
 
     pub(crate) fn is_list_type(x: TypeId) -> bool {
@@ -155,7 +153,7 @@ impl<'v> ListData<'v> {
 
     #[cold]
     #[inline(never)]
-    fn reserve_additional_slow(&self, additional: usize, heap: &'v Heap) {
+    fn reserve_additional_slow(&self, additional: usize, heap: Heap<'v>) {
         let new_cap = cmp::max(self.len() + additional, self.len() * 2);
         // Size of `Array` is 2 words and size of `List` is one word,
         // so allocating at least 4 words would not be too large waste.
@@ -169,7 +167,7 @@ impl<'v> ListData<'v> {
     }
 
     #[inline(always)]
-    fn reserve_additional(&self, additional: usize, heap: &'v Heap) {
+    fn reserve_additional(&self, additional: usize, heap: Heap<'v>) {
         if likely(self.content.get().as_ref().remaining_capacity() >= additional) {
             return;
         }
@@ -177,19 +175,15 @@ impl<'v> ListData<'v> {
         self.reserve_additional_slow(additional, heap);
     }
 
-    pub(crate) fn double(&self, heap: &'v Heap) {
+    pub(crate) fn double(&self, heap: Heap<'v>) {
         self.reserve_additional(self.len(), heap);
         self.content.get().double();
     }
 
     #[inline]
-    pub(crate) fn extend<I: IntoIterator<Item = Value<'v>>>(&self, iter: I, heap: &'v Heap) {
-        match self.try_extend(iter.into_iter().map(Ok), heap) {
+    pub(crate) fn extend<I: IntoIterator<Item = Value<'v>>>(&self, iter: I, heap: Heap<'v>) {
+        match self.try_extend(iter.into_iter().map(Ok::<_, Infallible>), heap) {
             Ok(()) => {}
-            Err(e) => {
-                let e: Infallible = e;
-                match e {}
-            }
         }
     }
 
@@ -197,7 +191,7 @@ impl<'v> ListData<'v> {
     pub(crate) fn try_extend<E, I: IntoIterator<Item = Result<Value<'v>, E>>>(
         &self,
         iter: I,
-        heap: &'v Heap,
+        heap: Heap<'v>,
     ) -> Result<(), E> {
         let iter = iter.into_iter();
         let (lo, hi) = iter.size_hint();
@@ -224,7 +218,7 @@ impl<'v> ListData<'v> {
         Ok(())
     }
 
-    pub(crate) fn push(&self, value: Value<'v>, heap: &'v Heap) {
+    pub(crate) fn push(&self, value: Value<'v>, heap: Heap<'v>) {
         self.reserve_additional(1, heap);
         self.content.get().push(value);
     }
@@ -233,7 +227,7 @@ impl<'v> ListData<'v> {
         self.content.get().clear();
     }
 
-    pub(crate) fn insert(&self, index: usize, value: Value<'v>, heap: &'v Heap) {
+    pub(crate) fn insert(&self, index: usize, value: Value<'v>, heap: Heap<'v>) {
         self.reserve_additional(1, heap);
         self.content.get().insert(index, value);
     }
@@ -244,7 +238,7 @@ impl<'v> ListData<'v> {
 }
 
 impl<'v, V: AllocValue<'v>> AllocValue<'v> for Vec<V> {
-    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
+    fn alloc_value(self, heap: Heap<'v>) -> Value<'v> {
         heap.alloc_list_iter(self.into_iter().map(|x| x.alloc_value(heap)))
     }
 }
@@ -270,7 +264,7 @@ impl<'a, 'v, V: 'a> AllocValue<'v> for &'a [V]
 where
     &'a V: AllocValue<'v>,
 {
-    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
+    fn alloc_value(self, heap: Heap<'v>) -> Value<'v> {
         heap.alloc_list_iter(self.iter().map(|x| x.alloc_value(heap)))
     }
 }
@@ -426,11 +420,6 @@ pub(crate) fn display_list(xs: &[Value], f: &mut fmt::Formatter<'_>) -> fmt::Res
     fmt_container(f, "[", "]", xs.iter())
 }
 
-pub(crate) fn list_methods() -> Option<&'static Methods> {
-    static RES: MethodsStatic = MethodsStatic::new();
-    RES.methods(crate::values::types::list::methods::list_methods)
-}
-
 #[starlark_value(type = ListData::TYPE)]
 impl<'v, T: ListLike<'v> + 'v> StarlarkValue<'v> for ListGen<T>
 where
@@ -446,7 +435,8 @@ where
     }
 
     fn get_methods() -> Option<&'static Methods> {
-        list_methods()
+        static RES: MethodsStatic = MethodsStatic::new();
+        RES.methods_for_type::<Self::Canonical>(crate::values::types::list::methods::list_methods)
     }
 
     fn collect_repr(&self, s: &mut String) {
@@ -483,7 +473,7 @@ where
         }
     }
 
-    fn at(&self, index: Value, _heap: &'v Heap) -> crate::Result<Value<'v>> {
+    fn at(&self, index: Value, _heap: Heap<'v>) -> crate::Result<Value<'v>> {
         let i = convert_index(index, self.0.content().len() as i32)? as usize;
         Ok(self.0.content()[i])
     }
@@ -506,35 +496,37 @@ where
         start: Option<Value>,
         stop: Option<Value>,
         stride: Option<Value>,
-        heap: &'v Heap,
+        heap: Heap<'v>,
     ) -> crate::Result<Value<'v>> {
         let xs = self.0.content();
         let res = apply_slice(xs, start, stop, stride)?;
         Ok(heap.alloc_list(&res))
     }
 
-    unsafe fn iterate(&self, me: Value<'v>, _heap: &'v Heap) -> crate::Result<Value<'v>> {
-        Ok(self.0.new_iter(me))
+    unsafe fn iterate(&self, me: Value<'v>, _heap: Heap<'v>) -> crate::Result<Value<'v>> {
+        unsafe { Ok(self.0.new_iter(me)) }
     }
 
     unsafe fn iter_size_hint(&self, index: usize) -> (usize, Option<usize>) {
-        self.0.iter_size_hint(index)
+        unsafe { self.0.iter_size_hint(index) }
     }
 
-    unsafe fn iter_next(&self, index: usize, _heap: &'v Heap) -> Option<Value<'v>> {
-        self.0.iter_next(index)
+    unsafe fn iter_next(&self, index: usize, _heap: Heap<'v>) -> Option<Value<'v>> {
+        unsafe { self.0.iter_next(index) }
     }
 
     unsafe fn iter_stop(&self) {
-        self.0.iter_stop();
+        unsafe {
+            self.0.iter_stop();
+        }
     }
 
-    fn add(&self, other: Value<'v>, heap: &'v Heap) -> Option<crate::Result<Value<'v>>> {
+    fn add(&self, other: Value<'v>, heap: Heap<'v>) -> Option<crate::Result<Value<'v>>> {
         ListRef::from_value(other)
             .map(|other| Ok(heap.alloc_list_concat(self.0.content(), other.content())))
     }
 
-    fn mul(&self, other: Value, heap: &'v Heap) -> Option<crate::Result<Value<'v>>> {
+    fn mul(&self, other: Value, heap: Heap<'v>) -> Option<crate::Result<Value<'v>>> {
         let l = match i32::unpack_value(other) {
             Ok(Some(l)) => l,
             Ok(None) => return None,
@@ -547,7 +539,7 @@ where
         Some(Ok(heap.alloc_list(&result)))
     }
 
-    fn rmul(&self, lhs: Value<'v>, heap: &'v Heap) -> Option<crate::Result<Value<'v>>> {
+    fn rmul(&self, lhs: Value<'v>, heap: Heap<'v>) -> Option<crate::Result<Value<'v>>> {
         self.mul(lhs, heap)
     }
 

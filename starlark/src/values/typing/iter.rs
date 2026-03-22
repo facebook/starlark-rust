@@ -18,21 +18,18 @@
 use std::marker::PhantomData;
 
 use allocative::Allocative;
-use starlark_derive::starlark_value;
 use starlark_derive::NoSerialize;
 use starlark_derive::ProvidesStaticType;
+use starlark_derive::starlark_value;
 
 use crate as starlark;
+use crate::static_starlark_value;
 use crate::typing::Ty;
-use crate::values::layout::avalue::alloc_static;
-use crate::values::layout::avalue::AValueBasic;
-use crate::values::layout::avalue::AValueImpl;
-use crate::values::layout::heap::repr::AValueRepr;
-use crate::values::type_repr::StarlarkTypeRepr;
 use crate::values::AllocFrozenValue;
 use crate::values::FrozenHeap;
 use crate::values::FrozenValue;
 use crate::values::StarlarkValue;
+use crate::values::type_repr::StarlarkTypeRepr;
 
 enum NonInstantiable {}
 
@@ -66,12 +63,11 @@ impl<'v> StarlarkValue<'v> for TypingIterable {
     // TODO(nga): support `[]`.
 }
 
+static_starlark_value!(ITERABLE: TypingIterable = TypingIterable);
+
 impl AllocFrozenValue for TypingIterable {
     fn alloc_frozen_value(self, _heap: &FrozenHeap) -> FrozenValue {
-        static ANY: AValueRepr<AValueImpl<'static, AValueBasic<TypingIterable>>> =
-            alloc_static(TypingIterable);
-
-        FrozenValue::new_repr(&ANY)
+        ITERABLE.to_frozen_value()
     }
 }
 

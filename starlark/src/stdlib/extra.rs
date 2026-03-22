@@ -23,14 +23,14 @@ use starlark_derive::starlark_module;
 use crate as starlark;
 use crate::environment::GlobalsBuilder;
 use crate::eval::Evaluator;
-use crate::values::function::StarlarkFunction;
-use crate::values::none::NoneOr;
-use crate::values::none::NoneType;
-use crate::values::tuple::UnpackTuple;
-use crate::values::typing::iter::StarlarkIter;
 use crate::values::StringValue;
 use crate::values::Value;
 use crate::values::ValueOfUnchecked;
+use crate::values::none::NoneOr;
+use crate::values::none::NoneType;
+use crate::values::tuple::UnpackTuple;
+use crate::values::typing::StarlarkCallable;
+use crate::values::typing::iter::StarlarkIter;
 
 #[starlark_module]
 pub fn filter(builder: &mut GlobalsBuilder) {
@@ -45,7 +45,7 @@ pub fn filter(builder: &mut GlobalsBuilder) {
     /// # "#);
     /// ```
     fn filter<'v>(
-        #[starlark(require = pos)] func: NoneOr<ValueOfUnchecked<'v, StarlarkFunction>>,
+        #[starlark(require = pos)] func: NoneOr<StarlarkCallable<'v>>,
         #[starlark(require = pos)] seq: ValueOfUnchecked<'v, StarlarkIter<Value<'v>>>,
         eval: &mut Evaluator<'v, '_, '_>,
     ) -> starlark::Result<Vec<Value<'v>>> {
@@ -59,7 +59,7 @@ pub fn filter(builder: &mut GlobalsBuilder) {
                     }
                 }
                 NoneOr::Other(func) => {
-                    if func.get().invoke_pos(&[v], eval)?.to_bool() {
+                    if func.0.invoke_pos(&[v], eval)?.to_bool() {
                         res.push(v);
                     }
                 }
@@ -80,14 +80,14 @@ pub fn map(builder: &mut GlobalsBuilder) {
     /// # "#);
     /// ```
     fn map<'v>(
-        #[starlark(require = pos)] func: ValueOfUnchecked<'v, StarlarkFunction>,
+        #[starlark(require = pos)] func: StarlarkCallable<'v>,
         #[starlark(require = pos)] seq: ValueOfUnchecked<'v, StarlarkIter<Value<'v>>>,
         eval: &mut Evaluator<'v, '_, '_>,
     ) -> starlark::Result<Vec<Value<'v>>> {
         let it = seq.get().iterate(eval.heap())?;
         let mut res = Vec::with_capacity(it.size_hint().0);
         for v in it {
-            res.push(func.get().invoke_pos(&[v], eval)?);
+            res.push(func.0.invoke_pos(&[v], eval)?);
         }
         Ok(res)
     }
@@ -98,7 +98,7 @@ pub fn debug(builder: &mut GlobalsBuilder) {
     /// Print the value with full debug formatting. The result may not be stable over time.
     /// Intended for debugging purposes and guaranteed to produce verbose output not suitable for user display.
     fn debug(#[starlark(require = pos)] val: Value) -> anyhow::Result<String> {
-        Ok(format!("{:?}", val))
+        Ok(format!("{val:?}"))
     }
 }
 
@@ -125,7 +125,7 @@ pub(crate) struct StderrPrintHandler;
 
 impl PrintHandler for StderrPrintHandler {
     fn println(&self, text: &str) -> crate::Result<()> {
-        eprintln!("{}", text);
+        eprintln!("{text}");
         Ok(())
     }
 }
@@ -165,7 +165,7 @@ fn pretty_repr<'v>(
     use std::fmt::Write;
 
     let mut s = eval.string_pool.alloc();
-    write!(s, "{:#}", a).unwrap();
+    write!(s, "{a:#}").unwrap();
     let r = eval.heap().alloc_str(&s);
     eval.string_pool.release(s);
     Ok(r)
@@ -210,9 +210,7 @@ mod tests {
 
     #[test]
     fn test_filter() {
-        let mut a = Assert::new();
-        // TODO(nga): fix and enable.
-        a.disable_static_typechecking();
+        let a = Assert::new();
         a.pass(
             r#"
 def contains_hello(s):
@@ -234,9 +232,7 @@ assert_eq(["hello world!"], filter(contains_hello, ["hello world!", "goodbye"]))
 
     #[test]
     fn test_map() {
-        let mut a = Assert::new();
-        // TODO: fix and enable.
-        a.disable_static_typechecking();
+        let a = Assert::new();
         a.pass(
             r#"
 def double(x):

@@ -29,12 +29,12 @@ use starlark_syntax::syntax::module::AstModuleFields;
 use starlark_syntax::syntax::top_level_stmts::top_level_stmts;
 
 use crate::environment::names::MutableNames;
-use crate::eval::compiler::scope::payload::CstPayload;
-use crate::eval::compiler::scope::scope_resolver_globals::ScopeResolverGlobals;
 use crate::eval::compiler::scope::BindingId;
 use crate::eval::compiler::scope::ModuleScopes;
 use crate::eval::compiler::scope::ResolvedIdent;
 use crate::eval::compiler::scope::Slot;
+use crate::eval::compiler::scope::payload::CstPayload;
+use crate::eval::compiler::scope::scope_resolver_globals::ScopeResolverGlobals;
 use crate::syntax::AstModule;
 use crate::syntax::Dialect;
 use crate::values::FrozenHeap;
@@ -130,7 +130,7 @@ pub(crate) fn find_unused_loads(
 
     for top in top_level_stmts(&module_scopes.cst) {
         top.visit_ident(|ident| {
-            println!("visit ident: {:?}", ident);
+            println!("visit ident: {ident:?}");
             let ResolvedIdent::Slot(Slot::Module(_), binding_id) = ident
                 .payload
                 .ok_or_else(|| anyhow::anyhow!("ident is not resolved (internal error)"))?

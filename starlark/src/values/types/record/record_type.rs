@@ -26,12 +26,12 @@ use display_container::fmt_keyed_container;
 use dupe::Dupe;
 use either::Either;
 use once_cell::unsync::OnceCell;
+use starlark_derive::NoSerialize;
 use starlark_derive::starlark_module;
 use starlark_derive::starlark_value;
-use starlark_derive::NoSerialize;
+use starlark_map::StarlarkHasher;
 use starlark_map::small_map::SmallMap;
 use starlark_map::sorted_map::SortedMap;
-use starlark_map::StarlarkHasher;
 
 use crate as starlark;
 use crate::any::ProvidesStaticType;
@@ -44,22 +44,15 @@ use crate::eval::Evaluator;
 use crate::eval::ParametersSpec;
 use crate::eval::ParametersSpecParam;
 use crate::starlark_complex_values;
+use crate::typing::ParamIsRequired;
+use crate::typing::ParamSpec;
+use crate::typing::Ty;
 use crate::typing::callable::TyCallable;
 use crate::typing::starlark_value::TyStarlarkValue;
 use crate::typing::user::TyUser;
 use crate::typing::user::TyUserFields;
 use crate::typing::user::TyUserParams;
-use crate::typing::ParamIsRequired;
-use crate::typing::ParamSpec;
-use crate::typing::Ty;
 use crate::util::ArcStr;
-use crate::values::function::FUNCTION_TYPE;
-use crate::values::record::field::FieldGen;
-use crate::values::record::matcher::RecordTypeMatcher;
-use crate::values::record::ty_record_type::TyRecordData;
-use crate::values::record::Record;
-use crate::values::types::type_instance_id::TypeInstanceId;
-use crate::values::typing::type_compiled::type_matcher_factory::TypeMatcherFactory;
 use crate::values::Freeze;
 use crate::values::FreezeResult;
 use crate::values::Freezer;
@@ -70,6 +63,13 @@ use crate::values::Value;
 use crate::values::ValueLifetimeless;
 use crate::values::ValueLike;
 use crate::values::ValueTypedComplex;
+use crate::values::function::FUNCTION_TYPE;
+use crate::values::record::Record;
+use crate::values::record::field::FieldGen;
+use crate::values::record::matcher::RecordTypeMatcher;
+use crate::values::record::ty_record_type::TyRecordData;
+use crate::values::types::type_instance_id::TypeInstanceId;
+use crate::values::typing::type_compiled::type_matcher_factory::TypeMatcherFactory;
 
 #[doc(hidden)]
 pub trait RecordCell: ValueLifetimeless {
@@ -131,9 +131,6 @@ pub struct RecordTypeGen<V: RecordCell> {
     pub(crate) ty_record_data: V::TyRecordDataOpt,
     /// The V is the type the field must satisfy (e.g. `"string"`)
     fields: SmallMap<String, FieldGen<V>>,
-    /// Creating these on every invoke is pretty expensive (profiling shows)
-    /// so compute them in advance and cache.
-    parameter_spec: ParametersSpec<FrozenValue>,
 }
 
 impl<'v, V: ValueLike<'v> + RecordCell> Display for RecordTypeGen<V> {
@@ -157,30 +154,11 @@ pub(crate) fn record_fields<'v>(
 
 impl<'v> RecordType<'v> {
     pub(crate) fn new(fields: SmallMap<String, FieldGen<Value<'v>>>) -> Self {
-        let parameter_spec = Self::make_parameter_spec(&fields);
         Self {
-            id: TypeInstanceId::gen(),
+            id: TypeInstanceId::r#gen(),
             fields,
-            parameter_spec,
             ty_record_data: OnceCell::new(),
         }
-    }
-
-    fn make_parameter_spec(
-        fields: &SmallMap<String, FieldGen<Value<'v>>>,
-    ) -> ParametersSpec<FrozenValue> {
-        ParametersSpec::new_named_only(
-            "record",
-            fields.iter().map(|(name, field)| {
-                (
-                    name.as_str(),
-                    match field.default {
-                        None => ParametersSpecParam::Required,
-                        Some(_default) => ParametersSpecParam::Optional,
-                    },
-                )
-            }),
-        )
     }
 }
 
@@ -190,7 +168,6 @@ impl<'v> Freeze for RecordType<'v> {
         Ok(FrozenRecordType {
             id: self.id,
             fields: self.fields.freeze(freezer)?,
-            parameter_spec: self.parameter_spec,
             ty_record_data: self.ty_record_data.into_inner(),
         })
     }
@@ -210,6 +187,24 @@ where
             .expect("Instances can only be created if named are assigned")
             .ty_record
             .dupe()
+    }
+
+    fn make_parameter_spec(
+        name: &str,
+        fields: &SmallMap<String, FieldGen<V>>,
+    ) -> ParametersSpec<FrozenValue> {
+        ParametersSpec::new_named_only(
+            name,
+            fields.iter().map(|(name, field)| {
+                (
+                    name.as_str(),
+                    match field.default {
+                        None => ParametersSpecParam::Required,
+                        Some(_default) => ParametersSpecParam::Optional,
+                    },
+                )
+            }),
+        )
     }
 }
 
@@ -236,15 +231,16 @@ where
         args: &Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_, '_>,
     ) -> crate::Result<Value<'v>> {
-        if self.ty_record_data().is_none() {
+        let Some(ty_record_data) = self.ty_record_data() else {
             return Err(crate::Error::new_other(
                 RecordTypeError::RecordTypeNotAssigned,
             ));
-        }
+        };
 
         let this = me;
 
-        self.parameter_spec
+        ty_record_data
+            .parameter_spec
             .parser(args, eval, |param_parser, eval| {
                 let fields = record_fields(RecordType::from_value(this).unwrap());
                 let mut values = Vec::with_capacity(fields.len());
@@ -281,7 +277,7 @@ where
         Self: Sized,
     {
         static RES: MethodsStatic = MethodsStatic::new();
-        RES.methods(record_type_methods)
+        RES.methods_for_type::<Self::Canonical>(record_type_methods)
     }
 
     fn eval_type(&self) -> Option<Ty> {
@@ -319,9 +315,9 @@ where
             )?);
 
             let ty_record_type = Ty::custom(TyUser::new(
-                format!("record[{}]", variable_name),
+                format!("record[{variable_name}]"),
                 TyStarlarkValue::new::<RecordType>(),
-                TypeInstanceId::gen(),
+                TypeInstanceId::r#gen(),
                 TyUserParams {
                     callable: Some(TyCallable::new(
                         ParamSpec::new_named_only(self.fields.iter().map(|(name, field)| {
@@ -343,9 +339,9 @@ where
 
             Ok(Arc::new(TyRecordData {
                 name: variable_name.to_owned(),
-                id: self.id,
                 ty_record,
                 ty_record_type,
+                parameter_spec: Self::make_parameter_spec(variable_name, &self.fields),
             }))
         })
     }
@@ -419,6 +415,18 @@ noop(f_fail_rt)(RecFailRt2(a = 1, b = 2))
         assert::fail_golden(
             "src/values/types/record/record_type/anon_record.golden",
             "record(a = field(int))(a = 1)",
+        );
+    }
+
+    #[test]
+    fn test_missing_field_error() {
+        assert::fail_golden(
+            "src/values/types/record/record_type/missing_field_error.golden",
+            r#"
+RecFail = record(a = field(int), b = field(int))
+
+_x = RecFail(a = 1)
+"#,
         );
     }
 }

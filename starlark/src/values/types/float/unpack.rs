@@ -16,11 +16,11 @@
  */
 
 use crate::typing::Ty;
+use crate::values::UnpackValue;
+use crate::values::Value;
 use crate::values::type_repr::StarlarkTypeRepr;
 use crate::values::types::num::value::Num;
 use crate::values::types::num::value::NumRef;
-use crate::values::UnpackValue;
-use crate::values::Value;
 
 /// Unpack `int` or `float` into `f64`.
 pub struct UnpackFloat(pub f64);
@@ -46,27 +46,28 @@ impl<'v> UnpackValue<'v> for UnpackFloat {
 
 #[cfg(test)]
 mod tests {
-    use crate::values::float::UnpackFloat;
     use crate::values::Heap;
     use crate::values::UnpackValue;
     use crate::values::Value;
+    use crate::values::float::UnpackFloat;
 
     #[test]
     fn test_unpack_float() {
-        let heap = Heap::new();
-        assert_eq!(
-            1.0,
-            UnpackFloat::unpack_value(Value::testing_new_int(1))
-                .unwrap()
-                .unwrap()
-                .0
-        );
-        assert_eq!(
-            1.0,
-            UnpackFloat::unpack_value(heap.alloc(1.0))
-                .unwrap()
-                .unwrap()
-                .0
-        );
+        Heap::temp(|heap| {
+            assert_eq!(
+                1.0,
+                UnpackFloat::unpack_value(Value::testing_new_int(1))
+                    .unwrap()
+                    .unwrap()
+                    .0
+            );
+            assert_eq!(
+                1.0,
+                UnpackFloat::unpack_value(heap.alloc(1.0))
+                    .unwrap()
+                    .unwrap()
+                    .0
+            );
+        });
     }
 }

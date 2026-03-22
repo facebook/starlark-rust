@@ -23,19 +23,21 @@ use std::fmt::Debug;
 use std::fmt::Display;
 
 use allocative::Allocative;
-use starlark_derive::starlark_value;
 use starlark_derive::NoSerialize;
+use starlark_derive::starlark_value;
 
 use crate as starlark;
 use crate::any::ProvidesStaticType;
+use crate::pagable::vtable_register::VtableRegistered;
 use crate::values::AllocValue;
 use crate::values::Freeze;
-use crate::values::FreezeResult;
 use crate::values::Heap;
+use crate::values::HeapSendable;
 use crate::values::StarlarkValue;
 use crate::values::Trace;
 use crate::values::Value;
 use crate::values::ValueLike;
+use crate::values::layout::heap::send::HeapSyncable;
 
 /// Allocate arbitrary value on the starlark heap without implementing full [`StarlarkValue`].
 ///
@@ -64,7 +66,7 @@ where
     }
 
     /// Obtain the value from a `Value`, if it is a `StarlarkAnyComplex<T>`.
-    pub fn get_err(value: Value<'v>) -> anyhow::Result<&'v T> {
+    pub fn get_err(value: Value<'v>) -> crate::Result<&'v T> {
         value.downcast_ref_err::<Self>().map(|x| &x.value)
     }
 }
@@ -95,13 +97,18 @@ where
 impl<'v, T> AllocValue<'v> for StarlarkAnyComplex<T>
 where
     Self: StarlarkValue<'v> + Freeze,
-    T: Trace<'v>,
-    <Self as Freeze>::Frozen: StarlarkValue<'static>,
+    T: Trace<'v> + ProvidesStaticType<'v>,
+    <Self as Freeze>::Frozen:
+        StarlarkValue<'static> + HeapSendable<'static> + HeapSyncable<'static>,
+    <Self as ProvidesStaticType<'v>>::StaticType: Send,
 {
-    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
+    fn alloc_value(self, heap: Heap<'v>) -> Value<'v> {
         heap.alloc_complex(self)
     }
 }
+
+// TODO(nero): Better handle StarlarkAnyComplex registration.
+unsafe impl<T> VtableRegistered for StarlarkAnyComplex<T> {}
 
 #[cfg(test)]
 mod tests {
@@ -112,8 +119,6 @@ mod tests {
     use crate as starlark;
     use crate::const_frozen_string;
     use crate::environment::Module;
-    use crate::values::list::AllocList;
-    use crate::values::types::any_complex::StarlarkAnyComplex;
     use crate::values::Freeze;
     use crate::values::FreezeResult;
     use crate::values::Freezer;
@@ -121,6 +126,8 @@ mod tests {
     use crate::values::FrozenValue;
     use crate::values::StringValue;
     use crate::values::Value;
+    use crate::values::list::AllocList;
+    use crate::values::types::any_complex::StarlarkAnyComplex;
 
     #[test]
     fn test_any_complex() {
@@ -144,33 +151,36 @@ mod tests {
         #[derive(Allocative, ProvidesStaticType)]
         struct FrozenData {
             string: FrozenStringValue,
+            #[expect(dead_code)]
             other: FrozenValue,
         }
 
-        let module = Module::new();
+        Module::with_temp_heap(|module| {
+            let data = module.heap().alloc(StarlarkAnyComplex::new(UnfrozenData {
+                string: module.heap().alloc_str("aaa"),
+                other: module.heap().alloc(AllocList([1, 2])),
+            }));
 
-        let data = module.heap().alloc(StarlarkAnyComplex::new(UnfrozenData {
-            string: module.heap().alloc_str("aaa"),
-            other: module.heap().alloc(AllocList([1, 2])),
-        }));
+            assert_eq!(
+                const_frozen_string!("aaa"),
+                StarlarkAnyComplex::<UnfrozenData>::get_err(data)
+                    .unwrap()
+                    .string
+            );
 
-        assert_eq!(
-            const_frozen_string!("aaa"),
-            StarlarkAnyComplex::<UnfrozenData>::get_err(data)
-                .unwrap()
-                .string
-        );
+            module.set_extra_value(data);
 
-        module.set_extra_value(data);
+            let module = module.freeze()?;
 
-        let module = module.freeze().unwrap();
-
-        let data = module.extra_value().unwrap();
-        assert_eq!(
-            const_frozen_string!("aaa"),
-            StarlarkAnyComplex::<FrozenData>::get_err(data.to_value())
-                .unwrap()
-                .string
-        );
+            let data = module.extra_value().unwrap();
+            assert_eq!(
+                const_frozen_string!("aaa"),
+                StarlarkAnyComplex::<FrozenData>::get_err(data.to_value())
+                    .unwrap()
+                    .string
+            );
+            crate::Result::Ok(())
+        })
+        .unwrap();
     }
 }

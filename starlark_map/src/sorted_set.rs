@@ -20,15 +20,31 @@
 use std::hash::Hash;
 
 use allocative::Allocative;
+#[cfg(feature = "pagable_dep")]
+use pagable::Pagable;
+use serde::Deserialize;
+use serde::Serialize;
 
+use crate::Equivalent;
 use crate::ordered_set::OrderedSet;
 use crate::small_set;
 use crate::small_set::SmallSet;
 use crate::sorted_vec::SortedVec;
-use crate::Equivalent;
 
 /// An immutable `SmallSet` with values guaranteed to be sorted.
-#[derive(Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd, Allocative)]
+#[derive(
+    Clone,
+    Debug,
+    Eq,
+    PartialEq,
+    Hash,
+    Ord,
+    PartialOrd,
+    Allocative,
+    Serialize,
+    Deserialize
+)]
+#[cfg_attr(feature = "pagable_dep", derive(Pagable))]
 pub struct SortedSet<T: Eq + Hash> {
     inner: OrderedSet<T>,
 }
@@ -71,18 +87,18 @@ where
 
     /// Get the element in the set.
     #[inline]
-    pub fn get<Q: ?Sized>(&self, value: &Q) -> Option<&T>
+    pub fn get<Q>(&self, value: &Q) -> Option<&T>
     where
-        Q: Hash + Equivalent<T>,
+        Q: ?Sized + Hash + Equivalent<T>,
     {
         self.inner.get(value)
     }
 
     /// Check if the set contains the given value.
     #[inline]
-    pub fn contains<Q: ?Sized>(&self, value: &Q) -> bool
+    pub fn contains<Q>(&self, value: &Q) -> bool
     where
-        Q: Hash + Equivalent<T>,
+        Q: ?Sized + Hash + Equivalent<T>,
     {
         self.inner.contains(value)
     }

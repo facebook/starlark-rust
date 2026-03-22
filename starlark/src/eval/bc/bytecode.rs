@@ -21,6 +21,7 @@ use std::fmt::Write;
 
 use starlark_syntax::eval_exception::EvalException;
 
+use crate::eval::Evaluator;
 use crate::eval::bc::addr::BcPtrAddr;
 use crate::eval::bc::for_loop::LoopDepth;
 use crate::eval::bc::frame::BcFramePtr;
@@ -34,7 +35,6 @@ use crate::eval::bc::slow_arg::BcInstrEndArg;
 use crate::eval::bc::slow_arg::BcInstrSlowArg;
 use crate::eval::compiler::add_span_to_expr_error;
 use crate::eval::runtime::evaluator::EvaluationCallbacks;
-use crate::eval::Evaluator;
 use crate::values::Value;
 
 /// Ready to execute bytecode.
@@ -53,7 +53,7 @@ impl Bc {
     /// Find span for instruction.
     #[cold]
     #[inline(never)]
-    pub(crate) fn slow_arg_at_ptr(addr_ptr: BcPtrAddr) -> &BcInstrSlowArg {
+    pub(crate) fn slow_arg_at_ptr(addr_ptr: BcPtrAddr<'_>) -> &BcInstrSlowArg {
         let mut ptr = addr_ptr;
         loop {
             let opcode = ptr.get_opcode();
@@ -71,7 +71,7 @@ impl Bc {
                         return next_span;
                     }
                 }
-                panic!("span not found for addr: {}", addr);
+                panic!("span not found for addr: {addr}");
             }
             ptr = ptr.add(opcode.size_of_repr());
         }
@@ -109,7 +109,7 @@ impl Bc {
         self.instrs
             .dump_debug()
             .lines()
-            .for_each(|line| writeln!(w, "  {}", line).unwrap());
+            .for_each(|line| writeln!(w, "  {line}").unwrap());
         w
     }
 }

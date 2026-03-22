@@ -21,20 +21,20 @@ use std::num::NonZeroI32;
 
 use allocative::Allocative;
 use dupe::Dupe;
-use starlark_derive::starlark_value;
 use starlark_derive::NoSerialize;
+use starlark_derive::starlark_value;
 
 use crate as starlark;
 use crate::any::ProvidesStaticType;
 use crate::starlark_simple_value;
 use crate::typing::Ty;
-use crate::values::index::convert_index;
-use crate::values::index::convert_slice_indices;
 use crate::values::Heap;
 use crate::values::StarlarkValue;
 use crate::values::Value;
 use crate::values::ValueError;
 use crate::values::ValueLike;
+use crate::values::index::convert_index;
+use crate::values::index::convert_slice_indices;
 
 /// Representation of `range()` type.
 #[derive(Clone, Copy, Dupe, Debug, ProvidesStaticType, NoSerialize, Allocative)]
@@ -139,7 +139,7 @@ impl<'v> StarlarkValue<'v> for Range {
         }
     }
 
-    fn at(&self, index: Value, heap: &'v Heap) -> crate::Result<Value<'v>> {
+    fn at(&self, index: Value, heap: Heap<'v>) -> crate::Result<Value<'v>> {
         let index = convert_index(index, self.length()?)?;
         // Must not overflow if `length` is computed correctly
         Ok(heap.alloc(self.start + self.step.get() * index))
@@ -158,7 +158,7 @@ impl<'v> StarlarkValue<'v> for Range {
         start: Option<Value>,
         stop: Option<Value>,
         stride: Option<Value>,
-        heap: &'v Heap,
+        heap: Heap<'v>,
     ) -> crate::Result<Value<'v>> {
         let (start, stop, step) = convert_slice_indices(self.length()?, start, stop, stride)?;
         return Ok(heap.alloc(Range {
@@ -185,11 +185,11 @@ impl<'v> StarlarkValue<'v> for Range {
         }));
     }
 
-    unsafe fn iterate(&self, me: Value<'v>, _heap: &'v Heap) -> crate::Result<Value<'v>> {
+    unsafe fn iterate(&self, me: Value<'v>, _heap: Heap<'v>) -> crate::Result<Value<'v>> {
         Ok(me)
     }
 
-    unsafe fn iter_next(&self, index: usize, heap: &'v Heap) -> Option<Value<'v>> {
+    unsafe fn iter_next(&self, index: usize, heap: Heap<'v>) -> Option<Value<'v>> {
         let rem_range = self.rem_range_at_iter(index)?;
 
         if !rem_range.to_bool() {
@@ -233,15 +233,13 @@ impl<'v> StarlarkValue<'v> for Range {
             if other < self.start || other >= self.stop {
                 return Ok(false);
             }
-            Ok((other.wrapping_sub(self.start) as u64) % (self.step.get() as u64) == 0)
+            Ok((other.wrapping_sub(self.start) as u64).is_multiple_of(self.step.get() as u64))
         } else {
             if other > self.start || other <= self.stop {
                 return Ok(false);
             }
-            Ok(
-                (self.start.wrapping_sub(other) as u64) % (self.step.get().wrapping_neg() as u64)
-                    == 0,
-            )
+            Ok((self.start.wrapping_sub(other) as u64)
+                .is_multiple_of(self.step.get().wrapping_neg() as u64))
         }
     }
 
@@ -262,11 +260,11 @@ mod tests {
     use std::num::NonZeroI32;
 
     use crate::assert;
-    use crate::values::range::Range;
-    use crate::values::types::int::inline_int::InlineInt;
     use crate::values::Heap;
     use crate::values::StarlarkValue;
     use crate::values::Value;
+    use crate::values::range::Range;
+    use crate::values::types::int::inline_int::InlineInt;
 
     fn range(start: i32, stop: i32, range: i32) -> Range {
         Range {
@@ -330,27 +328,28 @@ mod tests {
         }
         assert_eq!(ranges.len(), 294); // Assert we don't accidentally take too long
 
-        let heap = Heap::new();
-        for x in &ranges {
-            let x = heap.alloc_simple(*x);
-            let full: Vec<Value> = x.iterate(&heap).unwrap().collect();
-            assert_eq!(x.length().unwrap(), full.len() as i32);
-            for (i, v) in full.iter().enumerate() {
-                assert_eq!(x.at(heap.alloc(i), &heap).unwrap(), *v);
-            }
-        }
-
-        // Takes 294^2 steps - but completes instantly
-        for x in &ranges {
-            for y in &ranges {
+        Heap::temp(|heap| {
+            for x in &ranges {
                 let x = heap.alloc_simple(*x);
-                let y = heap.alloc_simple(*y);
-                assert_eq!(
-                    x == y,
-                    Iterator::eq(x.iterate(&heap).unwrap(), y.iterate(&heap).unwrap())
-                )
+                let full: Vec<Value> = x.iterate(heap).unwrap().collect();
+                assert_eq!(x.length().unwrap(), full.len() as i32);
+                for (i, v) in full.iter().enumerate() {
+                    assert_eq!(x.at(heap.alloc(i), heap).unwrap(), *v);
+                }
             }
-        }
+
+            // Takes 294^2 steps - but completes instantly
+            for x in &ranges {
+                for y in &ranges {
+                    let x = heap.alloc_simple(*x);
+                    let y = heap.alloc_simple(*y);
+                    assert_eq!(
+                        x == y,
+                        Iterator::eq(x.iterate(heap).unwrap(), y.iterate(heap).unwrap())
+                    )
+                }
+            }
+        });
     }
 
     #[test]

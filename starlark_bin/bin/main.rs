@@ -25,17 +25,18 @@ use std::fmt::Display;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use clap::builder::StringValueParser;
-use clap::builder::TypedValueParser;
 use clap::Parser;
 use clap::ValueEnum;
+use clap::builder::StringValueParser;
+use clap::builder::TypedValueParser;
 use dupe::Dupe;
 use eval::Context;
 use itertools::Either;
 use starlark::analysis::LintMessage;
-use starlark::docs::markdown::render_doc_item_no_link;
 use starlark::docs::DocItem;
+use starlark::docs::markdown::render_doc_item_no_link;
 use starlark::environment::Globals;
+use starlark::environment::Module;
 use starlark::errors::EvalMessage;
 use starlark::errors::EvalSeverity;
 use starlark::read_line::ReadLine;
@@ -171,7 +172,7 @@ enum ArgsDialect {
 
 // Treat directories as things to recursively walk for .<extension> files,
 // and everything else as normal files.
-fn expand_dirs(extension: &str, xs: Vec<PathBuf>) -> impl Iterator<Item = PathBuf> {
+fn expand_dirs(extension: &str, xs: Vec<PathBuf>) -> impl Iterator<Item = PathBuf> + use<> {
     let extension = Arc::new(extension.to_owned());
     xs.into_iter().flat_map(move |x| {
         // Have to keep cloning extension so we keep ownership
@@ -241,9 +242,9 @@ fn drain(
             if !error.is_empty() && !error.ends_with('\n') {
                 error.push('\n');
             }
-            print!("{}", error);
+            print!("{error}");
         } else {
-            println!("{}", x);
+            println!("{x}");
         }
     }
     Ok(())
@@ -299,71 +300,71 @@ fn main() -> anyhow::Result<()> {
         // TODO: Remove this when extracting the Bazel binary to its own
         // repository, after the LspContext interface stabilizes.
         if args.bazel {
-            bazel::main(
-                args.lsp,
-                print_non_none,
-                is_interactive,
-                &prelude,
-                dialect,
-                globals,
-            )?;
+            Module::with_temp_heap(|module| {
+                let module = if is_interactive { Some(module) } else { None };
+                bazel::main(args.lsp, print_non_none, module, &prelude, dialect, globals)
+            })?;
             return Ok(());
         }
 
-        let mut ctx = Context::new(
-            if args.check {
-                ContextMode::Check
+        Module::with_temp_heap(|module| {
+            let module = if is_interactive { Some(module) } else { None };
+            let mut ctx = Context::new(
+                if args.check {
+                    ContextMode::Check
+                } else {
+                    ContextMode::Run
+                },
+                print_non_none,
+                &prelude,
+                module,
+                dialect,
+                globals,
+                args.suppression,
+            )?;
+
+            if args.lsp {
+                ctx.mode = ContextMode::Check;
+                starlark_lsp::server::stdio_server(ctx)?;
+            } else if let Some(docs) = args.docs {
+                let global_module = DocItem::Module(Globals::extended_internal().documentation());
+
+                match docs {
+                    ArgsDoc::Markdown | ArgsDoc::Lsp => {
+                        println!(
+                            "{}",
+                            if docs == ArgsDoc::Markdown {
+                                render_doc_item_no_link("globals", &global_module)
+                            } else {
+                                String::new()
+                            }
+                        )
+                    }
+                    ArgsDoc::Code => println!("{}", global_module.render_as_code("globals")),
+                };
+            } else if is_interactive {
+                interactive(&ctx)?;
             } else {
-                ContextMode::Run
-            },
-            print_non_none,
-            &prelude,
-            is_interactive,
-            dialect,
-            globals,
-            args.suppression,
-        )?;
-
-        if args.lsp {
-            ctx.mode = ContextMode::Check;
-            starlark_lsp::server::stdio_server(ctx)?;
-        } else if let Some(docs) = args.docs {
-            let global_module = DocItem::Module(Globals::extended_internal().documentation());
-
-            match docs {
-                ArgsDoc::Markdown | ArgsDoc::Lsp => {
-                    println!(
-                        "{}",
-                        if docs == ArgsDoc::Markdown {
-                            render_doc_item_no_link("globals", &global_module)
-                        } else {
-                            String::new()
-                        }
-                    )
+                let mut stats = Stats::default();
+                for e in args.evaluate.clone() {
+                    stats.increment_file();
+                    drain(ctx.expression(e).messages, args.json, &mut stats)?;
                 }
-                ArgsDoc::Code => println!("{}", global_module.render_as_code("globals")),
-            };
-        } else if is_interactive {
-            interactive(&ctx)?;
-        } else {
-            let mut stats = Stats::default();
-            for e in args.evaluate.clone() {
-                stats.increment_file();
-                drain(ctx.expression(e).messages, args.json, &mut stats)?;
-            }
 
-            for file in expand_dirs(ext, args.files.clone()) {
-                stats.increment_file();
-                drain(ctx.file(&file).messages, args.json, &mut stats)?;
-            }
+                for file in expand_dirs(ext, args.files.clone()) {
+                    stats.increment_file();
+                    drain(ctx.file(&file).messages, args.json, &mut stats)?;
+                }
 
-            if !args.json {
-                println!("{}", stats);
-                if stats.error > 0 {
-                    return Err(anyhow::anyhow!("Failed with {} errors", stats.error));
+                if !args.json {
+                    println!("{stats}");
+                    if stats.error > 0 {
+                        return Err(anyhow::anyhow!("Failed with {} errors", stats.error));
+                    }
                 }
             }
-        }
+            Ok(())
+        })?;
     }
     Ok(())
 }

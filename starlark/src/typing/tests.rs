@@ -18,8 +18,12 @@
 use std::collections::HashMap;
 use std::fmt::Write;
 
+use allocative::Allocative;
 use dupe::Dupe;
+use starlark_derive::NoSerialize;
+use starlark_derive::ProvidesStaticType;
 use starlark_derive::starlark_module;
+use starlark_derive::starlark_value;
 use starlark_map::small_map::SmallMap;
 use starlark_syntax::golden_test_template::golden_test_template;
 
@@ -28,23 +32,27 @@ use crate::assert::Assert;
 use crate::environment::FrozenModule;
 use crate::environment::GlobalsBuilder;
 use crate::environment::Module;
-use crate::eval::runtime::file_loader::ReturnOwnedFileLoader;
 use crate::eval::Evaluator;
+use crate::eval::runtime::file_loader::ReturnOwnedFileLoader;
 use crate::syntax::AstModule;
 use crate::syntax::Dialect;
 use crate::tests::util::trim_rust_backtrace;
-use crate::typing::callable_param::ParamIsRequired;
-use crate::typing::interface::Interface;
 use crate::typing::AstModuleTypecheck;
 use crate::typing::ParamSpec;
 use crate::typing::Ty;
+use crate::typing::callable_param::ParamIsRequired;
+use crate::typing::interface::Interface;
 use crate::util::ArcStr;
+use crate::values::AllocValue;
+use crate::values::Heap;
+use crate::values::StarlarkValue;
+use crate::values::Value;
+use crate::values::ValueOfUnchecked;
 use crate::values::none::NoneType;
+use crate::values::types::starlark_value_as_type::StarlarkValueAsType;
 use crate::values::typing::StarlarkCallable;
 use crate::values::typing::StarlarkCallableParamSpec;
 use crate::values::typing::StarlarkIter;
-use crate::values::Value;
-use crate::values::ValueOfUnchecked;
 
 mod call;
 mod callable;
@@ -57,6 +65,26 @@ mod types;
 struct TypeCheck {
     expect_types: Vec<String>,
     loads: HashMap<String, (Interface, FrozenModule)>,
+}
+
+/// A simple custom type for testing `StarlarkValueAsType` parameterization errors.
+#[derive(
+    derive_more::Display,
+    Debug,
+    NoSerialize,
+    Allocative,
+    ProvidesStaticType
+)]
+#[display("MyType")]
+struct MyCustomType;
+
+#[starlark_value(type = "my_custom_type")]
+impl<'v> StarlarkValue<'v> for MyCustomType {}
+
+impl<'v> AllocValue<'v> for MyCustomType {
+    fn alloc_value(self, heap: Heap<'v>) -> Value<'v> {
+        heap.alloc_simple(self)
+    }
 }
 
 struct NamedXy;
@@ -73,6 +101,8 @@ impl StarlarkCallableParamSpec for NamedXy {
 
 #[starlark_module]
 fn register_typecheck_globals(globals: &mut GlobalsBuilder) {
+    const MyCustomType: StarlarkValueAsType<MyCustomType> = StarlarkValueAsType::new();
+
     fn accepts_iterable<'v>(
         #[starlark(require = pos)] xs: ValueOfUnchecked<'v, StarlarkIter<Value<'v>>>,
     ) -> anyhow::Result<NoneType> {
@@ -147,7 +177,7 @@ impl TypeCheck {
                 // Note we are using `:#` here instead of `:?` because
                 // `:?` includes rust backtrace.
                 // The issue: https://github.com/dtolnay/anyhow/issues/300
-                writeln!(output, "{}", format!("{:#}", error).trim_end()).unwrap();
+                writeln!(output, "{}", format!("{error:#}").trim_end()).unwrap();
             }
         }
 
@@ -155,7 +185,7 @@ impl TypeCheck {
             writeln!(output).unwrap();
             writeln!(output, "Approximations:").unwrap();
             for appox in approximations {
-                writeln!(output, "{}", appox).unwrap();
+                writeln!(output, "{appox}").unwrap();
             }
         }
 
@@ -165,9 +195,9 @@ impl TypeCheck {
             for k in &self.expect_types {
                 let types = typemap.find_bindings_by_name(k);
                 match types.as_slice() {
-                    [ty] => writeln!(output, "{}: {}", k, ty).unwrap(),
-                    [] => panic!("Type not found for {}", k),
-                    [_, _, ..] => panic!("Multiple types found for {}", k),
+                    [ty] => writeln!(output, "{k}: {ty}").unwrap(),
+                    [] => panic!("Type not found for {k}"),
+                    [_, _, ..] => panic!("Multiple types found for {k}"),
                 }
             }
         }
@@ -176,32 +206,34 @@ impl TypeCheck {
         let module = {
             writeln!(output).unwrap();
             writeln!(output, "Compiler typechecker (eval):").unwrap();
-            let module = Module::new();
-            let mut eval = Evaluator::new(&module);
+            Module::with_temp_heap(|module| {
+                let mut eval = Evaluator::new(&module);
 
-            eval.set_loader(&loader);
+                eval.set_loader(&loader);
 
-            eval.enable_static_typechecking(true);
-            let eval_result = eval.eval_module(ast, &globals);
-            if eval_result.is_ok() != errors.is_empty() {
-                writeln!(output, "Compiler typechecker and eval results mismatch.").unwrap();
-                writeln!(output).unwrap();
-            }
+                eval.enable_static_typechecking(true);
+                let eval_result = eval.eval_module(ast, &globals);
+                if eval_result.is_ok() != errors.is_empty() {
+                    writeln!(output, "Compiler typechecker and eval results mismatch.").unwrap();
+                    writeln!(output).unwrap();
+                }
 
-            // Additional writes must happen above this line otherwise it might be erased by trim_rust_backtrace
-            match &eval_result {
-                Ok(_) => writeln!(output, "No errors.").unwrap(),
-                Err(err) => writeln!(output, "{:?}", err).unwrap(),
-            }
+                // Additional writes must happen above this line otherwise it might be erased by trim_rust_backtrace
+                match &eval_result {
+                    Ok(_) => writeln!(output, "No errors.").unwrap(),
+                    Err(err) => writeln!(output, "{err:?}").unwrap(),
+                }
 
-            // Help borrow checker.
-            drop(eval);
+                // Help borrow checker.
+                drop(eval);
 
-            module.freeze().unwrap()
+                module.freeze()
+            })
+            .unwrap()
         };
 
         golden_test_template(
-            &format!("src/typing/tests/golden/{}.golden", test_name),
+            &format!("src/typing/tests/golden/{test_name}.golden"),
             trim_rust_backtrace(&output),
         );
 

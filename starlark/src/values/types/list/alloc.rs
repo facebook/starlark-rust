@@ -18,13 +18,13 @@
 use std::iter;
 
 use crate::typing::Ty;
-use crate::values::type_repr::StarlarkTypeRepr;
 use crate::values::AllocFrozenValue;
 use crate::values::AllocValue;
 use crate::values::FrozenHeap;
 use crate::values::FrozenValue;
 use crate::values::Heap;
 use crate::values::Value;
+use crate::values::type_repr::StarlarkTypeRepr;
 
 /// Utility to allocate a list from iterator.
 ///
@@ -34,7 +34,7 @@ use crate::values::Value;
 /// use starlark::values::list::AllocList;
 ///
 /// # use starlark::values::{FrozenHeap, Heap};
-/// # fn alloc(heap: &Heap, frozen_heap: &FrozenHeap) {
+/// # fn alloc(heap: Heap<'_>, frozen_heap: &FrozenHeap) {
 /// let l = heap.alloc(AllocList([1, 2, 3]));
 /// let ls = frozen_heap.alloc(AllocList([1, 2, 3]));
 /// # }
@@ -63,7 +63,7 @@ where
     L: IntoIterator,
     L::Item: AllocValue<'v>,
 {
-    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
+    fn alloc_value(self, heap: Heap<'v>) -> Value<'v> {
         heap.alloc_list_iter(self.0.into_iter().map(|x| heap.alloc(x)))
     }
 }

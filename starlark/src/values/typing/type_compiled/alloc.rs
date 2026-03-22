@@ -17,10 +17,10 @@
 
 use starlark_syntax::slice_vec_ext::SliceExt;
 
-use crate::typing::custom::TyCustom;
-use crate::typing::starlark_value::TyStarlarkValue;
 use crate::typing::Ty;
 use crate::typing::TyBasic;
+use crate::typing::custom::TyCustom;
+use crate::typing::starlark_value::TyStarlarkValue;
 use crate::values::typing::type_compiled::matcher::TypeMatcher;
 use crate::values::typing::type_compiled::matcher::TypeMatcherBoxAlloc;
 use crate::values::typing::type_compiled::matchers::IsAny;
@@ -45,16 +45,35 @@ use crate::values::typing::type_compiled::type_matcher_factory::TypeMatcherFacto
 
 /// Allocate runtime type matcher, either in starlark heap or in malloc.
 pub trait TypeMatcherAlloc: Sized {
+    /// Allocation result.
     type Result;
 
+    // When the `pagable` feature is enabled, we explicitly require `TypeMatcherRegistered`,
+    // although it is reuqired by TypeMatcher.
+    // It can produce better error messages. Generic matchers that not impls TypeMatcherRegistered
+    // will have concrete type in the error messages.
+    /// Allocate a type matcher.
+    #[cfg(feature = "pagable")]
+    fn alloc<
+        T: TypeMatcher + crate::values::typing::type_compiled::matcher::TypeMatcherRegistered,
+    >(
+        self,
+        matcher: T,
+    ) -> Self::Result;
+
+    /// Allocate a type matcher.
+    #[cfg(not(feature = "pagable"))]
     fn alloc<T: TypeMatcher>(self, matcher: T) -> Self::Result;
 
+    /// Allocate a matcher for a custom type.
     fn custom(self, custom: &TyCustom) -> Self::Result;
 
+    /// Allocate from a [`TypeMatcherFactory`].
     fn from_type_matcher_factory(self, factory: &TypeMatcherFactory) -> Self::Result;
 
     // Now the utilities.
 
+    /// Panics; this type cannot appear in type expressions.
     fn unreachable_cannot_appear_in_type_expr(self) -> ! {
         // TODO(nga): replace panic with error.
         unreachable!("type cannot appear in type expressions")
@@ -90,6 +109,7 @@ pub trait TypeMatcherAlloc: Sized {
         self.alloc(IsStr)
     }
 
+    /// Match a union type.
     fn ty(self, ty: &Ty) -> Self::Result {
         match ty.iter_union() {
             [] => self.never(),
@@ -134,6 +154,7 @@ pub trait TypeMatcherAlloc: Sized {
         }
     }
 
+    /// Match a single basic type.
     fn ty_basic(self, ty: &TyBasic) -> Self::Result {
         match ty {
             TyBasic::Any => self.any(),
@@ -149,6 +170,7 @@ pub trait TypeMatcherAlloc: Sized {
         }
     }
 
+    /// `callable`.
     fn callable(self) -> Self::Result {
         self.alloc(IsCallable)
     }
@@ -288,6 +310,7 @@ pub trait TypeMatcherAlloc: Sized {
         }
     }
 
+    /// `set[Item]`.
     fn set_of(self, item: &Ty) -> Self::Result {
         if item.is_any() {
             self.set()

@@ -1,26 +1,27 @@
 /*
  * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
- * This source code is licensed under both the MIT license found in the
- * LICENSE-MIT file in the root directory of this source tree and the Apache
+ * This source code is dual-licensed under either the MIT license found in the
+ * LICENSE-MIT file in the root directory of this source tree or the Apache
  * License, Version 2.0 found in the LICENSE-APACHE file in the root directory
- * of this source tree.
+ * of this source tree. You may select, at your option, one of the
+ * above-listed licenses.
  */
 
-use std::collections::hash_map;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::collections::hash_map;
 use std::fmt::Write as _;
 use std::mem;
 use std::ops::Index;
 use std::ops::IndexMut;
 
+use crate::Allocative;
 use crate::global_root::roots;
 use crate::key::Key;
 use crate::visitor::NodeKind;
 use crate::visitor::Visitor;
 use crate::visitor::VisitorImpl;
-use crate::Allocative;
 
 /// Node in flamegraph tree.
 ///
@@ -85,7 +86,7 @@ impl FlameGraph {
 
     /// Write flamegraph in format suitable for [`flamegraph.pl`] or [inferno].
     ///
-    /// [flamegraph.pl]: https://github.com/brendangregg/FlameGraph
+    /// [`flamegraph.pl`]: https://github.com/brendangregg/FlameGraph
     /// [inferno]: https://github.com/jonhoo/inferno
     pub fn write(&self) -> String {
         let mut r = String::new();
@@ -137,7 +138,7 @@ struct TreeRef<'a> {
     tree_id: TreeId,
 }
 
-impl<'a> TreeRef<'a> {
+impl TreeRef<'_> {
     fn write_flame_graph(&self, stack: &[&str], warnings: &mut String) -> FlameGraph {
         let mut flame_graph = FlameGraph::default();
         let tree = &self.trees[self.tree_id];
@@ -187,7 +188,7 @@ struct Tree {
 }
 
 impl Tree {
-    fn as_ref(&self) -> TreeRef {
+    fn as_ref(&self) -> TreeRef<'_> {
         TreeRef {
             trees: &self.trees,
             tree_id: self.tree_id,
@@ -240,7 +241,7 @@ struct TreeStackRef<'t, 's> {
     stack: &'s mut TreeStack,
 }
 
-impl<'t, 's> TreeStackRef<'t, 's> {
+impl<'t> TreeStackRef<'t, '_> {
     fn current_data(&'t mut self) -> &'t mut TreeData {
         &mut self.trees[self.stack.tree]
     }
@@ -345,7 +346,7 @@ impl Default for FlameGraphBuilder {
 }
 
 impl FlameGraphBuilder {
-    pub fn root_visitor(&mut self) -> Visitor {
+    pub fn root_visitor(&mut self) -> Visitor<'_> {
         assert!(!self.entered_root_visitor);
         self.entered_root_visitor = true;
         Visitor {
@@ -415,7 +416,7 @@ impl FlameGraphBuilder {
         tree.rem_size = (size as isize).saturating_sub(children_size as isize);
     }
 
-    fn current(&mut self) -> TreeStackRef {
+    fn current(&mut self) -> TreeStackRef<'_, '_> {
         TreeStackRef {
             trees: &mut self.trees,
             stack: &mut self.current,
@@ -451,7 +452,6 @@ impl VisitorImpl for FlameGraphBuilder {
         self.current().current_data().unique = true;
     }
 
-    #[must_use]
     fn enter_shared_impl(
         &mut self,
         name: Key,
@@ -496,11 +496,11 @@ impl VisitorImpl for FlameGraphBuilder {
 
 #[cfg(test)]
 mod tests {
+    use crate::FlameGraph;
     use crate::flamegraph::FlameGraphBuilder;
     use crate::flamegraph::Tree;
     use crate::flamegraph::Trees;
     use crate::key::Key;
-    use crate::FlameGraph;
 
     #[test]
     fn test_empty() {
@@ -565,8 +565,7 @@ mod tests {
                 Struct;p;x 13\n\
             ",
             tree.to_flame_graph().0.write(),
-            "{:#?}",
-            tree,
+            "{tree:#?}",
         );
     }
 
@@ -602,8 +601,7 @@ mod tests {
             Struct;p 12\n\
         ",
             tree.to_flame_graph().0.write(),
-            "{:#?}",
-            tree,
+            "{tree:#?}",
         );
     }
 

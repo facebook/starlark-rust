@@ -15,10 +15,10 @@
  * limitations under the License.
  */
 
+use crate::Hashed;
 use crate::iter::def_double_ended_iter;
 use crate::iter::def_iter;
 use crate::small_map;
-use crate::Hashed;
 
 /// Iterator over the hashed entries of [`SmallSet`](crate::small_set::SmallSet).
 pub struct Iter<'a, T> {
@@ -94,11 +94,11 @@ impl<'a, T> Iterator for Iter<'a, T> {
     def_iter!();
 }
 
-impl<'a, T> DoubleEndedIterator for Iter<'a, T> {
+impl<T> DoubleEndedIterator for Iter<'_, T> {
     def_double_ended_iter!();
 }
 
-impl<'a, T> ExactSizeIterator for Iter<'a, T> {
+impl<T> ExactSizeIterator for Iter<'_, T> {
     #[inline]
     fn len(&self) -> usize {
         self.iter.len()
@@ -111,11 +111,11 @@ impl<'a, T> Iterator for IterMutUnchecked<'a, T> {
     def_iter!();
 }
 
-impl<'a, T> DoubleEndedIterator for IterMutUnchecked<'a, T> {
+impl<T> DoubleEndedIterator for IterMutUnchecked<'_, T> {
     def_double_ended_iter!();
 }
 
-impl<'a, T> ExactSizeIterator for IterMutUnchecked<'a, T> {
+impl<T> ExactSizeIterator for IterMutUnchecked<'_, T> {
     #[inline]
     fn len(&self) -> usize {
         self.iter.len()
@@ -128,11 +128,11 @@ impl<'a, T> Iterator for IterHashed<'a, T> {
     def_iter!();
 }
 
-impl<'a, T> DoubleEndedIterator for IterHashed<'a, T> {
+impl<T> DoubleEndedIterator for IterHashed<'_, T> {
     def_double_ended_iter!();
 }
 
-impl<'a, T> ExactSizeIterator for IterHashed<'a, T> {
+impl<T> ExactSizeIterator for IterHashed<'_, T> {
     #[inline]
     fn len(&self) -> usize {
         self.iter.len()

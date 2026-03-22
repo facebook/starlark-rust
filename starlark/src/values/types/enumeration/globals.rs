@@ -20,11 +20,11 @@ use starlark_derive::starlark_module;
 
 use crate as starlark;
 use crate::environment::GlobalsBuilder;
-use crate::values::enumeration::EnumType;
-use crate::values::tuple::UnpackTuple;
 use crate::values::Heap;
 use crate::values::StringValue;
 use crate::values::Value;
+use crate::values::enumeration::EnumType;
+use crate::values::tuple::UnpackTuple;
 
 #[starlark_module]
 pub fn register_enum(builder: &mut GlobalsBuilder) {
@@ -49,10 +49,10 @@ pub fn register_enum(builder: &mut GlobalsBuilder) {
     /// Enumeration types store each value once, which are then efficiently referenced by enumeration values.
     fn r#enum<'v>(
         #[starlark(args)] args: UnpackTuple<StringValue<'v>>,
-        heap: &'v Heap,
+        heap: Heap<'v>,
     ) -> starlark::Result<Value<'v>> {
         // Every Value must either be a field or a value (the type)
-        EnumType::new(args.items, heap)
+        Ok(EnumType::new(args.items, heap)?.to_value())
     }
 }
 

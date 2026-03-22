@@ -20,7 +20,10 @@ Docs for func1
 
 #### Parameters
 
-* `foo`: Docs for foo
+* `foo`: (required)
+
+  Docs for foo
+
 
 
 #### Returns
@@ -41,7 +44,7 @@ The string 'func1'
     a: int,
     /,
     b: int,
-    *,
+    \*,
     c: int,
 ) -> <a to="/path/to/Magic">magic</a></code></pre>
 

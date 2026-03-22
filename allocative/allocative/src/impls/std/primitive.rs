@@ -1,10 +1,11 @@
 /*
  * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
- * This source code is licensed under both the MIT license found in the
- * LICENSE-MIT file in the root directory of this source tree and the Apache
+ * This source code is dual-licensed under either the MIT license found in the
+ * LICENSE-MIT file in the root directory of this source tree or the Apache
  * License, Version 2.0 found in the LICENSE-APACHE file in the root directory
- * of this source tree.
+ * of this source tree. You may select, at your option, one of the
+ * above-listed licenses.
  */
 
 use crate::allocative_trait::Allocative;
@@ -29,6 +30,12 @@ impl Allocative for u32 {
 }
 
 impl Allocative for u64 {
+    fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {
+        visitor.visit_simple_sized::<Self>();
+    }
+}
+
+impl Allocative for u128 {
     fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {
         visitor.visit_simple_sized::<Self>();
     }
@@ -59,6 +66,12 @@ impl Allocative for i32 {
 }
 
 impl Allocative for i64 {
+    fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {
+        visitor.visit_simple_sized::<Self>();
+    }
+}
+
+impl Allocative for i128 {
     fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {
         visitor.visit_simple_sized::<Self>();
     }

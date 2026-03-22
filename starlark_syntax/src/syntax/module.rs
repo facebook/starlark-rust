@@ -33,6 +33,8 @@ use crate::codemap::Spanned;
 use crate::eval_exception::EvalException;
 use crate::lexer::Lexer;
 use crate::lexer::Token;
+use crate::syntax::AstLoad;
+use crate::syntax::Dialect;
 use crate::syntax::ast::ArgumentP;
 use crate::syntax::ast::AstExpr;
 use crate::syntax::ast::AstStmt;
@@ -46,8 +48,6 @@ use crate::syntax::lint_suppressions::LintSuppressions;
 use crate::syntax::lint_suppressions::LintSuppressionsBuilder;
 use crate::syntax::state::ParserState;
 use crate::syntax::validate::validate_module;
-use crate::syntax::AstLoad;
-use crate::syntax::Dialect;
 
 fn one_of(expected: &[String]) -> String {
     let mut result = String::new();
@@ -58,7 +58,7 @@ fn one_of(expected: &[String]) -> String {
             // Last expected message to be written
             _ => " or",
         };
-        write!(result, "{} {}", sep, e).unwrap();
+        write!(result, "{sep} {e}").unwrap();
     }
     result
 }
@@ -93,7 +93,7 @@ fn parse_error_add_span(
             Span::new(Pos::new(pos as u32), Pos::new(pos as u32)),
         ),
         lu::ParseError::ExtraToken { token: (x, t, y) } => (
-            format!("Parse error: extraneous token {}", t),
+            format!("Parse error: extraneous token {t}"),
             Span::new(Pos::new(x as u32), Pos::new(y as u32)),
         ),
         lu::ParseError::User { error } => return error.into_error(),
@@ -258,7 +258,7 @@ impl AstModule {
 
     /// Return the file names of all the `load` statements in the module.
     /// If the [`Dialect`] had [`enable_load`](Dialect::enable_load) set to [`false`] this will be an empty list.
-    pub fn loads(&self) -> Vec<AstLoad> {
+    pub fn loads(&self) -> Vec<AstLoad<'_>> {
         // We know that `load` statements must be at the top-level, so no need to descend inside `if`, `for`, `def` etc.
         // There is a suggestion that `load` statements should be at the top of a file, but we tolerate that not being true.
         fn f<'a>(ast: &'a AstStmt, codemap: &CodeMap, vec: &mut Vec<AstLoad<'a>>) {
@@ -294,6 +294,11 @@ impl AstModule {
     /// Look up a [`Span`] contained in this module to a [`FileSpan`].
     pub fn file_span(&self, x: Span) -> FileSpan {
         self.codemap.file_span(x)
+    }
+
+    /// Get back the AST statement for the module
+    pub fn statement(&self) -> &AstStmt {
+        &self.statement
     }
 
     /// Locations where statements occur.

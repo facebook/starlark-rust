@@ -213,8 +213,8 @@ impl HeapSummaryByFunction {
 mod tests {
     use crate::environment::Globals;
     use crate::environment::Module;
-    use crate::eval::runtime::profile::mode::ProfileMode;
     use crate::eval::Evaluator;
+    use crate::eval::runtime::profile::mode::ProfileMode;
     use crate::syntax::AstModule;
     use crate::syntax::Dialect;
     use crate::values::layout::heap::profile::aggregated::AggregateHeapProfileInfo;
@@ -236,24 +236,27 @@ _ignore = str([1])     # allocate a string in non_drop
         .unwrap();
 
         let globals = Globals::standard();
-        let module = Module::new();
-        let mut eval = Evaluator::new(&module);
-        eval.enable_profile(&ProfileMode::HeapSummaryAllocated)
-            .unwrap();
+        Module::with_temp_heap(|module| {
+            let mut eval = Evaluator::new(&module);
+            eval.enable_profile(&ProfileMode::HeapSummaryAllocated)
+                .unwrap();
 
-        eval.eval_module(ast, &globals).unwrap();
+            eval.eval_module(ast, &globals).unwrap();
 
-        let stacks = AggregateHeapProfileInfo::collect(eval.heap(), None);
+            let stacks = AggregateHeapProfileInfo::collect(eval.heap(), None);
 
-        let info = HeapSummaryByFunction::init(&stacks);
+            let info = HeapSummaryByFunction::init(&stacks);
 
-        // Run the assertions.
-        info.gen_csv();
+            // Run the assertions.
+            info.gen_csv();
 
-        let total = FuncInfo::merge(info.info.values());
-        // from non-drop heap
-        assert_eq!(total.alloc.get("string").unwrap().count, 1);
-        // from drop heap
-        assert_eq!(total.alloc.get("dict").unwrap().count, 1);
+            let total = FuncInfo::merge(info.info.values());
+            // from non-drop heap
+            assert_eq!(total.alloc.get("string").unwrap().count, 1);
+            // from drop heap
+            assert_eq!(total.alloc.get("dict").unwrap().count, 1);
+            crate::Result::Ok(())
+        })
+        .unwrap();
     }
 }

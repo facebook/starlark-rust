@@ -24,18 +24,18 @@ use dupe::Dupe;
 use num_traits::Signed;
 use thiserror::Error;
 
-use crate::values::float::float;
-use crate::values::float::StarlarkFloat;
-use crate::values::string::dot_format::format_one;
-use crate::values::types::int::int_or_big::StarlarkIntRef;
-use crate::values::types::num::value::NumRef;
-use crate::values::types::tuple::value::Tuple;
 use crate::values::Heap;
 use crate::values::StringValue;
 use crate::values::UnpackValue;
 use crate::values::Value;
 use crate::values::ValueError;
 use crate::values::ValueLike;
+use crate::values::float::StarlarkFloat;
+use crate::values::float::float;
+use crate::values::string::dot_format::format_one;
+use crate::values::types::int::int_or_big::StarlarkIntRef;
+use crate::values::types::num::value::NumRef;
+use crate::values::types::tuple::value::Tuple;
 
 // `i32::abs(i32::MIN)` panics as `i32::MIN` has no corresponding
 // positive value that fits inside `i32`. For this edge case,
@@ -236,7 +236,7 @@ pub(crate) fn percent(format: &str, value: Value) -> crate::Result<String> {
                     }
                     Some(NumRef::Float(v)) => {
                         match NumRef::Float(StarlarkFloat(v.0.trunc())).as_int() {
-                            Some(v) => write!(res, "{}", v).unwrap(),
+                            Some(v) => write!(res, "{v}").unwrap(),
                             None => ValueError::unsupported_type(value, "format(%d)")?,
                         }
                     }
@@ -252,7 +252,7 @@ pub(crate) fn percent(format: &str, value: Value) -> crate::Result<String> {
                             Some(vp) => {
                                 write!(res, "{}{:o}", if v < 0 { "-" } else { "" }, vp).unwrap()
                             }
-                            None => write!(res, "{}", I32_MIN_OCTAL).unwrap(),
+                            None => write!(res, "{I32_MIN_OCTAL}").unwrap(),
                         }
                     }
                     Some(NumRef::Int(StarlarkIntRef::Big(v))) => {
@@ -279,7 +279,7 @@ pub(crate) fn percent(format: &str, value: Value) -> crate::Result<String> {
                             Some(vp) => {
                                 write!(res, "{}{:x}", if v < 0 { "-" } else { "" }, vp).unwrap()
                             }
-                            None => write!(res, "{}", I32_MIN_HEX).unwrap(),
+                            None => write!(res, "{I32_MIN_HEX}").unwrap(),
                         }
                     }
                     Some(NumRef::Int(StarlarkIntRef::Big(v))) => {
@@ -306,7 +306,7 @@ pub(crate) fn percent(format: &str, value: Value) -> crate::Result<String> {
                             Some(vp) => {
                                 write!(res, "{}{:X}", if v < 0 { "-" } else { "" }, vp).unwrap()
                             }
-                            None => write!(res, "{}", I32_MIN_HEX).unwrap(),
+                            None => write!(res, "{I32_MIN_HEX}").unwrap(),
                         }
                     }
                     Some(NumRef::Int(StarlarkIntRef::Big(v))) => {
@@ -388,7 +388,7 @@ pub(crate) fn percent_s_one<'v>(
     before: &str,
     arg: Value<'v>,
     after: &str,
-    heap: &'v Heap,
+    heap: Heap<'v>,
 ) -> crate::Result<StringValue<'v>> {
     Ok(match StringValue::new(arg) {
         Some(arg) => heap.alloc_str_concat3(before, &arg, after),

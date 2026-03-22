@@ -21,15 +21,19 @@ use std::cmp::Ordering;
 use std::hash::Hash;
 
 use allocative::Allocative;
+#[cfg(feature = "pagable_dep")]
+use pagable::Pagable;
 use serde::Deserialize;
 use serde::Serialize;
+use strong_hash::StrongHash;
 
+use crate::Equivalent;
 use crate::small_map;
 use crate::small_map::SmallMap;
-use crate::Equivalent;
 
 /// Wrapper for `SmallMap` which considers map equal if iteration order is equal.
 #[derive(Debug, Clone, Allocative)]
+#[cfg_attr(feature = "pagable_dep", derive(Pagable))]
 pub struct OrderedMap<K, V>(SmallMap<K, V>);
 
 impl<K, V> OrderedMap<K, V> {
@@ -59,13 +63,13 @@ impl<K, V> OrderedMap<K, V> {
 
     /// Iterate over the entries.
     #[inline]
-    pub fn iter(&self) -> small_map::Iter<K, V> {
+    pub fn iter(&self) -> small_map::Iter<'_, K, V> {
         self.0.iter()
     }
 
     /// Iterate over the entries, with mutable values.
     #[inline]
-    pub fn iter_mut(&mut self) -> small_map::IterMut<K, V> {
+    pub fn iter_mut(&mut self) -> small_map::IterMut<'_, K, V> {
         self.0.iter_mut()
     }
 
@@ -173,7 +177,7 @@ impl<K, V> OrderedMap<K, V> {
 
     /// Iterate over the map with hashes.
     #[inline]
-    pub fn iter_hashed(&self) -> small_map::IterHashed<K, V> {
+    pub fn iter_hashed(&self) -> small_map::IterHashed<'_, K, V> {
         self.0.iter_hashed()
     }
 }
@@ -198,6 +202,17 @@ impl<K: Hash, V: Hash> Hash for OrderedMap<K, V> {
     #[inline]
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.0.hash_ordered(state)
+    }
+}
+
+impl<K: StrongHash, V: StrongHash> StrongHash for OrderedMap<K, V> {
+    #[inline]
+    fn strong_hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.len().strong_hash(state);
+        for (k, v) in self.iter() {
+            k.strong_hash(state);
+            v.strong_hash(state);
+        }
     }
 }
 

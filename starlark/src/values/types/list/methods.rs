@@ -23,15 +23,15 @@ use starlark_syntax::convert_indices::convert_indices;
 
 use crate as starlark;
 use crate::environment::MethodsBuilder;
+use crate::values::Heap;
+use crate::values::Value;
+use crate::values::ValueError;
+use crate::values::ValueOfUnchecked;
 use crate::values::list::ListRef;
 use crate::values::none::NoneOr;
 use crate::values::none::NoneType;
 use crate::values::types::list::value::ListData;
 use crate::values::typing::StarlarkIter;
-use crate::values::Heap;
-use crate::values::Value;
-use crate::values::ValueError;
-use crate::values::ValueOfUnchecked;
 
 #[starlark_module]
 pub(crate) fn list_methods(builder: &mut MethodsBuilder) {
@@ -55,7 +55,7 @@ pub(crate) fn list_methods(builder: &mut MethodsBuilder) {
     fn append<'v>(
         this: Value<'v>,
         #[starlark(require = pos)] el: Value<'v>,
-        heap: &'v Heap,
+        heap: Heap<'v>,
     ) -> anyhow::Result<NoneType> {
         let this = ListData::from_value_mut(this)?;
         this.push(el, heap);
@@ -103,7 +103,7 @@ pub(crate) fn list_methods(builder: &mut MethodsBuilder) {
     fn extend<'v>(
         this: Value<'v>,
         #[starlark(require = pos)] other: ValueOfUnchecked<'v, StarlarkIter<Value<'v>>>,
-        heap: &'v Heap,
+        heap: Heap<'v>,
     ) -> starlark::Result<NoneType> {
         let res = ListData::from_value_mut(this)?;
         if this.ptr_eq(other.get()) {
@@ -128,7 +128,7 @@ pub(crate) fn list_methods(builder: &mut MethodsBuilder) {
     /// list L that is inspected.  If provided and not `None`, they must be list
     /// indices of type `int`. If an index is negative, `len(L)` is effectively
     /// added to it, then if the index is outside the range `[0:len(L)]`, the
-    /// nearest value within that range is used; see [Indexing](#indexing).
+    /// nearest value within that range is used; see [Indexing](https://github.com/bazelbuild/starlark/blob/master/spec.md#indexing).
     ///
     /// `index` fails if `x` is not found in L, or if `start` or `end`
     /// is not a valid index (`int` or `None`).
@@ -188,7 +188,7 @@ pub(crate) fn list_methods(builder: &mut MethodsBuilder) {
         this: Value<'v>,
         #[starlark(require = pos)] index: i32,
         #[starlark(require = pos)] el: Value<'v>,
-        heap: &'v Heap,
+        heap: Heap<'v>,
     ) -> anyhow::Result<NoneType> {
         let this = ListData::from_value_mut(this)?;
         let index = convert_index(this.len() as i32, index);

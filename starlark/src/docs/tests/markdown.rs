@@ -20,31 +20,31 @@ use derive_more::Display;
 use itertools::Itertools;
 use serde::Serialize;
 use starlark::starlark_simple_value;
+use starlark_derive::NoSerialize;
 use starlark_derive::starlark_module;
 use starlark_derive::starlark_value;
-use starlark_derive::NoSerialize;
 use starlark_map::small_map::SmallMap;
 use starlark_syntax::golden_test_template::golden_test_template;
 
 use crate as starlark;
 use crate::any::ProvidesStaticType;
 use crate::assert;
-use crate::docs::markdown::render_doc_item_no_link;
-use crate::docs::multipage::render_markdown_multipage;
-use crate::docs::multipage::DocModuleInfo;
 use crate::docs::DocItem;
 use crate::docs::DocType;
+use crate::docs::markdown::render_doc_item_no_link;
+use crate::docs::multipage::DocModuleInfo;
+use crate::docs::multipage::render_markdown_multipage;
 use crate::environment::Globals;
 use crate::environment::GlobalsBuilder;
 use crate::environment::Methods;
 use crate::environment::MethodsBuilder;
 use crate::environment::MethodsStatic;
+use crate::values::StarlarkValue;
+use crate::values::Value;
 use crate::values::list::UnpackList;
 use crate::values::none::NoneType;
 use crate::values::starlark_value_as_type::StarlarkValueAsType;
 use crate::values::tuple::UnpackTuple;
-use crate::values::StarlarkValue;
-use crate::values::Value;
 
 fn docs_golden_test(test_file_name: &str, doc: DocItem) -> String {
     assert!(test_file_name.ends_with(".golden.md"));
@@ -224,7 +224,7 @@ starlark_simple_value!(Obj);
 impl<'v> StarlarkValue<'v> for Obj {
     fn get_methods() -> Option<&'static Methods> {
         static RES: MethodsStatic = MethodsStatic::new();
-        RES.methods(object)
+        RES.methods_for_type::<Self::Canonical>(object)
     }
 }
 
@@ -285,7 +285,7 @@ fn native_docs_module() {
     assert!(res.contains(r#"string_default: str = "my_default"#));
 }
 
-fn test_globals_docs_render(with_linked_type: bool) {
+fn test_globals_docs_render(with_linked_type: bool, render_signature_at_bottom: bool) {
     let global = get_globals().documentation();
     let modules_info = DocModuleInfo {
         module: &global,
@@ -295,40 +295,57 @@ fn test_globals_docs_render(with_linked_type: bool) {
     fn linked_ty_mapper(path: &str, type_name: &str) -> String {
         format!("<a to=\"/path/to/{path}\">{type_name}</a>")
     }
-    let res = if with_linked_type {
-        render_markdown_multipage(vec![modules_info], Some(linked_ty_mapper))
+    let linked_ty_mapper: Option<fn(&str, &str) -> String> = if with_linked_type {
+        Some(linked_ty_mapper)
     } else {
-        render_markdown_multipage(vec![modules_info], None)
+        None
     };
-    let subfolder_name = if with_linked_type {
-        "multipage_linked_type"
-    } else {
-        "multipage"
+    let res = render_markdown_multipage(
+        vec![modules_info],
+        linked_ty_mapper,
+        render_signature_at_bottom,
+    );
+    let subfolder_name = match (with_linked_type, render_signature_at_bottom) {
+        (true, true) => "multipage_linked_type_and_render_signature_at_bottom",
+        (true, false) => "multipage_linked_type",
+        (false, true) => "multipage_render_signature_at_bottom",
+        (false, false) => "multipage",
     };
     let expected_keys = vec!["", "Magic", "Obj", "submod"];
     assert_eq!(&res.keys().sorted().collect::<Vec<_>>(), &expected_keys);
     for (k, v) in res {
         let k = if k.is_empty() { "globals" } else { &k };
         golden_test_template(
-            &format!("src/docs/tests/golden/{subfolder_name}/{}.golden.md", k),
+            &format!("src/docs/tests/golden/{subfolder_name}/{k}.golden.md"),
             &v,
         );
     }
 }
 
 #[test]
-fn globals_docs_render() {
-    test_globals_docs_render(false);
+fn globals_render_default() {
+    test_globals_docs_render(false, false);
 }
 
 #[test]
-fn globals_docs_render_with_linked_type() {
-    test_globals_docs_render(true);
+fn globals_render_default_with_linked_type() {
+    test_globals_docs_render(true, false);
+}
+
+#[test]
+fn globals_render_signature_at_bottom() {
+    test_globals_docs_render(false, true);
+}
+
+#[test]
+fn globals_render_signature_at_bottom_with_linked_type() {
+    test_globals_docs_render(true, true);
 }
 
 #[test]
 fn golden_docs_object() {
     let docs = DocType::from_starlark_value::<Obj>();
     let res = docs_golden_test("object.golden.md", DocItem::Type(docs));
-    assert!(res.contains(r#"name.\_\_exported\_\_"#));
+
+    assert!(res.contains(r#"name.__exported__"#));
 }

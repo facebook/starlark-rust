@@ -30,8 +30,9 @@ use starlark_syntax::codemap::Span;
 use starlark_syntax::codemap::Spanned;
 
 use crate as starlark;
-use crate::__derive_refs::components::NativeCallableComponents;
 use crate::eval::compiler::small_vec_1::SmallVec1;
+use crate::typing::ParamSpec;
+use crate::typing::TypingOracleCtx;
 use crate::typing::arc_ty::ArcTy;
 use crate::typing::basic::TyBasic;
 use crate::typing::call_args::TyCallArgs;
@@ -46,12 +47,10 @@ use crate::typing::small_arc_vec::SmallArcVec1;
 use crate::typing::starlark_value::TyStarlarkValue;
 use crate::typing::structs::TyStruct;
 use crate::typing::tuple::TyTuple;
-use crate::typing::ParamSpec;
-use crate::typing::TypingOracleCtx;
-use crate::values::bool::StarlarkBool;
-use crate::values::typing::never::TypingNever;
 use crate::values::StarlarkValue;
 use crate::values::Value;
+use crate::values::bool::StarlarkBool;
+use crate::values::typing::never::TypingNever;
 
 /// A typing operation wasn't able to produce a precise result,
 /// so made some kind of approximation.
@@ -68,7 +67,7 @@ impl Approximation {
     pub fn new(category: &'static str, message: impl Debug) -> Self {
         Self {
             category,
-            message: format!("{:?}", message),
+            message: format!("{message:?}"),
         }
     }
 }
@@ -83,6 +82,7 @@ impl Display for Approximation {
 #[derive(
     Debug, Clone, Dupe, PartialEq, Eq, Hash, PartialOrd, Ord, Allocative, Trace
 )]
+#[cfg_attr(feature = "pagable_dep", derive(pagable::PagablePanic))]
 pub struct Ty {
     /// A series of alternative types.
     ///
@@ -426,10 +426,9 @@ impl Ty {
 
     /// Typechecker type of value.
     pub fn of_value(value: Value) -> Ty {
-        if let Some(t) = value.get_ref().typechecker_ty() {
-            t
-        } else {
-            value.get_type_starlark_repr()
+        match value.get_ref().typechecker_ty() {
+            Some(t) => t,
+            _ => value.get_type_starlark_repr(),
         }
     }
 
@@ -489,20 +488,6 @@ impl Ty {
         match oracle.intersects(self, other) {
             Ok(ok) => Ok(ok),
             Err(e) => Err(e.into_error()),
-        }
-    }
-
-    pub(crate) fn from_native_callable_components(
-        comp: &NativeCallableComponents,
-        as_type: Option<Ty>,
-    ) -> starlark::Result<Self> {
-        let result = comp.return_type.clone();
-
-        let params = comp.param_spec.param_spec();
-
-        match as_type {
-            None => Ok(Ty::function(params, result)),
-            Some(type_attr) => Ok(Ty::ctor_function(type_attr, params, result)),
         }
     }
 

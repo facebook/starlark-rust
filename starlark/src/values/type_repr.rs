@@ -24,12 +24,11 @@ use either::Either;
 pub use starlark_derive::StarlarkTypeRepr;
 
 use crate::typing::Ty;
+use crate::values::Heap;
+use crate::values::StarlarkValue;
 use crate::values::list::ListType;
 use crate::values::none::NoneType;
 use crate::values::string::str_type::StarlarkStr;
-use crate::values::Heap;
-use crate::values::StarlarkValue;
-use crate::values::Value;
 
 /// Provides a starlark type representation, even if StarlarkValue is not implemented.
 ///
@@ -133,8 +132,8 @@ impl<TLeft: StarlarkTypeRepr, TRight: StarlarkTypeRepr> StarlarkTypeRepr for Eit
 /// Derive macros generate a reference to this method to be able to get the `type_repr` of types
 /// they can't name
 #[doc(hidden)]
-pub fn type_repr_from_attr_impl<'v, T: StarlarkTypeRepr, E>(
-    _f: fn(Value<'v>, &'v Heap) -> Result<T, E>,
+pub fn type_repr_from_attr_impl<'v, T: StarlarkTypeRepr, V, E>(
+    _f: fn(V, Heap<'v>) -> Result<T, E>,
 ) -> Ty {
     T::starlark_type_repr()
 }
@@ -143,9 +142,9 @@ pub fn type_repr_from_attr_impl<'v, T: StarlarkTypeRepr, E>(
 mod tests {
     use crate::tests::util::TestComplexValue;
     use crate::util::non_static_type_id::non_static_type_id;
-    use crate::values::type_repr::StarlarkTypeRepr;
     use crate::values::FrozenValue;
     use crate::values::Value;
+    use crate::values::type_repr::StarlarkTypeRepr;
 
     #[test]
     fn test_canonical_for_complex_value() {

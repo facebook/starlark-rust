@@ -24,22 +24,22 @@ use crate as starlark;
 use crate::codemap::Span;
 use crate::codemap::Spanned;
 use crate::environment::GlobalsBuilder;
-use crate::typing::call_args::TyCallArgs;
-use crate::typing::callable::TyCallable;
-use crate::typing::error::TypingOrInternalError;
-use crate::typing::function::TyCustomFunctionImpl;
 use crate::typing::ParamSpec;
 use crate::typing::Ty;
 use crate::typing::TyFunction;
 use crate::typing::TypingOracleCtx;
-use crate::values::function::SpecialBuiltinFunction;
-use crate::values::list::value::FrozenList;
-use crate::values::list::AllocList;
-use crate::values::list::ListRef;
-use crate::values::typing::StarlarkIter;
+use crate::typing::call_args::TyCallArgs;
+use crate::typing::callable::TyCallable;
+use crate::typing::error::TypingOrInternalError;
+use crate::typing::function::TyCustomFunctionImpl;
 use crate::values::Heap;
 use crate::values::Value;
 use crate::values::ValueOfUnchecked;
+use crate::values::function::SpecialBuiltinFunction;
+use crate::values::list::AllocList;
+use crate::values::list::ListRef;
+use crate::values::list::value::FrozenList;
+use crate::values::typing::StarlarkIter;
 
 #[derive(Allocative, Hash, Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
 struct ListType;
@@ -110,7 +110,7 @@ pub(crate) fn register_list(globals: &mut GlobalsBuilder) {
     )]
     fn list<'v>(
         #[starlark(require = pos)] a: Option<ValueOfUnchecked<'v, StarlarkIter<Value<'v>>>>,
-        heap: &'v Heap,
+        heap: Heap<'v>,
     ) -> starlark::Result<ValueOfUnchecked<'v, &'v ListRef<'v>>> {
         Ok(ValueOfUnchecked::new(if let Some(a) = a {
             if let Some(xs) = ListRef::from_value(a.get()) {

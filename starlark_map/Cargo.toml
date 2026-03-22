@@ -4,11 +4,18 @@ authors = [
 ]
 description = "Map implementation with starlark-rust specific optimizations"
 documentation = "https://docs.rs/starlark_map"
-edition = "2021"
+edition = "2024"
 license = "Apache-2.0"
 name = "starlark_map"
 repository = "https://github.com/facebook/starlark-rust"
 version = "0.13.0"
+
+[features]
+default = []
+# Controls whether to depend on the pagable crate.
+# This is independent from the `pagable` feature in starlark,
+# which controls pagable serialization/deserialization support for starlark values.
+pagable_dep = ["dep:pagable", "dep:pagable_derive"]
 
 [dependencies]
 allocative = { workspace = true, features = ["hashbrown"] }
@@ -18,6 +25,10 @@ equivalent = { workspace = true }
 fxhash = "0.2.1"
 hashbrown = { version = "0.14.3", features = ["raw"] }
 serde = { version = "1.0", features = ["derive"] }
+
+pagable = { workspace = true, optional = true }
+pagable_derive = { workspace = true, optional = true }
+strong_hash = { workspace = true }
 
 [dev-dependencies]
 serde_json = "1.0.48"

@@ -22,10 +22,10 @@ use starlark_derive::starlark_module;
 use crate as starlark;
 use crate::assert::Assert;
 use crate::environment::GlobalsBuilder;
-use crate::values::dict::UnpackDictEntries;
-use crate::values::list::UnpackList;
 use crate::values::Value;
 use crate::values::ValueOf;
+use crate::values::dict::UnpackDictEntries;
+use crate::values::list::UnpackList;
 
 // TODO(nmj): Figure out default values here. ValueOf<i32> = 5 should work.
 #[starlark_module]
@@ -58,7 +58,7 @@ fn validate_module(builder: &mut GlobalsBuilder) {
             .map(|l| {
                 l.entries
                     .iter()
-                    .map(|(k, v)| format!("{}: {}", k, v))
+                    .map(|(k, v)| format!("{k}: {v}"))
                     .join(", ")
             })
             .join(" + ");
@@ -71,7 +71,7 @@ fn validate_module(builder: &mut GlobalsBuilder) {
             .typed
             .entries
             .iter()
-            .map(|(k, v)| format!("{}: {}", k, v))
+            .map(|(k, v)| format!("{k}: {v}"))
             .join(" + ");
         Ok((v.value, repr))
     }
@@ -97,9 +97,9 @@ fn validate_module(builder: &mut GlobalsBuilder) {
                 let inner_repr = v
                     .entries
                     .iter()
-                    .map(|(k2, v2)| format!("{}:{}", k2, v2))
+                    .map(|(k2, v2)| format!("{k2}:{v2}"))
                     .join(", ");
-                format!("{}: {}", k, inner_repr)
+                format!("{k}: {inner_repr}")
             })
             .join(" + ");
         Ok((v.value, repr))

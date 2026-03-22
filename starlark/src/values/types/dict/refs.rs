@@ -26,16 +26,16 @@ use either::Either;
 
 use crate::coerce::coerce;
 use crate::typing::Ty;
-use crate::values::dict::value::DictGen;
-use crate::values::dict::value::FrozenDictData;
-use crate::values::dict::Dict;
-use crate::values::type_repr::StarlarkTypeRepr;
-use crate::values::types::dict::dict_type::DictType;
 use crate::values::FrozenValue;
 use crate::values::UnpackValue;
 use crate::values::Value;
 use crate::values::ValueError;
 use crate::values::ValueLike;
+use crate::values::dict::Dict;
+use crate::values::dict::value::DictGen;
+use crate::values::dict::value::FrozenDictData;
+use crate::values::type_repr::StarlarkTypeRepr;
+use crate::values::types::dict::dict_type::DictType;
 
 /// Borrowed `Dict`.
 pub struct DictRef<'v> {
@@ -59,7 +59,8 @@ impl<'v> Dupe for DictRef<'v> {}
 
 /// Mutably borrowed `Dict`.
 pub struct DictMut<'v> {
-    pub(crate) aref: RefMut<'v, Dict<'v>>,
+    /// Mutable reference to the dict
+    pub aref: RefMut<'v, Dict<'v>>,
 }
 
 /// Reference to frozen `Dict`.
@@ -87,7 +88,7 @@ impl<'v> DictRef<'v> {
 impl<'v> DictMut<'v> {
     /// Downcast the value to a mutable dict reference.
     #[inline]
-    pub fn from_value(x: Value<'v>) -> anyhow::Result<DictMut> {
+    pub fn from_value(x: Value<'v>) -> anyhow::Result<DictMut<'v>> {
         #[derive(thiserror::Error, Debug)]
         #[error("Value is not dict, value type: `{0}`")]
         struct NotDictError(&'static str);
@@ -126,7 +127,7 @@ impl FrozenDictRef {
     }
 
     /// Iterate over dict entries.
-    pub fn iter(&self) -> impl ExactSizeIterator<Item = (FrozenValue, FrozenValue)> {
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = (FrozenValue, FrozenValue)> + use<> {
         self.dict.iter()
     }
 }

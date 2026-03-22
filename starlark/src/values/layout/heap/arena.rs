@@ -40,11 +40,13 @@ use starlark_map::small_map::SmallMap;
 
 use crate::collections::StarlarkHashValue;
 use crate::eval::runtime::profile::instant::ProfilerInstant;
+use crate::values::Value;
+use crate::values::ValueLike;
 use crate::values::layout::aligned_size::AlignedSize;
-use crate::values::layout::avalue::starlark_str;
 use crate::values::layout::avalue::AValue;
 use crate::values::layout::avalue::AValueImpl;
 use crate::values::layout::avalue::BlackHole;
+use crate::values::layout::avalues::str_::starlark_str;
 use crate::values::layout::heap::allocator::api::ArenaAllocator;
 use crate::values::layout::heap::allocator::api::ChunkAllocationDirection;
 use crate::values::layout::heap::call_enter_exit::CallEnter;
@@ -61,8 +63,6 @@ use crate::values::layout::heap::repr::AValueOrForwardUnpack;
 use crate::values::layout::heap::repr::AValueRepr;
 use crate::values::layout::vtable::AValueVTable;
 use crate::values::string::str_type::StarlarkStr;
-use crate::values::Value;
-use crate::values::ValueLike;
 
 /// Min size of allocated object including header.
 /// Should be able to fit `BlackHole` or forward.
@@ -152,17 +152,19 @@ impl<'v, T: AValue<'v>> ArenaUninit<'v, T> {
         self,
         extra_len: usize,
     ) -> (Reservation<'v, T>, *mut [MaybeUninit<T::ExtraElem>]) {
-        let p = self.repr as *mut AValueRepr<BlackHole>;
-        p.write(AValueRepr {
-            header: AValueHeader(AValueVTable::new_black_hole()),
-            payload: BlackHole(T::alloc_size_for_extra_len(extra_len)),
-        });
-        (
-            Reservation {
-                pointer: p as *mut _,
-            },
-            self.extra,
-        )
+        unsafe {
+            let p = self.repr as *mut AValueRepr<BlackHole>;
+            p.write(AValueRepr {
+                header: AValueHeader(AValueVTable::new_black_hole()),
+                payload: BlackHole(T::alloc_size_for_extra_len(extra_len)),
+            });
+            (
+                Reservation {
+                    pointer: p as *mut _,
+                },
+                self.extra,
+            )
+        }
     }
 
     pub(crate) fn debug_assert_extra_is_empty(&self) {
@@ -285,8 +287,6 @@ impl<A: ArenaAllocator> Arena<A> {
     }
 
     /// Allocate a type `T` plus `extra` bytes.
-    ///
-    /// The type `T` will never be dropped, so had better not do any memory allocation.
     pub(crate) fn alloc_extra<'v, T: AValue<'v>>(
         &self,
         x: AValueImpl<'v, T>,
@@ -330,34 +330,68 @@ impl<A: ArenaAllocator> Arena<A> {
         ChunkIter { chunk }
     }
 
-    // Iterate over the values in the heap in the order they
-    // were added.
-    fn for_each_ordered<'a>(&'a mut self, mut f: impl FnMut(ArenaVisitEvent<'a>)) {
-        // We get the chunks from most newest to oldest as per the bumpalo spec.
+    /// Iterate over values in a single bump allocator in allocation order.
+    fn for_each_bump_ordered<'a>(bump: &'a A, mut f: impl FnMut(&'a AValueOrForward)) {
+        // We get the chunks from newest to oldest as per the bumpalo spec.
         // And within each chunk, the values are filled newest to oldest.
         // So need to do two sets of reversing.
-        for bump in [&mut self.drop, &mut self.non_drop] {
-            f(ArenaVisitEvent::EnterBump);
-            let chunks = unsafe { bump.iter_allocated_chunks_rev().collect::<Vec<_>>() };
-            // Use a single buffer to reduce allocations, but clear it after use
-            let mut buffer = Vec::new();
-            for chunk in chunks.iter().rev() {
-                match A::CHUNK_ALLOCATION_DIRECTION {
-                    ChunkAllocationDirection::Down => {
-                        buffer.extend(Arena::<A>::iter_chunk(chunk));
-                        for x in buffer.iter().rev() {
-                            f(ArenaVisitEvent::Value(x));
-                        }
-                        buffer.clear();
+        let chunks = unsafe { bump.iter_allocated_chunks_rev().collect::<Vec<_>>() };
+        let mut buffer = Vec::new();
+        for chunk in chunks.iter().rev() {
+            match A::CHUNK_ALLOCATION_DIRECTION {
+                ChunkAllocationDirection::Down => {
+                    buffer.extend(Arena::<A>::iter_chunk(chunk));
+                    for x in buffer.iter().rev() {
+                        f(x);
                     }
-                    ChunkAllocationDirection::Up => {
-                        for x in Arena::<A>::iter_chunk(chunk) {
-                            f(ArenaVisitEvent::Value(x));
-                        }
+                    buffer.clear();
+                }
+                ChunkAllocationDirection::Up => {
+                    for x in Arena::<A>::iter_chunk(chunk) {
+                        f(x);
                     }
                 }
             }
         }
+    }
+
+    // Iterate over the values in the heap in the order they
+    // were added.
+    fn for_each_ordered<'a>(&'a mut self, mut f: impl FnMut(ArenaVisitEvent<'a>)) {
+        for bump in [&self.drop, &self.non_drop] {
+            f(ArenaVisitEvent::EnterBump);
+            Self::for_each_bump_ordered(bump, |x| f(ArenaVisitEvent::Value(x)));
+        }
+    }
+
+    /// Collect live value headers from the `drop` bump in allocation order.
+    /// Forward pointers (from GC) are skipped.
+    #[expect(
+        dead_code,
+        reason = "used by FrozenFrozenHeap serialization in later diffs"
+    )]
+    pub(crate) fn collect_drop_headers_ordered(&self) -> Vec<&AValueHeader> {
+        Self::collect_bump_headers_ordered(&self.drop)
+    }
+
+    /// Collect live value headers from the `non_drop` bump in allocation order.
+    /// Forward pointers (from GC) are skipped.
+    #[expect(
+        dead_code,
+        reason = "used by FrozenFrozenHeap serialization in later diffs"
+    )]
+    pub(crate) fn collect_undrop_headers_ordered(&self) -> Vec<&AValueHeader> {
+        Self::collect_bump_headers_ordered(&self.non_drop)
+    }
+
+    fn collect_bump_headers_ordered(bump: &A) -> Vec<&AValueHeader> {
+        let mut headers = Vec::new();
+        Self::for_each_bump_ordered(bump, |value| {
+            if let Some(header) = value.unpack_header() {
+                headers.push(header);
+            }
+        });
+        headers
     }
 
     pub(crate) unsafe fn visit_arena<'v>(
@@ -366,50 +400,53 @@ impl<A: ArenaAllocator> Arena<A> {
         forward_heap_kind: HeapKind,
         visitor: &mut impl ArenaVisitor<'v>,
     ) {
-        fn fix_function<'v>(function: Value<'v>, forward_heap_kind: HeapKind) -> Value<'v> {
-            if let Some(function) = function.unpack_frozen() {
-                return function.to_value();
-            }
-
-            unsafe {
-                match function
-                    .0
-                    .unpack_ptr()
-                    .expect("int cannot be stored in heap")
-                    .unpack_forward()
-                {
-                    None => function,
-                    Some(forward) => forward.forward_ptr().unpack_value(forward_heap_kind),
+        unsafe {
+            fn fix_function<'v>(function: Value<'v>, forward_heap_kind: HeapKind) -> Value<'v> {
+                if let Some(function) = function.unpack_frozen() {
+                    return function.to_value();
                 }
-            }
-        }
 
-        self.for_each_ordered(|x| match x {
-            ArenaVisitEvent::EnterBump => visitor.enter_bump(),
-            ArenaVisitEvent::Value(x) => match x.unpack() {
-                AValueOrForwardUnpack::Header(header) => {
-                    let value = header.unpack_value(heap_kind);
-                    if let Some(call_enter) = value.downcast_ref::<CallEnter<NeedsDrop>>() {
-                        visitor.call_enter(
-                            fix_function(call_enter.function, forward_heap_kind),
-                            call_enter.time,
-                        );
-                    } else if let Some(call_enter) = value.downcast_ref::<CallEnter<NoDrop>>() {
-                        visitor.call_enter(
-                            fix_function(call_enter.function, forward_heap_kind),
-                            call_enter.time,
-                        );
-                    } else if let Some(call_exit) = value.downcast_ref::<CallExit<NeedsDrop>>() {
-                        visitor.call_exit(call_exit.time);
-                    } else if let Some(call_exit) = value.downcast_ref::<CallExit<NoDrop>>() {
-                        visitor.call_exit(call_exit.time);
-                    } else {
-                        visitor.regular_value(x);
+                unsafe {
+                    match function
+                        .0
+                        .unpack_ptr()
+                        .expect("int cannot be stored in heap")
+                        .unpack_forward()
+                    {
+                        None => function,
+                        Some(forward) => forward.forward_ptr().unpack_value(forward_heap_kind),
                     }
                 }
-                AValueOrForwardUnpack::Forward(_forward) => visitor.regular_value(x),
-            },
-        });
+            }
+
+            self.for_each_ordered(|x| match x {
+                ArenaVisitEvent::EnterBump => visitor.enter_bump(),
+                ArenaVisitEvent::Value(x) => match x.unpack() {
+                    AValueOrForwardUnpack::Header(header) => {
+                        let value = header.unpack_value(heap_kind);
+                        if let Some(call_enter) = value.downcast_ref::<CallEnter<NeedsDrop>>() {
+                            visitor.call_enter(
+                                fix_function(call_enter.function, forward_heap_kind),
+                                call_enter.time,
+                            );
+                        } else if let Some(call_enter) = value.downcast_ref::<CallEnter<NoDrop>>() {
+                            visitor.call_enter(
+                                fix_function(call_enter.function, forward_heap_kind),
+                                call_enter.time,
+                            );
+                        } else if let Some(call_exit) = value.downcast_ref::<CallExit<NeedsDrop>>()
+                        {
+                            visitor.call_exit(call_exit.time);
+                        } else if let Some(call_exit) = value.downcast_ref::<CallExit<NoDrop>>() {
+                            visitor.call_exit(call_exit.time);
+                        } else {
+                            visitor.regular_value(x);
+                        }
+                    }
+                    AValueOrForwardUnpack::Forward(_forward) => visitor.regular_value(x),
+                },
+            });
+        }
     }
 
     // Iterate over the values in the drop bump in any order
@@ -456,7 +493,7 @@ impl<A: ArenaAllocator> Arena<A> {
                 .entry(x.dupe())
                 .or_insert_with(|| (v.vtable().type_name, AllocCounts::default()));
             e.1.count += 1;
-            e.1.bytes += v.total_memory()
+            e.1.bytes += v.total_memory_for_profile()
         };
         self.for_each_unordered(f);
 
@@ -528,7 +565,7 @@ impl<A: ArenaAllocator> Allocative for Arena<A> {
 mod tests {
     use super::*;
     use crate::values::any::StarlarkAny;
-    use crate::values::layout::avalue::simple;
+    use crate::values::layout::avalues::simple::simple;
 
     fn to_repr(x: &AValueHeader) -> String {
         let mut s = String::new();
@@ -536,7 +573,7 @@ mod tests {
         s
     }
 
-    fn mk_str(x: &str) -> AValueImpl<'static, impl AValue<'static, ExtraElem = ()>> {
+    fn mk_str(x: &str) -> AValueImpl<'static, impl AValue<'static, ExtraElem = ()> + use<>> {
         simple(StarlarkAny::new(x.to_owned()))
     }
 

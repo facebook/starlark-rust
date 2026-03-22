@@ -28,9 +28,9 @@ use derivative::Derivative;
 use derive_more::Display;
 use dupe::Dupe;
 use once_cell::sync::Lazy;
-use starlark_derive::starlark_value;
 use starlark_derive::NoSerialize;
 use starlark_derive::VisitSpanMut;
+use starlark_derive::starlark_value;
 use starlark_map::StarlarkHasher;
 use starlark_syntax::eval_exception::EvalException;
 use starlark_syntax::slice_vec_ext::SliceExt;
@@ -52,25 +52,26 @@ use crate::docs::DocString;
 use crate::docs::DocStringKind;
 use crate::environment::FrozenModuleData;
 use crate::environment::Globals;
+use crate::eval::Arguments;
 use crate::eval::bc::bytecode::Bc;
 use crate::eval::bc::frame::alloca_frame;
-use crate::eval::compiler::def_inline::inline_def_body;
+use crate::eval::compiler::Compiler;
 use crate::eval::compiler::def_inline::InlineDefBody;
+use crate::eval::compiler::def_inline::inline_def_body;
 use crate::eval::compiler::error::CompilerInternalError;
 use crate::eval::compiler::expr::ExprCompiled;
 use crate::eval::compiler::opt_ctx::OptCtx;
+use crate::eval::compiler::scope::Captured;
+use crate::eval::compiler::scope::ScopeId;
 use crate::eval::compiler::scope::payload::CstAssignIdent;
 use crate::eval::compiler::scope::payload::CstParameter;
 use crate::eval::compiler::scope::payload::CstPayload;
 use crate::eval::compiler::scope::payload::CstStmt;
 use crate::eval::compiler::scope::payload::CstTypeExpr;
-use crate::eval::compiler::scope::Captured;
-use crate::eval::compiler::scope::ScopeId;
 use crate::eval::compiler::span::IrSpanned;
 use crate::eval::compiler::stmt::OptimizeOnFreezeContext;
 use crate::eval::compiler::stmt::StmtCompileContext;
 use crate::eval::compiler::stmt::StmtsCompiled;
-use crate::eval::compiler::Compiler;
 use crate::eval::runtime::arguments::ArgumentsImpl;
 use crate::eval::runtime::arguments::ResolvedArgName;
 use crate::eval::runtime::evaluator::Evaluator;
@@ -80,15 +81,11 @@ use crate::eval::runtime::params::spec::ParametersSpec;
 use crate::eval::runtime::profile::instant::ProfilerInstant;
 use crate::eval::runtime::slots::LocalSlotId;
 use crate::eval::runtime::slots::LocalSlotIdCapturedOrNot;
-use crate::eval::Arguments;
 use crate::starlark_complex_values;
-use crate::typing::callable_param::ParamIsRequired;
 use crate::typing::ParamSpec;
 use crate::typing::Ty;
+use crate::typing::callable_param::ParamIsRequired;
 use crate::util::arc_str::ArcStr;
-use crate::values::frozen_ref::AtomicFrozenRefOption;
-use crate::values::function::FUNCTION_TYPE;
-use crate::values::typing::type_compiled::compiled::TypeCompiled;
 use crate::values::Freeze;
 use crate::values::FreezeResult;
 use crate::values::Freezer;
@@ -102,6 +99,9 @@ use crate::values::Trace;
 use crate::values::Tracer;
 use crate::values::Value;
 use crate::values::ValueLike;
+use crate::values::frozen_ref::AtomicFrozenRefOption;
+use crate::values::function::FUNCTION_TYPE;
+use crate::values::typing::type_compiled::compiled::TypeCompiled;
 
 #[derive(thiserror::Error, Debug)]
 enum DefError {
@@ -133,8 +133,10 @@ impl StmtCompiledCell {
 
     /// This function is unsafe if other thread is executing the stmt.
     unsafe fn set(&self, value: Bc) {
-        ptr::drop_in_place(self.cell.get());
-        ptr::write(self.cell.get(), value);
+        unsafe {
+            ptr::drop_in_place(self.cell.get());
+            ptr::write(self.cell.get(), value);
+        }
     }
 
     fn get(&self) -> &Bc {
@@ -826,7 +828,7 @@ where
         self.bc()
             .dump_debug()
             .lines()
-            .for_each(|l| writeln!(w, "  {}", l).unwrap());
+            .for_each(|l| writeln!(w, "  {l}").unwrap());
         w
     }
 }
@@ -835,7 +837,7 @@ impl FrozenDef {
     pub(crate) fn post_freeze(
         &self,
         module: FrozenRef<FrozenModuleData>,
-        heap: &Heap,
+        heap: Heap<'_>,
         frozen_heap: &FrozenHeap,
     ) {
         // Module passed to this function is not always module where the function is declared:

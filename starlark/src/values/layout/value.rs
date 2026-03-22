@@ -59,28 +59,40 @@ use crate::collections::Hashed;
 use crate::collections::StarlarkHashValue;
 use crate::collections::StarlarkHasher;
 use crate::docs::DocItem;
+use crate::eval::Arguments;
+use crate::eval::Evaluator;
+use crate::eval::ParametersSpec;
 use crate::eval::compiler::def::Def;
 use crate::eval::compiler::def::FrozenDef;
 use crate::eval::runtime::arguments::ArgumentsFull;
 use crate::eval::runtime::frame_span::FrameSpan;
-use crate::eval::Arguments;
-use crate::eval::Evaluator;
-use crate::eval::ParametersSpec;
 use crate::sealed::Sealed;
 use crate::typing::ParamIsRequired;
 use crate::typing::ParamSpec;
 use crate::typing::Ty;
 use crate::typing::TyCallable;
 use crate::util::ArcStr;
+use crate::values::FreezeResult;
+use crate::values::Freezer;
+use crate::values::FrozenRef;
+use crate::values::FrozenStringValue;
+use crate::values::FrozenValueTyped;
+use crate::values::Heap;
+use crate::values::StarlarkValue;
+use crate::values::StringValue;
+use crate::values::Trace;
+use crate::values::UnpackValue;
+use crate::values::ValueError;
+use crate::values::ValueIdentity;
 use crate::values::bool::value::VALUE_FALSE_TRUE;
 use crate::values::demand::request_value_impl;
-use crate::values::dict::value::VALUE_EMPTY_FROZEN_DICT;
 use crate::values::dict::FrozenDictRef;
+use crate::values::dict::value::VALUE_EMPTY_FROZEN_DICT;
 use crate::values::enumeration::EnumType;
 use crate::values::enumeration::FrozenEnumValue;
+use crate::values::function::FUNCTION_TYPE;
 use crate::values::function::FrozenBoundMethod;
 use crate::values::function::NativeFunction;
-use crate::values::function::FUNCTION_TYPE;
 use crate::values::int::pointer_i32::PointerI32;
 use crate::values::iter::StarlarkIterator;
 use crate::values::layout::avalue::AValue;
@@ -116,18 +128,6 @@ use crate::values::types::list::value::FrozenListData;
 use crate::values::types::num::value::NumRef;
 use crate::values::types::tuple::value::FrozenTuple;
 use crate::values::types::tuple::value::Tuple;
-use crate::values::FreezeResult;
-use crate::values::Freezer;
-use crate::values::FrozenRef;
-use crate::values::FrozenStringValue;
-use crate::values::FrozenValueTyped;
-use crate::values::Heap;
-use crate::values::StarlarkValue;
-use crate::values::StringValue;
-use crate::values::Trace;
-use crate::values::UnpackValue;
-use crate::values::ValueError;
-use crate::values::ValueIdentity;
 
 // We already import another `ValueError`, hence the odd name.
 #[derive(Debug, thiserror::Error)]
@@ -173,7 +173,7 @@ impl Display for Value<'_> {
             Err(..) => {
                 let mut recursive = String::new();
                 self.get_ref().collect_repr_cycle(&mut recursive);
-                write!(f, "{}", recursive)
+                write!(f, "{recursive}")
             }
         }
     }
@@ -245,16 +245,12 @@ impl Equivalent<Value<'_>> for FrozenValue {
 /// when working directly with [`FrozenValue`]s. See the type [`OwnedFrozenValue`](crate::values::OwnedFrozenValue)
 /// for a little bit more safety.
 #[derive(Clone, Copy, Dupe, ProvidesStaticType, Allocative)]
+#[derive(pagable::PagablePanic)]
 // One possible change: moving from Blackhole during GC
 pub struct FrozenValue(
     #[allocative(skip)] // Because it is owned by the heap.
     pub(crate)  FrozenPointer<'static>,
 );
-
-// These can both be shared, but not obviously, because we hide a fake RefCell in Pointer to stop
-// it having variance.
-unsafe impl Send for FrozenValue {}
-unsafe impl Sync for FrozenValue {}
 
 #[derive(thiserror::Error, Debug)]
 #[error("Integer value is too big to fit in {integer_type}: {value}")]
@@ -282,12 +278,12 @@ impl<'v> Value<'v> {
 
     #[inline]
     pub(crate) unsafe fn new_ptr_usize_with_str_tag(x: usize) -> Self {
-        Self(Pointer::new_unfrozen_usize_with_str_tag(x))
+        unsafe { Self(Pointer::new_unfrozen_usize_with_str_tag(x)) }
     }
 
     #[inline]
     pub(crate) unsafe fn cast_lifetime<'w>(self) -> Value<'w> {
-        Value(self.0.cast_lifetime())
+        unsafe { Value(self.0.cast_lifetime()) }
     }
 
     /// Create a new `None` value.
@@ -347,8 +343,10 @@ impl<'v> Value<'v> {
 
     #[inline]
     unsafe fn unpack_frozen_unchecked(self) -> FrozenValue {
-        debug_assert!(!self.0.is_unfrozen());
-        FrozenValue(self.0.cast_lifetime().to_frozen_pointer_unchecked())
+        unsafe {
+            debug_assert!(!self.0.is_unfrozen());
+            FrozenValue(self.0.cast_lifetime().to_frozen_pointer_unchecked())
+        }
     }
 
     /// Is this value `None`.
@@ -466,6 +464,12 @@ impl<'v> Value<'v> {
         self.unpack_starlark_str().map(|s| s.as_str())
     }
 
+    /// Obtain the underlying `str` if it is a string, otherwise return an error for users.
+    #[inline]
+    pub fn unpack_str_err(self) -> crate::Result<&'v str> {
+        UnpackValue::unpack_value_err(self)
+    }
+
     /// Get a pointer to a [`AValue`].
     #[inline]
     pub(crate) fn get_ref(self) -> AValueDyn<'v> {
@@ -496,13 +500,15 @@ impl<'v> Value<'v> {
     #[inline]
     pub(crate) unsafe fn downcast_ref_unchecked<T: StarlarkValue<'v>>(self) -> &'v T {
         debug_assert!(self.get_ref().downcast_ref::<T>().is_some());
-        if PointerI32::type_is_pointer_i32::<T>() {
-            transmute!(&PointerI32, &T, self.0.unpack_pointer_i32_unchecked())
-        } else {
-            self.0
-                .unpack_ptr_no_int_unchecked()
-                .unpack_header_unchecked()
-                .payload()
+        unsafe {
+            if PointerI32::type_is_pointer_i32::<T>() {
+                transmute!(&PointerI32, &T, self.0.unpack_pointer_i32_unchecked())
+            } else {
+                self.0
+                    .unpack_ptr_no_int_unchecked()
+                    .unpack_header_unchecked()
+                    .payload()
+            }
         }
     }
 
@@ -562,7 +568,7 @@ impl<'v> Value<'v> {
     }
 
     /// `x[index]`.
-    pub fn at(self, index: Value<'v>, heap: &'v Heap) -> crate::Result<Value<'v>> {
+    pub fn at(self, index: Value<'v>, heap: Heap<'v>) -> crate::Result<Value<'v>> {
         self.get_ref().at(index, heap)
     }
 
@@ -572,7 +578,7 @@ impl<'v> Value<'v> {
         start: Option<Value<'v>>,
         stop: Option<Value<'v>>,
         stride: Option<Value<'v>>,
-        heap: &'v Heap,
+        heap: Heap<'v>,
     ) -> crate::Result<Value<'v>> {
         self.get_ref().slice(start, stop, stride, heap)
     }
@@ -588,73 +594,73 @@ impl<'v> Value<'v> {
     }
 
     /// `+x`.
-    pub fn plus(self, heap: &'v Heap) -> crate::Result<Value<'v>> {
+    pub fn plus(self, heap: Heap<'v>) -> crate::Result<Value<'v>> {
         self.get_ref().plus(heap)
     }
 
     /// `-x`.
-    pub fn minus(self, heap: &'v Heap) -> crate::Result<Value<'v>> {
+    pub fn minus(self, heap: Heap<'v>) -> crate::Result<Value<'v>> {
         self.get_ref().minus(heap)
     }
 
     /// `x - other`.
-    pub fn sub(self, other: Value<'v>, heap: &'v Heap) -> crate::Result<Value<'v>> {
+    pub fn sub(self, other: Value<'v>, heap: Heap<'v>) -> crate::Result<Value<'v>> {
         self.get_ref().sub(other, heap)
     }
 
     /// `x * other`.
-    pub fn mul(self, other: Value<'v>, heap: &'v Heap) -> crate::Result<Value<'v>> {
-        if let Some(r) = self.get_ref().mul(other, heap) {
-            r
-        } else if let Some(r) = other.get_ref().rmul(self, heap) {
-            r
-        } else {
-            ValueError::unsupported_owned(self.get_type(), "*", Some(other.get_type()))
+    pub fn mul(self, other: Value<'v>, heap: Heap<'v>) -> crate::Result<Value<'v>> {
+        match self.get_ref().mul(other, heap) {
+            Some(r) => r,
+            _ => match other.get_ref().rmul(self, heap) {
+                Some(r) => r,
+                _ => ValueError::unsupported_owned(self.get_type(), "*", Some(other.get_type())),
+            },
         }
     }
 
     /// `x % other`.
-    pub fn percent(self, other: Value<'v>, heap: &'v Heap) -> crate::Result<Value<'v>> {
+    pub fn percent(self, other: Value<'v>, heap: Heap<'v>) -> crate::Result<Value<'v>> {
         self.get_ref().percent(other, heap)
     }
 
     /// `x / other`.
-    pub fn div(self, other: Value<'v>, heap: &'v Heap) -> crate::Result<Value<'v>> {
+    pub fn div(self, other: Value<'v>, heap: Heap<'v>) -> crate::Result<Value<'v>> {
         self.get_ref().div(other, heap)
     }
 
     /// `x // other`.
-    pub fn floor_div(self, other: Value<'v>, heap: &'v Heap) -> crate::Result<Value<'v>> {
+    pub fn floor_div(self, other: Value<'v>, heap: Heap<'v>) -> crate::Result<Value<'v>> {
         self.get_ref().floor_div(other, heap)
     }
 
     /// `x & other`.
-    pub fn bit_and(self, other: Value<'v>, heap: &'v Heap) -> crate::Result<Value<'v>> {
+    pub fn bit_and(self, other: Value<'v>, heap: Heap<'v>) -> crate::Result<Value<'v>> {
         self.get_ref().bit_and(other, heap)
     }
 
     /// `x | other`.
-    pub fn bit_or(self, other: Value<'v>, heap: &'v Heap) -> crate::Result<Value<'v>> {
+    pub fn bit_or(self, other: Value<'v>, heap: Heap<'v>) -> crate::Result<Value<'v>> {
         self.get_ref().bit_or(other, heap)
     }
 
     /// `x ^ other`.
-    pub fn bit_xor(self, other: Value<'v>, heap: &'v Heap) -> crate::Result<Value<'v>> {
+    pub fn bit_xor(self, other: Value<'v>, heap: Heap<'v>) -> crate::Result<Value<'v>> {
         self.get_ref().bit_xor(other, heap)
     }
 
     /// `~x`.
-    pub fn bit_not(self, heap: &'v Heap) -> crate::Result<Value<'v>> {
+    pub fn bit_not(self, heap: Heap<'v>) -> crate::Result<Value<'v>> {
         self.get_ref().bit_not(heap)
     }
 
     /// `x << other`.
-    pub fn left_shift(self, other: Value<'v>, heap: &'v Heap) -> crate::Result<Value<'v>> {
+    pub fn left_shift(self, other: Value<'v>, heap: Heap<'v>) -> crate::Result<Value<'v>> {
         self.get_ref().left_shift(other, heap)
     }
 
     /// `x >> other`.
-    pub fn right_shift(self, other: Value<'v>, heap: &'v Heap) -> crate::Result<Value<'v>> {
+    pub fn right_shift(self, other: Value<'v>, heap: Heap<'v>) -> crate::Result<Value<'v>> {
         self.get_ref().right_shift(other, heap)
     }
 
@@ -794,7 +800,7 @@ impl<'v> Value<'v> {
 
     /// Add two [`Value`]s together. Will first try using [`add`](StarlarkValue::add),
     /// before falling back to [`radd`](StarlarkValue::radd).
-    pub fn add(self, other: Value<'v>, heap: &'v Heap) -> crate::Result<Value<'v>> {
+    pub fn add(self, other: Value<'v>, heap: Heap<'v>) -> crate::Result<Value<'v>> {
         // Fast special case for ints.
         if let Some(ls) = self.unpack_inline_int() {
             if let Some(rs) = other.unpack_inline_int() {
@@ -818,12 +824,12 @@ impl<'v> Value<'v> {
             }
         }
 
-        if let Some(v) = self.get_ref().add(other, heap) {
-            v
-        } else if let Some(v) = other.get_ref().radd(self, heap) {
-            v
-        } else {
-            ValueError::unsupported_owned(self.get_type(), "+", Some(other.get_type()))
+        match self.get_ref().add(other, heap) {
+            Some(v) => v,
+            _ => match other.get_ref().radd(self, heap) {
+                Some(v) => v,
+                _ => ValueError::unsupported_owned(self.get_type(), "+", Some(other.get_type())),
+            },
         }
     }
 
@@ -881,7 +887,7 @@ impl<'v> Value<'v> {
 
     /// Produce an iterable from a value.
     #[inline]
-    pub fn iterate(self, heap: &'v Heap) -> crate::Result<StarlarkIterator<'v>> {
+    pub fn iterate(self, heap: Heap<'v>) -> crate::Result<StarlarkIterator<'v>> {
         let iter = self.get_ref().iterate(self, heap)?;
         Ok(StarlarkIterator::new(iter, heap))
     }
@@ -942,7 +948,7 @@ impl<'v> Value<'v> {
     }
 
     /// Return the attribute with the given name.
-    pub fn get_attr(self, attribute: &str, heap: &'v Heap) -> crate::Result<Option<Value<'v>>> {
+    pub fn get_attr(self, attribute: &str, heap: Heap<'v>) -> crate::Result<Option<Value<'v>>> {
         let aref = self.get_ref();
         if let Some(methods) = aref.vtable().methods() {
             let attribute = Hashed::new(attribute);
@@ -956,18 +962,16 @@ impl<'v> Value<'v> {
     }
 
     /// Like `get_attr` but return an error if the attribute is not available.
-    pub fn get_attr_error(self, attribute: &str, heap: &'v Heap) -> crate::Result<Value<'v>> {
+    pub fn get_attr_error(self, attribute: &str, heap: Heap<'v>) -> crate::Result<Value<'v>> {
         match self.get_attr(attribute, heap)? {
-            None => {
-                ValueError::unsupported_owned(self.get_type(), &format!(".{}", attribute), None)
-            }
+            None => ValueError::unsupported_owned(self.get_type(), &format!(".{attribute}"), None),
             Some(x) => Ok(x),
         }
     }
 
     /// Query whether an attribute exists on a type. Should be equivalent to whether
     /// [`get_attr`](Value::get_attr) succeeds, but potentially more efficient.
-    pub fn has_attr(self, attribute: &str, heap: &'v Heap) -> bool {
+    pub fn has_attr(self, attribute: &str, heap: Heap<'v>) -> bool {
         let aref = self.get_ref();
         if let Some(methods) = aref.vtable().methods() {
             if methods.get(attribute).is_some() {
@@ -1061,11 +1065,6 @@ impl FrozenValue {
     }
 
     #[inline]
-    pub(crate) fn new_repr<'a, T: AValue<'a>>(x: &'static AValueRepr<AValueImpl<'a, T>>) -> Self {
-        Self::new_ptr(&x.header, T::IS_STR)
-    }
-
-    #[inline]
     pub(crate) fn new_ptr_usize_with_str_tag(x: usize) -> Self {
         Self(FrozenPointer::new_frozen_usize_with_str_tag(x))
     }
@@ -1073,7 +1072,7 @@ impl FrozenValue {
     /// Create a new value representing `None` in Starlark.
     #[inline]
     pub fn new_none() -> Self {
-        Self::new_repr(&VALUE_NONE)
+        VALUE_NONE.to_frozen_value()
     }
 
     /// Create a new boolean in Starlark.
@@ -1081,7 +1080,7 @@ impl FrozenValue {
     pub fn new_bool(x: bool) -> Self {
         // Implemented by indexing into a static so that
         // the compiler makes this function branchless.
-        Self::new_repr(&VALUE_FALSE_TRUE[x as usize])
+        VALUE_FALSE_TRUE[x as usize].to_frozen_value()
     }
 
     /// Create a new int in Starlark.
@@ -1104,19 +1103,19 @@ impl FrozenValue {
     /// Create a new empty tuple.
     #[inline]
     pub(crate) fn new_empty_tuple() -> Self {
-        FrozenValue::new_repr(&VALUE_EMPTY_TUPLE)
+        VALUE_EMPTY_TUPLE.to_frozen_value()
     }
 
     /// Create a new empty list.
     #[inline]
     pub fn new_empty_list() -> Self {
-        FrozenValue::new_repr(&VALUE_EMPTY_FROZEN_LIST)
+        VALUE_EMPTY_FROZEN_LIST.to_frozen_value()
     }
 
     /// Create a new empty dict.
     #[inline]
     pub fn new_empty_dict() -> Self {
-        FrozenValue::new_repr(&VALUE_EMPTY_FROZEN_DICT)
+        VALUE_EMPTY_FROZEN_DICT.to_frozen_value()
     }
 
     #[inline]
@@ -1342,14 +1341,13 @@ pub trait ValueLike<'v>:
 
     /// Get a reference to underlying data or [`Err`]
     /// if contained object has different type than requested.
-    fn downcast_ref_err<T: StarlarkValue<'v>>(self) -> anyhow::Result<&'v T> {
+    fn downcast_ref_err<T: StarlarkValue<'v>>(self) -> crate::Result<&'v T> {
         match self.downcast_ref() {
             Some(v) => Ok(v),
-            None => Err(ValueValueError::WrongType(
+            None => Err(crate::Error::new_value(ValueValueError::WrongType(
                 T::TYPE,
                 self.to_value().to_string_for_type_error(),
-            )
-            .into()),
+            ))),
         }
     }
 }
@@ -1477,43 +1475,45 @@ mod tests {
     use crate::assert;
     use crate::environment::Globals;
     use crate::typing::Ty;
+    use crate::values::Heap;
+    use crate::values::Value;
+    use crate::values::ValueLike;
     use crate::values::int::pointer_i32::PointerI32;
     use crate::values::list::AllocList;
     use crate::values::none::NoneType;
     use crate::values::string::str_type::StarlarkStr;
     use crate::values::unpack::UnpackValue;
-    use crate::values::Heap;
-    use crate::values::Value;
-    use crate::values::ValueLike;
 
     #[test]
     fn test_downcast_ref() {
-        let heap = Heap::new();
-        let string = heap.alloc_str("asd").to_value();
-        let none = Value::new_none();
-        let integer = Value::testing_new_int(17);
+        Heap::temp(|heap| {
+            let string = heap.alloc_str("asd").to_value();
+            let none = Value::new_none();
+            let integer = Value::testing_new_int(17);
 
-        assert!(string.downcast_ref::<NoneType>().is_none());
-        assert!(integer.downcast_ref::<NoneType>().is_none());
-        assert!(none.downcast_ref::<NoneType>().is_some());
+            assert!(string.downcast_ref::<NoneType>().is_none());
+            assert!(integer.downcast_ref::<NoneType>().is_none());
+            assert!(none.downcast_ref::<NoneType>().is_some());
 
-        assert_eq!(
-            "asd",
-            string.downcast_ref::<StarlarkStr>().unwrap().as_str()
-        );
-        assert!(integer.downcast_ref::<StarlarkStr>().is_none());
-        assert!(none.downcast_ref::<StarlarkStr>().is_none());
+            assert_eq!(
+                "asd",
+                string.downcast_ref::<StarlarkStr>().unwrap().as_str()
+            );
+            assert!(integer.downcast_ref::<StarlarkStr>().is_none());
+            assert!(none.downcast_ref::<StarlarkStr>().is_none());
 
-        assert!(string.downcast_ref::<PointerI32>().is_none());
-        assert_eq!(17, integer.downcast_ref::<PointerI32>().unwrap().get());
-        assert!(none.downcast_ref::<PointerI32>().is_none());
+            assert!(string.downcast_ref::<PointerI32>().is_none());
+            assert_eq!(17, integer.downcast_ref::<PointerI32>().unwrap().get());
+            assert!(none.downcast_ref::<PointerI32>().is_none());
+        });
     }
 
     #[test]
     fn test_unpack_i32() {
-        let heap = Heap::new();
-        let value = heap.alloc(i32::MAX);
-        assert_eq!(Some(i32::MAX), value.unpack_i32());
+        Heap::temp(|heap| {
+            let value = heap.alloc(i32::MAX);
+            assert_eq!(Some(i32::MAX), value.unpack_i32());
+        });
     }
 
     #[test]
@@ -1524,13 +1524,14 @@ mod tests {
 
     #[test]
     fn test_unpack_bigint() {
-        let heap = Heap::new();
-        let value = heap.alloc(BigInt::from(i64::MAX));
-        assert_eq!(None, value.unpack_i32());
-        assert_eq!(
-            Some(BigInt::from(i64::MAX)),
-            BigInt::unpack_value(value).unwrap()
-        );
+        Heap::temp(|heap| {
+            let value = heap.alloc(BigInt::from(i64::MAX));
+            assert_eq!(None, value.unpack_i32());
+            assert_eq!(
+                Some(BigInt::from(i64::MAX)),
+                BigInt::unpack_value(value).unwrap()
+            );
+        });
     }
 
     #[test]
@@ -1549,12 +1550,13 @@ mod tests {
             Value::new_none().to_string_for_type_error(),
         );
 
-        let heap = Heap::new();
-        let list = heap.alloc(AllocList(0..12345));
-        assert_eq!(
-            "list (repr: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,<<...>>42, 12343, 12344])",
-            list.to_string_for_type_error(),
-        );
+        Heap::temp(|heap| {
+            let list = heap.alloc(AllocList(0..12345));
+            assert_eq!(
+                "list (repr: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,<<...>>42, 12343, 12344])",
+                list.to_string_for_type_error(),
+            );
+        });
     }
 
     #[test]

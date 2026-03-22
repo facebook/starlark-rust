@@ -37,11 +37,11 @@ use starlark_syntax::eval_exception::EvalException;
 
 use crate::codemap::CodeMap;
 use crate::environment::Globals;
+use crate::eval::Evaluator;
 use crate::eval::compiler::scope::ModuleScopeData;
 use crate::eval::compiler::scope::ScopeId;
 use crate::eval::compiler::scope::ScopeNames;
 use crate::eval::runtime::frame_span::FrameSpan;
-use crate::eval::Evaluator;
 use crate::values::FrozenRef;
 
 #[cold]
@@ -84,7 +84,7 @@ pub(crate) fn expr_throw_starlark_result<'v, T>(
 
 pub(crate) struct Compiler<'v, 'a, 'e, 'x> {
     pub(crate) eval: &'x mut Evaluator<'v, 'a, 'e>,
-    pub(crate) scope_data: ModuleScopeData<'v>,
+    pub(crate) scope_data: ModuleScopeData<'x>,
     pub(crate) locals: Vec<ScopeId>,
     pub(crate) globals: FrozenRef<'static, Globals>,
     pub(crate) codemap: FrozenRef<'static, CodeMap>,
@@ -103,7 +103,7 @@ impl Compiler<'_, '_, '_, '_> {
         self.locals.pop().unwrap()
     }
 
-    pub(crate) fn current_scope(&self) -> &ScopeNames {
+    pub(crate) fn current_scope(&self) -> &ScopeNames<'_> {
         self.scope_data.get_scope(*self.locals.last().unwrap())
     }
 }

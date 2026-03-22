@@ -19,15 +19,15 @@ use proc_macro2::Ident;
 use proc_macro2::TokenStream;
 use quote::quote;
 use quote::quote_spanned;
-use syn::parse::ParseStream;
-use syn::parse_macro_input;
-use syn::spanned::Spanned;
 use syn::Attribute;
 use syn::DeriveInput;
 use syn::GenericParam;
 use syn::LitStr;
 use syn::Token;
 use syn::WherePredicate;
+use syn::parse::ParseStream;
+use syn::parse_macro_input;
+use syn::spanned::Spanned;
 
 use crate::util::DeriveInputUtil;
 
@@ -35,7 +35,7 @@ struct Input<'a> {
     input: &'a DeriveInput,
 }
 
-impl<'a> Input<'a> {
+impl Input<'_> {
     fn angle_brankets(&self, tokens: &[TokenStream]) -> TokenStream {
         let span = self.input.span();
         if tokens.is_empty() {
@@ -135,12 +135,12 @@ fn derive_freeze_impl(input: DeriveInput) -> syn::Result<syn::ItemImpl> {
 
     let body = freeze_impl(input.input)?;
 
-    let gen = syn::parse_quote_spanned! {
+    let r#gen = syn::parse_quote_spanned! {
         span=>
         impl #impl_params starlark::values::Freeze for #name #input_params #bounds_body {
             type Frozen = #name #output_params;
             #[allow(unused_variables)]
-            fn freeze(self, freezer: &starlark::values::Freezer) -> FreezeResult<Self::Frozen> {
+            fn freeze(self, freezer: &starlark::values::Freezer) -> starlark::values::FreezeResult<Self::Frozen> {
                 let frozen = #body;
                 #validate_body
                 std::result::Result::Ok(frozen)
@@ -148,7 +148,7 @@ fn derive_freeze_impl(input: DeriveInput) -> syn::Result<syn::ItemImpl> {
         }
     };
 
-    Ok(gen)
+    Ok(r#gen)
 }
 
 syn::custom_keyword!(identity);

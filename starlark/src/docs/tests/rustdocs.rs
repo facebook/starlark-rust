@@ -18,10 +18,10 @@
 use allocative::Allocative;
 use derive_more::Display;
 use serde::Serialize;
-use starlark_derive::starlark_module;
-use starlark_derive::starlark_value;
 use starlark_derive::NoSerialize;
 use starlark_derive::ProvidesStaticType;
+use starlark_derive::starlark_module;
+use starlark_derive::starlark_value;
 use starlark_map::small_map::SmallMap;
 
 use crate as starlark;
@@ -33,18 +33,18 @@ use crate::environment::GlobalsBuilder;
 use crate::environment::Methods;
 use crate::environment::MethodsBuilder;
 use crate::environment::MethodsStatic;
-use crate::eval::runtime::params::display::PARAM_FMT_OPTIONAL;
 use crate::eval::Arguments;
 use crate::eval::Evaluator;
-use crate::values::list::UnpackList;
-use crate::values::none::NoneType;
-use crate::values::starlark_value_as_type::StarlarkValueAsType;
-use crate::values::tuple::UnpackTuple;
+use crate::eval::runtime::params::display::PARAM_FMT_OPTIONAL;
 use crate::values::Heap;
 use crate::values::StarlarkValue;
 use crate::values::StringValue;
 use crate::values::Value;
 use crate::values::ValueOfUnchecked;
+use crate::values::list::UnpackList;
+use crate::values::none::NoneType;
+use crate::values::starlark_value_as_type::StarlarkValueAsType;
+use crate::values::tuple::UnpackTuple;
 
 #[derive(
     Debug,
@@ -104,7 +104,7 @@ fn globals(builder: &mut GlobalsBuilder) {
     fn custom_types<'v>(
         arg1: StringValue<'v>,
         arg2: ValueOfUnchecked<'v, InputTypeRepr>,
-        heap: &'v Heap,
+        heap: Heap<'v>,
     ) -> anyhow::Result<ValueOfUnchecked<'v, OutputTypeRepr>> {
         unimplemented!()
     }
@@ -119,6 +119,7 @@ fn globals(builder: &mut GlobalsBuilder) {
 }
 
 /// Test that a Rust starlark_module produces the right documentation.
+
 #[test]
 fn test_rustdoc() {
     let got = GlobalsBuilder::new().with(globals).build();
@@ -163,7 +164,7 @@ struct Obj;
 impl<'v> StarlarkValue<'v> for Obj {
     fn get_methods() -> Option<&'static Methods> {
         static RES: MethodsStatic = MethodsStatic::new();
-        RES.methods(object)
+        RES.methods_for_type::<Self::Canonical>(object)
     }
 }
 
@@ -185,20 +186,21 @@ fn object(builder: &mut MethodsBuilder) {
 
 #[test]
 fn inner_object_functions_have_docs() {
-    let heap = Heap::new();
-    let obj = heap.alloc_simple(Obj);
-    let item = obj
-        .get_attr("func1", &heap)
-        .unwrap()
-        .unwrap()
-        .documentation();
+    Heap::temp(|heap| {
+        let obj = heap.alloc_simple(Obj);
+        let item = obj
+            .get_attr("func1", heap)
+            .unwrap()
+            .unwrap()
+            .documentation();
 
-    match item {
-        DocItem::Member(DocMember::Function(item)) => {
-            assert_eq!(item.docs.unwrap().summary, "Docs for func1");
+        match item {
+            DocItem::Member(DocMember::Function(item)) => {
+                assert_eq!(item.docs.unwrap().summary, "Docs for func1");
+            }
+            _ => panic!("Expected function: {item:#?}"),
         }
-        _ => panic!("Expected function: {:#?}", item),
-    }
+    });
 }
 
 #[starlark_module]
@@ -231,6 +233,6 @@ fn inner_module_functions_have_docs() {
         DocItem::Member(DocMember::Function(item)) => {
             assert_eq!(item.docs.unwrap().summary, "Docs for func1");
         }
-        _ => panic!("Expected function: {:#?}", item),
+        _ => panic!("Expected function: {item:#?}"),
     }
 }

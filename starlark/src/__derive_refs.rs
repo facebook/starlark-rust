@@ -17,14 +17,14 @@
 
 #![doc(hidden)]
 
-/// __derive_refs allows us to reference other crates in starlark_derive without users needing to be
-///  aware of those dependencies. We make them public here and then can reference them like
-///  `starlark::__derive_refs::foo`.
+//! __derive_refs allows us to reference other crates in starlark_derive without users needing to be
+//!  aware of those dependencies. We make them public here and then can reference them like
+//!  `starlark::__derive_refs::foo`.
 
 pub mod serde {
-    pub use serde::ser::Error;
     pub use serde::Serialize;
     pub use serde::Serializer;
+    pub use serde::ser::Error;
 }
 pub use inventory;
 pub mod components;
@@ -32,3 +32,14 @@ pub mod invoke_macro_error;
 pub mod param_spec;
 pub mod parse_args;
 pub mod sig;
+
+// Re-export for const_frozen_string! and static_starlark_value! macro registry.
+pub use crate::pagable::StaticValueEntry;
+// Re-exports for vtable registration macro.
+pub use crate::pagable::vtable_register::VtableRegistered;
+#[cfg(feature = "pagable")]
+pub use crate::pagable::vtable_registry::DeserTypeId;
+#[cfg(feature = "pagable")]
+pub use crate::pagable::vtable_registry::VTableRegistryEntry;
+pub use crate::values::layout::avalues::simple::AValueSimple;
+pub use crate::values::layout::vtable::AValueVTable;

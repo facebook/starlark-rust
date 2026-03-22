@@ -15,8 +15,8 @@
  * limitations under the License.
  */
 
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::slice;
 
 use dupe::Dupe;
@@ -24,6 +24,7 @@ use starlark_map::StarlarkHasherBuilder;
 use starlark_syntax::slice_vec_ext::SliceExt;
 
 use crate as starlark;
+use crate::eval::ProfileMode;
 use crate::eval::runtime::profile::data::ProfileData;
 use crate::eval::runtime::profile::data::ProfileDataImpl;
 use crate::eval::runtime::profile::flamegraph::FlameGraphData;
@@ -31,13 +32,12 @@ use crate::eval::runtime::profile::flamegraph::FlameGraphNode;
 use crate::eval::runtime::profile::instant::ProfilerInstant;
 use crate::eval::runtime::profile::profiler_type::ProfilerType;
 use crate::eval::runtime::small_duration::SmallDuration;
-use crate::eval::ProfileMode;
 use crate::util::arc_str::ArcStr;
-use crate::values::layout::pointer::RawPointer;
 use crate::values::FrozenValue;
 use crate::values::Trace;
 use crate::values::Tracer;
 use crate::values::Value;
+use crate::values::layout::pointer::RawPointer;
 
 pub(crate) struct TimeFlameProfilerType;
 
@@ -264,7 +264,7 @@ impl<'v> TimeFlameProfile<'v> {
     }
 
     // We could expose profile on the Heap, but it's an implementation detail that it works here.
-    pub(crate) fn gen(&self) -> crate::Result<ProfileData> {
+    pub(crate) fn r#gen(&self) -> crate::Result<ProfileData> {
         match &self.0 {
             None => Err(crate::Error::new_other(FlameProfileError::NotEnabled)),
             Some(x) => Ok(Self::gen_profile(x)),
@@ -299,9 +299,9 @@ mod tests {
     use crate::environment::Globals;
     use crate::environment::GlobalsBuilder;
     use crate::environment::Module;
+    use crate::eval::Evaluator;
     use crate::eval::runtime::file_loader::ReturnOwnedFileLoader;
     use crate::eval::runtime::profile::mode::ProfileMode;
-    use crate::eval::Evaluator;
     use crate::syntax::AstModule;
     use crate::syntax::Dialect;
     use crate::values::none::NoneType;
@@ -330,14 +330,14 @@ def foo():
         let modules = HashMap::from_iter([("a.bzl".to_owned(), a_bzl)]);
         let loader = ReturnOwnedFileLoader { modules };
 
-        let module = Module::new();
-        let mut eval = Evaluator::new(&module);
-        eval.enable_profile(&ProfileMode::TimeFlame).unwrap();
-        eval.set_loader(&loader);
-        eval.eval_module(
-            AstModule::parse(
-                "x.star",
-                r#"
+        Module::with_temp_heap(|module| {
+            let mut eval = Evaluator::new(&module);
+            eval.enable_profile(&ProfileMode::TimeFlame).unwrap();
+            eval.set_loader(&loader);
+            eval.eval_module(
+                AstModule::parse(
+                    "x.star",
+                    r#"
 load("a.bzl", "foo")
 
 def bar():
@@ -346,29 +346,34 @@ def bar():
 
 bar()
 "#
-                .to_owned(),
-                &Dialect::Standard,
-            )
-            .unwrap(),
-            &Globals::standard(),
-        )
-        .unwrap();
-
-        let profile = eval.gen_profile().unwrap().gen().unwrap();
-        let the_line = profile
-            .lines()
-            .find(|l| l.contains("foo"))
-            .with_context(|| {
-                format!(
-                    "There must be a line with `foo` in the profile: {:?}",
-                    profile
+                    .to_owned(),
+                    &Dialect::Standard,
                 )
-            })
+                .unwrap(),
+                &Globals::standard(),
+            )
             .unwrap();
-        assert!(
-            the_line.contains("bar"),
-            "Profile must contain a line `bar.*foo`: {:?}",
-            profile
-        );
+
+            let profile = eval
+                .gen_profile()
+                .unwrap()
+                .gen_flame_data()
+                .unwrap()
+                .unwrap();
+
+            let the_line = profile
+                .lines()
+                .find(|l| l.contains("foo"))
+                .with_context(|| {
+                    format!("There must be a line with `foo` in the profile: {profile:?}")
+                })
+                .unwrap();
+            assert!(
+                the_line.contains("bar"),
+                "Profile must contain a line `bar.*foo`: {profile:?}"
+            );
+            crate::Result::Ok(())
+        })
+        .unwrap();
     }
 }

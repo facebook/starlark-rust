@@ -21,11 +21,11 @@ use crate as starlark;
 use crate::assert::Assert;
 use crate::environment::GlobalsBuilder;
 use crate::environment::MethodsBuilder;
-use crate::values::list_or_tuple::UnpackListOrTuple;
 use crate::values::Heap;
 use crate::values::StringValue;
 use crate::values::Value;
 use crate::values::ValueOfUnchecked;
+use crate::values::list_or_tuple::UnpackListOrTuple;
 
 // The examples from the starlark_module documentation.
 #[test]
@@ -54,7 +54,7 @@ fn test_starlark_methods() {
         fn r#enum<'v>(
             this: Value<'v>,
             #[starlark(require = named, default = 3)] index: i32,
-            heap: &'v Heap,
+            heap: Heap<'v>,
         ) -> anyhow::Result<StringValue<'v>> {
             Ok(heap.alloc_str(&format!("{this} {index}")))
         }

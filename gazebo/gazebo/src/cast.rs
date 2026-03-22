@@ -1,10 +1,11 @@
 /*
  * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
- * This source code is licensed under both the MIT license found in the
- * LICENSE-MIT file in the root directory of this source tree and the Apache
+ * This source code is dual-licensed under either the MIT license found in the
+ * LICENSE-MIT file in the root directory of this source tree or the Apache
  * License, Version 2.0 found in the LICENSE-APACHE file in the root directory
- * of this source tree.
+ * of this source tree. You may select, at your option, one of the
+ * above-listed licenses.
  */
 
 //! Cast between types with no conversion.
@@ -29,24 +30,24 @@ pub fn ptr_to_usize<T: ?Sized>(x: &T) -> usize {
 /// of type `T`.
 #[inline(always)]
 pub unsafe fn usize_to_ptr<'a, T>(x: usize) -> &'a T {
-    &*(x as *const T)
+    unsafe { &*(x as *const T) }
 }
 
 /// Undefined behaviour if the argument does not satisfy the alignment of type `To`.
 #[inline(always)]
 pub unsafe fn ptr<From, To>(x: &From) -> &To {
-    &*(x as *const From as *const To)
+    unsafe { &*(x as *const From as *const To) }
 }
 
 /// Undefined behaviour if the argument does not satisfy the alignment of type `To`.
 #[inline(always)]
 pub unsafe fn ptr_mut<From, To>(x: &mut From) -> &mut To {
-    &mut *(x as *mut From as *mut To)
+    unsafe { &mut *(x as *mut From as *mut To) }
 }
 
 #[inline(always)]
-pub unsafe fn ptr_lifetime<'a, 'b, T: ?Sized>(x: &'a T) -> &'b T {
-    &*(x as *const T)
+pub unsafe fn ptr_lifetime<'b, T: ?Sized>(x: &T) -> &'b T {
+    unsafe { &*(x as *const T) }
 }
 
 /// Like normal [`transmute`](std::mem::transmute), but without the compile-time
@@ -59,11 +60,13 @@ pub unsafe fn ptr_lifetime<'a, 'b, T: ?Sized>(x: &'a T) -> &'b T {
 /// e.g. `Vec<T>`, that `transmute` cannot be applied to.
 #[inline]
 pub unsafe fn transmute_unchecked<A, B>(x: A) -> B {
-    assert_eq!(mem::size_of::<A>(), mem::size_of::<B>());
-    debug_assert_eq!(0, (&x as *const A).align_offset(mem::align_of::<B>()));
-    let b = ptr::read(&x as *const A as *const B);
-    mem::forget(x);
-    b
+    unsafe {
+        assert_eq!(mem::size_of::<A>(), mem::size_of::<B>());
+        debug_assert_eq!(0, (&x as *const A).align_offset(mem::align_of::<B>()));
+        let b = ptr::read(&x as *const A as *const B);
+        mem::forget(x);
+        b
+    }
 }
 
 #[macro_export]
@@ -85,7 +88,7 @@ mod tests {
     fn test_transmute() {
         #[allow(clippy::useless_transmute)]
         unsafe fn downcast_string<'a>(x: &'a str) -> &'static str {
-            transmute!(&'a str, &'static str, x)
+            unsafe { transmute!(&'a str, &'static str, x) }
         }
         assert_eq!(unsafe { downcast_string("test") }, "test");
     }

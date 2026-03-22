@@ -20,16 +20,19 @@
 use std::hash::Hash;
 
 use allocative::Allocative;
+#[cfg(feature = "pagable_dep")]
+use pagable::Pagable;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::Equivalent;
 use crate::ordered_map::OrderedMap;
 use crate::small_map;
 use crate::small_map::SmallMap;
-use crate::Equivalent;
 
 /// `IndexMap` but with keys sorted.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Ord, PartialOrd, Allocative)]
+#[cfg_attr(feature = "pagable_dep", derive(Pagable))]
 pub struct SortedMap<K, V> {
     map: OrderedMap<K, V>,
 }
@@ -99,18 +102,18 @@ where
 
     /// Get a reference to the value associated with the given key.
     #[inline]
-    pub fn get<Q: ?Sized>(&self, key: &Q) -> Option<&V>
+    pub fn get<Q>(&self, key: &Q) -> Option<&V>
     where
-        Q: Hash + Equivalent<K>,
+        Q: ?Sized + Hash + Equivalent<K>,
     {
         self.map.get(key)
     }
 
     /// Get a mutable reference to the value associated with the given key.
     #[inline]
-    pub fn get_mut<Q: ?Sized>(&mut self, key: &Q) -> Option<&mut V>
+    pub fn get_mut<Q>(&mut self, key: &Q) -> Option<&mut V>
     where
-        Q: Hash + Equivalent<K>,
+        Q: ?Sized + Hash + Equivalent<K>,
     {
         self.map.get_mut(key)
     }
@@ -126,7 +129,7 @@ where
 
     /// Iterate over the map with hashes.
     #[inline]
-    pub fn iter_hashed(&self) -> small_map::IterHashed<K, V> {
+    pub fn iter_hashed(&self) -> small_map::IterHashed<'_, K, V> {
         self.map.iter_hashed()
     }
 }

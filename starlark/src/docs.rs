@@ -34,13 +34,12 @@ pub use parse::DocStringKind;
 use starlark_map::small_map::SmallMap;
 
 use crate as starlark;
-use crate::eval::runtime::params::display::iter_fmt_param_spec;
 pub use crate::eval::runtime::params::display::FmtParam;
+use crate::eval::runtime::params::display::iter_fmt_param_spec;
 use crate::typing::Ty;
-use crate::values::type_repr::StarlarkTypeRepr;
 use crate::values::StarlarkValue;
 use crate::values::Trace;
-use crate::values::Value;
+use crate::values::type_repr::StarlarkTypeRepr;
 
 /// The documentation provided by a user for a specific module, object, function, etc.
 #[derive(Debug, Clone, PartialEq, Trace, Default, Allocative)]
@@ -50,6 +49,8 @@ pub struct DocString {
     /// The contents of a doc string that follow the summary, and a single blank line.
     /// This also has whitespace trimmed from it, and it is dedented.
     pub details: Option<String>,
+    /// Examples provided as a part of the doc string. It's separated by a 'Examples:' string
+    pub examples: Option<String>,
 }
 
 /// The documentation for a module/namespace.
@@ -61,6 +62,24 @@ pub struct DocModule {
     pub members: SmallMap<String, DocItem>,
 }
 
+impl DocModule {
+    pub fn filter<P>(self, mut predicate: P) -> Self
+    where
+        P: FnMut(&(String, DocItem)) -> bool,
+    {
+        let members = self
+            .members
+            .into_iter()
+            .filter(|member| predicate(member))
+            .collect();
+
+        Self {
+            docs: self.docs,
+            members,
+        }
+    }
+}
+
 /// Documents a single function.
 #[derive(Debug, Clone, PartialEq, Default, Allocative)]
 pub struct DocFunction {
@@ -70,7 +89,8 @@ pub struct DocFunction {
     /// they are present.
     pub docs: Option<DocString>,
     /// The parameters that this function takes. Docs for these parameters should generally be
-    /// extracted from the main docstring's details.
+    /// extracted from the main docstring's details, but may be extracted from the definition if the
+    /// docstring is not present.
     pub params: DocParams,
     /// Details about what this function returns.
     pub ret: DocReturn,
@@ -182,24 +202,11 @@ pub struct DocProperty {
 }
 
 /// A named member of an object.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Allocative)]
 pub enum DocMember {
     Property(DocProperty),
     Function(DocFunction),
-}
-
-impl DocMember {
-    pub(crate) fn from_value(value: Value) -> Self {
-        // If we have a value which is a complex type, the right type to put in the docs is not the type
-        // it represents, but it's just a property we should point at
-        match value.documentation() {
-            DocItem::Member(x) => x,
-            _ => DocMember::Property(DocProperty {
-                docs: None,
-                typ: value.get_type_starlark_repr(),
-            }),
-        }
-    }
 }
 
 /// The documentation for a type

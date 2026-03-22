@@ -18,8 +18,8 @@
 #![cfg(test)]
 
 use crate::assert;
-use crate::values::typing::type_compiled::compiled::TypeCompiled;
 use crate::values::Heap;
+use crate::values::typing::type_compiled::compiled::TypeCompiled;
 
 #[test]
 fn test_types() {
@@ -171,11 +171,12 @@ f()
 #[test]
 fn test_type_compiled_display() {
     fn t(expected: &str, ty0: &str) {
-        let ty = assert::pass(ty0);
-        let heap = Heap::new();
-        let ty = unsafe { ty.unchecked_frozen_value() }.to_value();
-        let ty = TypeCompiled::new(ty, &heap).unwrap();
-        assert_eq!(expected, ty.to_string(), "for `{}`", ty0);
+        Heap::temp(|heap| {
+            let ty = assert::pass(ty0);
+            let ty = unsafe { ty.unchecked_frozen_value() }.to_value();
+            let ty = TypeCompiled::new(ty, heap).unwrap();
+            assert_eq!(expected, ty.to_string(), "for `{ty0}`");
+        });
     }
 
     t("typing.Any", "typing.Any");

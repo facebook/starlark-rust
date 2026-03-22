@@ -17,21 +17,17 @@
 
 mod fun;
 
-use std::collections::HashSet;
-
 use proc_macro2::TokenStream;
+use quote::ToTokens;
 use quote::format_ident;
 use quote::quote;
-use quote::ToTokens;
 
 use crate::module::render::fun::render_fun;
-use crate::module::render::fun::render_none;
-use crate::module::render::fun::render_some;
 use crate::module::simple_param::SimpleParam;
 use crate::module::typ::SpecialParam;
 use crate::module::typ::StarAttr;
 use crate::module::typ::StarConst;
-use crate::module::typ::StarFun;
+use crate::module::typ::StarGenerics;
 use crate::module::typ::StarModule;
 use crate::module::typ::StarStmt;
 use crate::module::util::ident_string;
@@ -42,40 +38,52 @@ pub(crate) fn render(x: StarModule) -> syn::Result<TokenStream> {
 
 fn render_impl(x: StarModule) -> syn::Result<syn::ItemFn> {
     let StarModule {
-        name,
-        globals_builder,
-        visibility,
-        attrs,
+        mut input,
         docstring,
         stmts,
         module_kind,
+        generics,
     } = x;
     let statics = format_ident!("{}", module_kind.statics_type_name());
     let stmts: Vec<_> = stmts
         .into_iter()
-        .map(render_stmt)
+        .map(|s| render_stmt(s, &generics))
         .collect::<syn::Result<_>>()?;
     let set_docstring = docstring.map(|ds| quote!(globals_builder.set_docstring(#ds);));
-    Ok(syn::parse_quote! {
-        #( #attrs )*
-        #visibility fn #name(globals_builder: #globals_builder) {
-            fn build(globals_builder: #globals_builder) {
+
+    let inner_fn = syn::ItemFn {
+        attrs: Default::default(),
+        vis: syn::Visibility::Inherited,
+        sig: syn::Signature {
+            ident: syn::Ident::new("build", input.sig.ident.span()),
+            ..input.sig.clone()
+        },
+        block: syn::parse_quote! {
+            {
                 #set_docstring
                 #( #stmts )*
                 // Mute warning if stmts is empty.
                 let _ = globals_builder;
             }
+        },
+    };
+    let turbofish = generics.turbofish();
+    let fn_name = &input.sig.ident;
+    input.block = syn::parse_quote! {
+        {
+            #inner_fn
             static RES: starlark::environment::#statics = starlark::environment::#statics::new();
-            RES.populate(build, globals_builder);
+            RES.populate(concat!(module_path!(), "::", stringify!(#fn_name)), build #turbofish, globals_builder);
         }
-    })
+    };
+    Ok(input)
 }
 
-fn render_stmt(x: StarStmt) -> syn::Result<syn::Stmt> {
+fn render_stmt(x: StarStmt, generics: &StarGenerics) -> syn::Result<syn::Stmt> {
     match x {
         StarStmt::Const(x) => Ok(render_const(x)),
-        StarStmt::Attr(x) => Ok(render_attr(x)),
-        StarStmt::Fun(x) => render_fun(x),
+        StarStmt::Attr(x) => Ok(render_attr(x, generics)),
+        StarStmt::Fun(x) => render_fun(x, generics),
     }
 }
 
@@ -87,7 +95,7 @@ fn render_const(x: StarConst) -> syn::Stmt {
     }
 }
 
-fn render_attr(x: StarAttr) -> syn::Stmt {
+fn render_attr(x: StarAttr, generics: &StarGenerics) -> syn::Stmt {
     let StarAttr {
         name,
         this,
@@ -99,11 +107,15 @@ fn render_attr(x: StarAttr) -> syn::Stmt {
         docstring,
     } = x;
     let name_str = ident_string(&name);
-    let name_inner = syn::Ident::new(&format!("{}__inner", name_str), name.span());
+    let name_inner = syn::Ident::new(&format!("{name_str}__inner"), name.span());
     let docstring: syn::Expr = match docstring {
         Some(d) => render_some(syn::parse_quote! { #d.to_owned() }),
         None => render_none(),
     };
+
+    let generic_decls = generics.decls();
+    let where_clause = generics.where_clause();
+    let turbofish = generics.turbofish();
 
     let let_heap = if let Some(SpecialParam {
         param: SimpleParam { ident, ty, .. },
@@ -115,19 +127,20 @@ fn render_attr(x: StarAttr) -> syn::Stmt {
     };
 
     let this_value: syn::Ident = syn::parse_quote! { s_this_value };
+    let this_return_type: &syn::Type = &this.param.ty;
 
     let unpack = this.render_prepare(&this.param.ident, &this_value);
 
     let inner: syn::ItemFn = syn::parse_quote! {
         #( #attrs )*
         #[allow(non_snake_case)] // Starlark doesn't have this convention
-        fn #name_inner<'v>(
-            #this_value: starlark::values::Value<'v>,
-            #[allow(unused_variables)]
-            __heap: &'v starlark::values::Heap,
-        ) -> #return_type {
-            #[allow(unused_variables)]
-            #unpack
+        #[allow(unused_variables)]
+        fn #name_inner #generic_decls(
+            this: #this_return_type,
+            __heap: starlark::values::Heap<'v>,
+        ) -> #return_type
+        #where_clause
+        {
             #let_heap
             #body
         }
@@ -135,12 +148,15 @@ fn render_attr(x: StarAttr) -> syn::Stmt {
 
     let outer: syn::ItemFn = syn::parse_quote! {
         #[allow(non_snake_case)]
-        fn #name<'v>(
-            #[allow(unused_variables)]
-            this: starlark::values::Value<'v>,
-            heap: &'v starlark::values::Heap,
-        ) -> starlark::Result<starlark::values::Value<'v>> {
-            Ok(heap.alloc(#name_inner(this, heap)?))
+        fn #name #generic_decls(
+            _ignored: std::option::Option<starlark::values::FrozenValue>,
+            #this_value: starlark::values::Value<'v>,
+            heap: starlark::values::Heap<'v>,
+        ) -> starlark::Result<starlark::values::Value<'v>>
+        #where_clause
+        {
+            #unpack
+            Ok(heap.alloc(#name_inner #turbofish(this, heap)?))
         }
     };
 
@@ -153,92 +169,17 @@ fn render_attr(x: StarAttr) -> syn::Stmt {
                 #name_str,
                 #speculative_exec_safe,
                 #docstring,
-                starlark::values::type_repr::type_repr_from_attr_impl(#name_inner),
-                #name
+                starlark::values::type_repr::type_repr_from_attr_impl(#name_inner #turbofish),
+                #name #turbofish
             );
         }
     }
 }
 
-/// Get the lifetimes that are mentioned in a given type and its nested generics.
-fn get_lifetimes_inner<'a>(ret: &mut HashSet<&'a syn::Lifetime>, typ: &'a syn::Type) {
-    match typ {
-        syn::Type::Path(path) => {
-            if let Some(segment) = path.path.segments.last() {
-                match &segment.arguments {
-                    syn::PathArguments::None => {}
-                    syn::PathArguments::AngleBracketed(args) => {
-                        for arg in &args.args {
-                            match arg {
-                                syn::GenericArgument::Lifetime(l) => {
-                                    ret.insert(l);
-                                }
-                                syn::GenericArgument::Type(t) => get_lifetimes_inner(ret, t),
-                                _ => {}
-                            };
-                        }
-                    }
-                    syn::PathArguments::Parenthesized(args) => {
-                        for t in &args.inputs {
-                            get_lifetimes_inner(ret, t);
-                        }
-                        match &args.output {
-                            syn::ReturnType::Default => {}
-                            syn::ReturnType::Type(_, t) => get_lifetimes_inner(ret, t),
-                        };
-                    }
-                };
-            }
-        }
-        syn::Type::Group(g) => get_lifetimes_inner(ret, &g.elem),
-        syn::Type::Paren(p) => get_lifetimes_inner(ret, &p.elem),
-        syn::Type::Ptr(p) => get_lifetimes_inner(ret, &p.elem),
-        syn::Type::Reference(r) => {
-            if let Some(l) = &r.lifetime {
-                ret.insert(l);
-            };
-            get_lifetimes_inner(ret, &r.elem);
-        }
-        syn::Type::Tuple(t) => {
-            for t in &t.elems {
-                get_lifetimes_inner(ret, t);
-            }
-        }
-        _ => {}
-    };
+pub(crate) fn render_none() -> syn::Expr {
+    syn::parse_quote! { std::option::Option::None }
 }
 
-/// Get the lifetime specifications to use with a function based on the lifetimes mentioned in `typ`.
-///
-/// e.g. `i32` would return ``, `Vec<(&'a str, &'b str)>` would return `<'a, 'b>`
-fn get_lifetimes(typ: &syn::Type) -> TokenStream {
-    let mut ret = HashSet::new();
-    get_lifetimes_inner(&mut ret, typ);
-    if ret.is_empty() {
-        TokenStream::new()
-    } else {
-        let mut ret: Vec<_> = ret.into_iter().filter(|l| l.ident != "_").collect();
-        ret.sort_by(|l, r| l.ident.cmp(&r.ident));
-        quote!(<#(#ret),*>)
-    }
-}
-
-pub(crate) fn render_starlark_type(typ: &syn::Type) -> syn::Expr {
-    let lifetimes = get_lifetimes(typ);
-    syn::parse_quote! {
-        {
-            #[allow(clippy::extra_unused_lifetimes)]
-            fn get_type_string #lifetimes() -> starlark::typing::Ty {
-                <#typ as starlark::values::type_repr::StarlarkTypeRepr>::starlark_type_repr()
-            }
-            get_type_string()
-        }
-    }
-}
-
-pub(crate) fn render_starlark_return_type(fun: &StarFun) -> syn::Expr {
-    let struct_name = fun.struct_name();
-    syn::parse_quote! {
-        #struct_name::return_type_starlark_type_repr()
-    }
+pub(crate) fn render_some(expr: syn::Expr) -> syn::Expr {
+    syn::parse_quote! { std::option::Option::Some(#expr) }
 }

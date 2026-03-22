@@ -27,7 +27,6 @@ use either::Either;
 use starlark_syntax::value_error;
 
 use crate::typing::Ty;
-use crate::values::type_repr::StarlarkTypeRepr;
 use crate::values::AllocValue;
 use crate::values::ComplexValue;
 use crate::values::Freeze;
@@ -35,6 +34,7 @@ use crate::values::FreezeError;
 use crate::values::FreezeResult;
 use crate::values::Freezer;
 use crate::values::FrozenValueTyped;
+use crate::values::Heap;
 use crate::values::StarlarkValue;
 use crate::values::Trace;
 use crate::values::Tracer;
@@ -42,6 +42,7 @@ use crate::values::UnpackValue;
 use crate::values::Value;
 use crate::values::ValueLike;
 use crate::values::ValueTyped;
+use crate::values::type_repr::StarlarkTypeRepr;
 
 /// Value which is either a complex mutable value or a frozen value.
 #[derive(Copy_, Clone_, Dupe_, Allocative)]
@@ -70,15 +71,14 @@ where
     }
 
     /// Downcast.
-    pub fn new_err(value: Value<'v>) -> anyhow::Result<Self> {
+    pub fn new_err(value: Value<'v>) -> crate::Result<Self> {
         match Self::new(value) {
             Some(v) => Ok(v),
             None => Err(value_error!(
                 "Expected value of type `{}`, got: `{}`",
                 T::TYPE,
                 value.to_string_for_type_error()
-            )
-            .into_anyhow()),
+            )),
         }
     }
 
@@ -121,7 +121,7 @@ where
     T::Frozen: StarlarkValue<'static>,
 {
     #[inline]
-    fn alloc_value(self, _heap: &'v crate::values::Heap) -> Value<'v> {
+    fn alloc_value(self, _heap: Heap<'v>) -> Value<'v> {
         self.0
     }
 }
@@ -155,6 +155,16 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("ValueTypedComplex").field(&self.0).finish()
+    }
+}
+
+impl<'v, T> fmt::Display for ValueTypedComplex<'v, T>
+where
+    T: ComplexValue<'v>,
+    T::Frozen: StarlarkValue<'static>,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
     }
 }
 
@@ -194,8 +204,8 @@ mod tests {
     use crate::const_frozen_string;
     use crate::environment::GlobalsBuilder;
     use crate::tests::util::TestComplexValue;
-    use crate::values::layout::complex::ValueTypedComplex;
     use crate::values::Value;
+    use crate::values::layout::complex::ValueTypedComplex;
 
     #[starlark_module]
     fn test_module(globals: &mut GlobalsBuilder) {

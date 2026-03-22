@@ -135,7 +135,10 @@ impl ChunkChain {
                     // because real allocator never finishes with an empty last chunk part.
                     // For that reason we don't care about somewhat unoptimal code below:
                     // we could extend the `after` chunk with the `before` chunk.
-                    assert!(cfg!(test) && SPLIT_AT_ZERO_TEST.get());
+                    #[allow(clippy::assertions_on_constants)]
+                    {
+                        assert!(cfg!(test) && SPLIT_AT_ZERO_TEST.get());
+                    }
 
                     unsafe {
                         // We are abandoning `before` chunk,
@@ -157,11 +160,14 @@ impl ChunkChain {
     }
 
     pub(crate) unsafe fn split_at_ptr(self, ptr: NonNull<usize>) -> (ChunkChain, ChunkPart) {
-        debug_assert!(ptr >= self.begin());
-        debug_assert!(ptr <= self.end());
-        let offset =
-            AlignedSize::new_bytes(ptr.as_ptr().byte_offset_from(self.begin().as_ptr()) as usize);
-        self.split_at(offset)
+        unsafe {
+            debug_assert!(ptr >= self.begin());
+            debug_assert!(ptr <= self.end());
+            let offset = AlignedSize::new_bytes(
+                ptr.as_ptr().byte_offset_from(self.begin().as_ptr()) as usize,
+            );
+            self.split_at(offset)
+        }
     }
 
     /// Clear the content invoking provided callback to release the chunks.
@@ -180,7 +186,7 @@ impl ChunkChain {
         }
     }
 
-    pub(crate) fn iter(&self) -> ChunkChainIterator {
+    pub(crate) fn iter(&self) -> ChunkChainIterator<'_> {
         ChunkChainIterator { next: Some(self) }
     }
 

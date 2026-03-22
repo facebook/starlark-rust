@@ -25,18 +25,18 @@ use starlark_derive::starlark_module;
 use crate as starlark;
 use crate::environment::GlobalsBuilder;
 use crate::eval::Evaluator;
-use crate::values::list::AllocList;
-use crate::values::tuple::UnpackTuple;
-use crate::values::typing::never::StarlarkNever;
-use crate::values::typing::ty::AbstractType;
-use crate::values::typing::StarlarkIter;
-use crate::values::value_of_unchecked::ValueOfUnchecked;
 use crate::values::AllocValue;
 use crate::values::FrozenStringValue;
 use crate::values::Heap;
 use crate::values::Value;
 use crate::values::ValueError;
 use crate::values::ValueLike;
+use crate::values::list::AllocList;
+use crate::values::tuple::UnpackTuple;
+use crate::values::typing::StarlarkIter;
+use crate::values::typing::never::StarlarkNever;
+use crate::values::typing::ty::AbstractType;
+use crate::values::value_of_unchecked::ValueOfUnchecked;
 
 #[starlark_module]
 pub(crate) fn register_other(builder: &mut GlobalsBuilder) {
@@ -81,7 +81,7 @@ pub(crate) fn register_other(builder: &mut GlobalsBuilder) {
     #[starlark(speculative_exec_safe)]
     fn any<'v>(
         #[starlark(require = pos)] x: ValueOfUnchecked<'v, StarlarkIter<Value<'v>>>,
-        heap: &'v Heap,
+        heap: Heap<'v>,
     ) -> starlark::Result<bool> {
         for i in x.get().iterate(heap)? {
             if i.to_bool() {
@@ -111,7 +111,7 @@ pub(crate) fn register_other(builder: &mut GlobalsBuilder) {
     #[starlark(speculative_exec_safe)]
     fn all<'v>(
         #[starlark(require = pos)] x: ValueOfUnchecked<'v, StarlarkIter<Value<'v>>>,
-        heap: &'v Heap,
+        heap: Heap<'v>,
     ) -> starlark::Result<bool> {
         for i in x.get().iterate(heap)? {
             if !i.to_bool() {
@@ -160,7 +160,7 @@ pub(crate) fn register_other(builder: &mut GlobalsBuilder) {
     fn enumerate<'v>(
         #[starlark(require = pos)] it: ValueOfUnchecked<'v, StarlarkIter<Value<'v>>>,
         #[starlark(default = 0)] start: i32,
-        heap: &'v Heap,
+        heap: Heap<'v>,
     ) -> starlark::Result<impl AllocValue<'v>> {
         let v = it
             .get()
@@ -192,14 +192,14 @@ pub(crate) fn register_other(builder: &mut GlobalsBuilder) {
         #[starlark(require = pos)] a: Value<'v>,
         #[starlark(require = pos)] attr: &str,
         #[starlark(require = pos)] default: Option<Value<'v>>,
-        heap: &'v Heap,
+        heap: Heap<'v>,
     ) -> starlark::Result<Value<'v>> {
         // TODO(nga): this doesn't cache string hash, so it is suboptimal.
         match a.get_attr(attr, heap)? {
             Some(v) => Ok(v),
             None => match default {
                 Some(x) => Ok(x),
-                None => ValueError::unsupported_owned(a.get_type(), &format!(".{}", attr), None),
+                None => ValueError::unsupported_owned(a.get_type(), &format!(".{attr}"), None),
             },
         }
     }
@@ -214,7 +214,7 @@ pub(crate) fn register_other(builder: &mut GlobalsBuilder) {
     fn hasattr<'v>(
         #[starlark(require = pos)] a: Value<'v>,
         #[starlark(require = pos)] attr: &str,
-        heap: &'v Heap,
+        heap: Heap<'v>,
     ) -> anyhow::Result<bool> {
         Ok(a.has_attr(attr, heap))
     }
@@ -305,7 +305,7 @@ pub(crate) fn register_other(builder: &mut GlobalsBuilder) {
     #[starlark(speculative_exec_safe)]
     fn reversed<'v>(
         #[starlark(require = pos)] a: ValueOfUnchecked<'v, StarlarkIter<Value<'v>>>,
-        heap: &'v Heap,
+        heap: Heap<'v>,
     ) -> starlark::Result<Vec<Value<'v>>> {
         let mut v: Vec<Value> = a.get().iterate(heap)?.collect();
         v.reverse();
@@ -341,7 +341,7 @@ pub(crate) fn register_other(builder: &mut GlobalsBuilder) {
         #[starlark(require = named)] key: Option<Value<'v>>,
         #[starlark(require = named, default = false)] reverse: bool,
         eval: &mut Evaluator<'v, '_, '_>,
-    ) -> starlark::Result<AllocList<impl IntoIterator<Item = Value<'v>>>> {
+    ) -> starlark::Result<AllocList<impl IntoIterator<Item = Value<'v>> + use<'v>>> {
         let it = x.get().iterate(eval.heap())?;
         let mut it = match key {
             None => it.map(|x| (x, x)).collect(),

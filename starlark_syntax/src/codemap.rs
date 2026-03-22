@@ -23,8 +23,8 @@
 //! of a `Pos` or `Span`, as well as provide source code snippets for error reporting.
 use std::cmp;
 use std::cmp::Ordering;
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::fmt;
 use std::fmt::Debug;
 use std::fmt::Display;
@@ -419,7 +419,7 @@ impl CodeMap {
     /// Like `line_span_opt` but panics if the line number is out of range.
     pub fn line_span(&self, line: usize) -> Span {
         self.line_span_opt(line)
-            .unwrap_or_else(|| panic!("Line {} is out of range for {:?}", line, self))
+            .unwrap_or_else(|| panic!("Line {line} is out of range for {self:?}"))
     }
 
     /// Trim trailing newline if any, including windows, from the line span.
@@ -592,7 +592,7 @@ impl FileSpan {
     }
 
     /// Cheap reference to the span.
-    pub fn as_ref(&self) -> FileSpanRef {
+    pub fn as_ref(&self) -> FileSpanRef<'_> {
         FileSpanRef {
             file: &self.file,
             span: self.span,

@@ -21,16 +21,14 @@ use std::cell::UnsafeCell;
 use std::marker;
 use std::marker::PhantomData;
 
+use starlark_map::Hashed;
 use starlark_map::small_map::SmallMap;
 use starlark_map::small_set::SmallSet;
-use starlark_map::Hashed;
 use starlark_syntax::slice_vec_ext::VecExt;
 
 use crate::values::FreezeResult;
 use crate::values::Freezer;
-use crate::values::FrozenStringValue;
 use crate::values::FrozenValue;
-use crate::values::StringValue;
 use crate::values::Value;
 
 /// Need to be implemented for non-simple `StarlarkValue`.
@@ -276,14 +274,6 @@ impl Freeze for FrozenValue {
     }
 }
 
-impl<'v> Freeze for StringValue<'v> {
-    type Frozen = FrozenStringValue;
-
-    fn freeze(self, freezer: &Freezer) -> FreezeResult<FrozenStringValue> {
-        self.freeze(freezer)
-    }
-}
-
 impl Freeze for () {
     type Frozen = ();
 
@@ -332,6 +322,23 @@ impl<A: Freeze, B: Freeze, C: Freeze, D: Freeze> Freeze for (A, B, C, D) {
             self.1.freeze(freezer)?,
             self.2.freeze(freezer)?,
             self.3.freeze(freezer)?,
+        ))
+    }
+}
+
+impl<A: Freeze, B: Freeze, C: Freeze, D: Freeze, E: Freeze> Freeze for (A, B, C, D, E) {
+    type Frozen = (A::Frozen, B::Frozen, C::Frozen, D::Frozen, E::Frozen);
+
+    fn freeze(
+        self,
+        freezer: &Freezer,
+    ) -> FreezeResult<(A::Frozen, B::Frozen, C::Frozen, D::Frozen, E::Frozen)> {
+        Ok((
+            self.0.freeze(freezer)?,
+            self.1.freeze(freezer)?,
+            self.2.freeze(freezer)?,
+            self.3.freeze(freezer)?,
+            self.4.freeze(freezer)?,
         ))
     }
 }

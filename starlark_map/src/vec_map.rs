@@ -25,10 +25,11 @@ use std::mem;
 
 use allocative::Allocative;
 use equivalent::Equivalent;
+#[cfg(feature = "pagable_dep")]
+use pagable::Pagable;
 
 use crate::hash_value::StarlarkHashValue;
 use crate::hashed::Hashed;
-pub(crate) use crate::vec2::Vec2;
 use crate::vec_map::hint::likely;
 pub(crate) use crate::vec_map::iter::IntoIter;
 pub(crate) use crate::vec_map::iter::IntoIterHashed;
@@ -40,8 +41,10 @@ pub(crate) use crate::vec_map::iter::Keys;
 pub(crate) use crate::vec_map::iter::Values;
 pub(crate) use crate::vec_map::iter::ValuesMut;
 use crate::vec_map::simd::find_hash_in_array;
+pub(crate) use crate::vec2::Vec2;
 
 #[derive(Debug, Clone, Allocative)]
+#[cfg_attr(feature = "pagable_dep", derive(Pagable))]
 pub(crate) struct VecMap<K, V> {
     buckets: Vec2<(K, V), StarlarkHashValue>,
 }
@@ -115,16 +118,20 @@ impl<K, V> VecMap<K, V> {
 
     #[inline]
     pub(crate) unsafe fn get_unchecked(&self, index: usize) -> (Hashed<&K>, &V) {
-        debug_assert!(index < self.buckets.len());
-        let ((key, value), hash) = self.buckets.get_unchecked(index);
-        (Hashed::new_unchecked(*hash, key), value)
+        unsafe {
+            debug_assert!(index < self.buckets.len());
+            let ((key, value), hash) = self.buckets.get_unchecked(index);
+            (Hashed::new_unchecked(*hash, key), value)
+        }
     }
 
     #[inline]
     pub(crate) unsafe fn get_unchecked_mut(&mut self, index: usize) -> (Hashed<&K>, &mut V) {
-        debug_assert!(index < self.buckets.len());
-        let ((key, value), hash) = self.buckets.get_unchecked_mut(index);
-        (Hashed::new_unchecked(*hash, key), value)
+        unsafe {
+            debug_assert!(index < self.buckets.len());
+            let ((key, value), hash) = self.buckets.get_unchecked_mut(index);
+            (Hashed::new_unchecked(*hash, key), value)
+        }
     }
 
     #[inline]
@@ -172,19 +179,19 @@ impl<K, V> VecMap<K, V> {
     }
 
     #[inline]
-    pub(crate) fn values(&self) -> Values<K, V> {
+    pub(crate) fn values(&self) -> Values<'_, K, V> {
         Values { iter: self.iter() }
     }
 
     #[inline]
-    pub(crate) fn values_mut(&mut self) -> ValuesMut<K, V> {
+    pub(crate) fn values_mut(&mut self) -> ValuesMut<'_, K, V> {
         ValuesMut {
             iter: self.iter_mut(),
         }
     }
 
     #[inline]
-    pub(crate) fn keys(&self) -> Keys<K, V> {
+    pub(crate) fn keys(&self) -> Keys<'_, K, V> {
         Keys { iter: self.iter() }
     }
 
@@ -196,14 +203,14 @@ impl<K, V> VecMap<K, V> {
     }
 
     #[inline]
-    pub(crate) fn iter(&self) -> Iter<K, V> {
+    pub(crate) fn iter(&self) -> Iter<'_, K, V> {
         Iter {
             iter: self.buckets.aaa().iter(),
         }
     }
 
     #[inline]
-    pub(crate) fn iter_hashed(&self) -> IterHashed<K, V> {
+    pub(crate) fn iter_hashed(&self) -> IterHashed<'_, K, V> {
         IterHashed {
             // Values go first since they terminate first and we can short-circuit
             iter: self.buckets.iter(),
@@ -219,14 +226,14 @@ impl<K, V> VecMap<K, V> {
     }
 
     #[inline]
-    pub(crate) fn iter_mut(&mut self) -> IterMut<K, V> {
+    pub(crate) fn iter_mut(&mut self) -> IterMut<'_, K, V> {
         IterMut {
             iter: self.buckets.aaa_mut().iter_mut(),
         }
     }
 
     #[inline]
-    pub(crate) fn iter_mut_unchecked(&mut self) -> IterMutUnchecked<K, V> {
+    pub(crate) fn iter_mut_unchecked(&mut self) -> IterMutUnchecked<'_, K, V> {
         IterMutUnchecked {
             iter: self.buckets.aaa_mut().iter_mut(),
         }

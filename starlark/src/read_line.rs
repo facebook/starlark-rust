@@ -23,9 +23,9 @@ mod with_or_without_rustyline {
     use std::env;
     use std::io;
 
+    use rustyline::Editor;
     use rustyline::error::ReadlineError;
     use rustyline::history::DefaultHistory;
-    use rustyline::Editor;
 
     /// Wrapper for the readline library, whichever we are using at the moment.
     pub struct ReadLine {
@@ -40,7 +40,7 @@ mod with_or_without_rustyline {
                 if let Err(e) = editor.load_history(&histfile) {
                     match e {
                         ReadlineError::Io(e) if e.kind() == io::ErrorKind::NotFound => {}
-                        e => eprintln!("Failed to load history from `{}`: {}", histfile, e),
+                        e => eprintln!("Failed to load history from `{histfile}`: {e}"),
                     }
                 }
                 Some(histfile)
@@ -57,7 +57,7 @@ mod with_or_without_rustyline {
                     self.editor.add_history_entry(line.as_str())?;
                     if let Some(histfile) = &self.histfile {
                         if let Err(e) = self.editor.save_history(&histfile) {
-                            eprintln!("Failed to save history to `{}`: {}", histfile, e);
+                            eprintln!("Failed to save history to `{histfile}`: {e}");
                         }
                     }
                     Ok(Some(line))

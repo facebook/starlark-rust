@@ -49,11 +49,11 @@ use starlark_syntax::syntax::module::AstModuleFields;
 use crate::collections::symbol::symbol::Symbol;
 use crate::docs::DocString;
 use crate::environment::Globals;
+use crate::eval::compiler::Compiler;
 use crate::eval::compiler::def::DefInfo;
-use crate::eval::compiler::scope::scope_resolver_globals::ScopeResolverGlobals;
 use crate::eval::compiler::scope::ModuleScopes;
 use crate::eval::compiler::scope::ScopeId;
-use crate::eval::compiler::Compiler;
+use crate::eval::compiler::scope::scope_resolver_globals::ScopeResolverGlobals;
 pub use crate::eval::params::param_specs;
 use crate::eval::runtime::arguments::ArgNames;
 use crate::eval::runtime::arguments::ArgumentsFull;
@@ -142,6 +142,8 @@ impl<'v, 'a, 'e> Evaluator<'v, 'a, 'e> {
         #[cfg(not(target_arch = "wasm32"))]
         self.module_env.add_eval_duration(start.elapsed());
 
+        self.run_infrequent_instr_checks()?;
+
         // Return the result of evaluation
         res.map_err(|e| e.into_error())
     }
@@ -168,9 +170,14 @@ impl<'v, 'a, 'e> Evaluator<'v, 'a, 'e> {
         )?;
         // eval_module pushes an "empty" call stack frame. other places expect that first frame to be ignorable, and
         // so we push an empty frame too (otherwise things would ignore this function's own frame).
-        self.with_call_stack(Value::new_none(), None, |this| {
-            function.invoke(&params, this)
-        })
-        .map_err(Into::into)
+        let res = self
+            .with_call_stack(Value::new_none(), None, |this| {
+                function.invoke(&params, this)
+            })
+            .map_err(Into::into);
+
+        self.run_infrequent_instr_checks()?;
+
+        res
     }
 }

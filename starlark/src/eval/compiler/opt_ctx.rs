@@ -16,20 +16,20 @@
  */
 
 use crate::environment::FrozenModuleData;
-use crate::eval::compiler::stmt::OptimizeOnFreezeContext;
 use crate::eval::Evaluator;
+use crate::eval::compiler::stmt::OptimizeOnFreezeContext;
 use crate::values::FrozenHeap;
 use crate::values::Heap;
 
 pub(crate) trait OptCtxEval<'v, 'a, 'e> {
-    fn heap(&self) -> &'v Heap;
+    fn heap(&self) -> Heap<'v>;
     fn frozen_heap(&self) -> &FrozenHeap;
     fn eval(&mut self) -> Option<&mut Evaluator<'v, 'a, 'e>>;
     fn frozen_module(&self) -> Option<&FrozenModuleData>;
 }
 
 impl<'v, 'a, 'e> OptCtxEval<'v, 'a, 'e> for OptimizeOnFreezeContext<'v, 'a> {
-    fn heap(&self) -> &'v Heap {
+    fn heap(&self) -> Heap<'v> {
         self.heap
     }
 
@@ -47,7 +47,7 @@ impl<'v, 'a, 'e> OptCtxEval<'v, 'a, 'e> for OptimizeOnFreezeContext<'v, 'a> {
 }
 
 impl<'v, 'a, 'e> OptCtxEval<'v, 'a, 'e> for Evaluator<'v, 'a, 'e> {
-    fn heap(&self) -> &'v Heap {
+    fn heap(&self) -> Heap<'v> {
         self.heap()
     }
 
@@ -69,7 +69,7 @@ impl<'v, 'a, 'e> OptCtxEval<'v, 'a, 'e> for Evaluator<'v, 'a, 'e> {
 /// We perform optimization
 /// * during compilation of AST to IR, and
 /// * when freezing the heap.
-pub(crate) struct OptCtx<'v, 'a, 'e: 'a, 'x> {
+pub(crate) struct OptCtx<'v: 'a, 'a, 'e: 'a, 'x> {
     pub(crate) eval: &'x mut dyn OptCtxEval<'v, 'a, 'e>,
     /// Current function parameter slot count. Zero when compiling module.
     pub(crate) param_count: u32,
@@ -83,7 +83,7 @@ impl<'v, 'a, 'e: 'a, 'x> OptCtx<'v, 'a, 'e, 'x> {
         OptCtx { eval, param_count }
     }
 
-    pub(crate) fn heap(&self) -> &'v Heap {
+    pub(crate) fn heap(&self) -> Heap<'v> {
         self.eval.heap()
     }
 

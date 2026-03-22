@@ -35,10 +35,6 @@ use crate::private::Private;
 use crate::typing::Ty;
 use crate::typing::TyBasic;
 use crate::typing::TypingBinOp;
-use crate::values::type_repr::StarlarkTypeRepr;
-use crate::values::types::num::typecheck::typecheck_num_bin_op;
-use crate::values::types::num::typecheck::NumTy;
-use crate::values::types::num::value::NumRef;
 use crate::values::AllocFrozenValue;
 use crate::values::AllocValue;
 use crate::values::FrozenHeap;
@@ -49,6 +45,10 @@ use crate::values::UnpackValue;
 use crate::values::Value;
 use crate::values::ValueError;
 use crate::values::ValueLike;
+use crate::values::type_repr::StarlarkTypeRepr;
+use crate::values::types::num::typecheck::NumTy;
+use crate::values::types::num::typecheck::typecheck_num_bin_op;
+use crate::values::types::num::value::NumRef;
 
 const WRITE_PRECISION: usize = 6;
 
@@ -69,7 +69,7 @@ pub(crate) fn write_decimal<W: fmt::Write>(output: &mut W, f: f64) -> fmt::Resul
     if !f.is_finite() {
         write_non_finite(output, f)
     } else {
-        write!(output, "{:.prec$}", f, prec = WRITE_PRECISION)
+        write!(output, "{f:.WRITE_PRECISION$}")
     }
 }
 
@@ -127,7 +127,7 @@ pub(crate) fn write_scientific<W: fmt::Write>(
 
         // add exponent part
         output.write_char(exponent_char)?;
-        output.write_fmt(format_args!("{:+03}", exponent))
+        output.write_fmt(format_args!("{exponent:+03}"))
     }
 }
 
@@ -151,10 +151,10 @@ pub(crate) fn write_compact<W: fmt::Write>(
             write_scientific(output, f, exponent_char, true)
         } else if f.fract() == 0.0 {
             // make sure there's a fractional part even if the number doesn't have it
-            output.write_fmt(format_args!("{:.1}", f))
+            output.write_fmt(format_args!("{f:.1}"))
         } else {
             // rely on the built-in formatting otherwise
-            output.write_fmt(format_args!("{}", f))
+            output.write_fmt(format_args!("{f}"))
         }
     }
 }
@@ -209,7 +209,7 @@ impl StarlarkTypeRepr for f64 {
 }
 
 impl<'v> AllocValue<'v> for StarlarkFloat {
-    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
+    fn alloc_value(self, heap: Heap<'v>) -> Value<'v> {
         heap.alloc_simple(self)
     }
 }
@@ -221,7 +221,7 @@ impl AllocFrozenValue for StarlarkFloat {
 }
 
 impl<'v> AllocValue<'v> for f64 {
-    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
+    fn alloc_value(self, heap: Heap<'v>) -> Value<'v> {
         heap.alloc(StarlarkFloat(self))
     }
 }
@@ -257,7 +257,7 @@ impl<'v> StarlarkValue<'v> for StarlarkFloat {
     }
 
     fn collect_repr(&self, s: &mut String) {
-        write!(s, "{}", self).unwrap()
+        write!(s, "{self}").unwrap()
     }
 
     fn to_bool(&self) -> bool {
@@ -273,44 +273,44 @@ impl<'v> StarlarkValue<'v> for StarlarkFloat {
         Ok(NumRef::Float(*self).get_hash())
     }
 
-    fn plus(&self, heap: &'v Heap) -> crate::Result<Value<'v>> {
+    fn plus(&self, heap: Heap<'v>) -> crate::Result<Value<'v>> {
         Ok(heap.alloc(*self))
     }
 
-    fn minus(&self, heap: &'v Heap) -> crate::Result<Value<'v>> {
+    fn minus(&self, heap: Heap<'v>) -> crate::Result<Value<'v>> {
         Ok(heap.alloc(StarlarkFloat(-self.0)))
     }
 
-    fn add(&self, other: Value, heap: &'v Heap) -> Option<crate::Result<Value<'v>>> {
+    fn add(&self, other: Value, heap: Heap<'v>) -> Option<crate::Result<Value<'v>>> {
         Some(Ok(heap.alloc(NumRef::Float(*self) + other.unpack_num()?)))
     }
 
-    fn sub(&self, other: Value, heap: &'v Heap) -> crate::Result<Value<'v>> {
+    fn sub(&self, other: Value, heap: Heap<'v>) -> crate::Result<Value<'v>> {
         match other.unpack_num() {
             None => ValueError::unsupported_with(self, "-", other),
             Some(other) => Ok(heap.alloc(NumRef::Float(*self) - other)),
         }
     }
 
-    fn mul(&self, other: Value<'v>, heap: &'v Heap) -> Option<crate::Result<Value<'v>>> {
+    fn mul(&self, other: Value<'v>, heap: Heap<'v>) -> Option<crate::Result<Value<'v>>> {
         Some(Ok(heap.alloc(NumRef::Float(*self) * other.unpack_num()?)))
     }
 
-    fn div(&self, other: Value, heap: &'v Heap) -> crate::Result<Value<'v>> {
+    fn div(&self, other: Value, heap: Heap<'v>) -> crate::Result<Value<'v>> {
         match other.unpack_num() {
             None => ValueError::unsupported_with(self, "/", other),
             Some(other) => Ok(heap.alloc(NumRef::Float(*self).div(other)?)),
         }
     }
 
-    fn percent(&self, other: Value, heap: &'v Heap) -> crate::Result<Value<'v>> {
+    fn percent(&self, other: Value, heap: Heap<'v>) -> crate::Result<Value<'v>> {
         match other.unpack_num() {
             Some(other) => Ok(heap.alloc(NumRef::Float(*self).percent(other)?)),
             None => ValueError::unsupported_with(self, "%", other),
         }
     }
 
-    fn floor_div(&self, other: Value, heap: &'v Heap) -> crate::Result<Value<'v>> {
+    fn floor_div(&self, other: Value, heap: Heap<'v>) -> crate::Result<Value<'v>> {
         match other.unpack_num() {
             None => ValueError::unsupported_with(self, "//", other),
             Some(other) => Ok(heap.alloc(NumRef::Float(*self).floor_div(other)?)),

@@ -16,9 +16,9 @@
  */
 
 use std::cmp::Reverse;
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::collections::hash_map::Entry;
 use std::fmt::Write;
 
 use dupe::Dupe;
@@ -32,13 +32,13 @@ use crate::codemap::FileSpan;
 use crate::codemap::FileSpanRef;
 use crate::codemap::ResolvedFileSpan;
 use crate::codemap::Span;
+use crate::eval::ProfileMode;
 use crate::eval::runtime::profile::csv::CsvWriter;
 use crate::eval::runtime::profile::data::ProfileData;
 use crate::eval::runtime::profile::data::ProfileDataImpl;
 use crate::eval::runtime::profile::instant::ProfilerInstant;
 use crate::eval::runtime::profile::profiler_type::ProfilerType;
 use crate::eval::runtime::small_duration::SmallDuration;
-use crate::eval::ProfileMode;
 
 pub(crate) struct StmtProfilerType;
 pub(crate) struct CoverageProfileType;
@@ -201,7 +201,11 @@ impl StmtProfileData {
             count: usize,
         }
         // There should be one EMPTY span entry
-        let mut items = Vec::with_capacity(self.stmts.len() - 1);
+        let mut items = Vec::with_capacity(if self.stmts.is_empty() {
+            0
+        } else {
+            self.stmts.len() - 1
+        });
         let mut total_time = SmallDuration::default();
         let mut total_count = 0;
         for (file_span, &(count, time)) in &self.stmts {
@@ -247,7 +251,7 @@ impl StmtProfileData {
             .collect();
         keys.sort();
         for key in keys {
-            writeln!(s, "{}", key).unwrap();
+            writeln!(s, "{key}").unwrap();
         }
         s
     }
@@ -297,7 +301,7 @@ impl StmtProfile {
     }
 
     // None = not applicable because not enabled
-    pub(crate) fn gen(&self) -> crate::Result<ProfileData> {
+    pub(crate) fn r#gen(&self) -> crate::Result<ProfileData> {
         match &self.0 {
             Some(data) => Ok(ProfileData {
                 profile: ProfileDataImpl::Statement(data.finish()?),
@@ -339,57 +343,68 @@ mod tests {
     use crate::assert::test_functions;
     use crate::environment::GlobalsBuilder;
     use crate::environment::Module;
+    use crate::eval::Evaluator;
+    use crate::eval::ProfileData;
     use crate::eval::runtime::profile::data::ProfileDataImpl;
     use crate::eval::runtime::profile::instant::ProfilerInstant;
     use crate::eval::runtime::profile::mode::ProfileMode;
     use crate::eval::runtime::profile::stmt::StmtProfile;
     use crate::eval::runtime::profile::stmt::StmtProfileData;
     use crate::eval::runtime::small_duration::SmallDuration;
-    use crate::eval::Evaluator;
-    use crate::eval::ProfileData;
     use crate::syntax::AstModule;
     use crate::syntax::Dialect;
 
     #[test]
     fn test_coverage() {
-        let module = Module::new();
-        let mut eval = Evaluator::new(&module);
+        Module::with_temp_heap(|module| {
+            let mut eval = Evaluator::new(&module);
 
-        let module = AstModule::parse(
-            "cov.star",
-            r#"
+            let ast = AstModule::parse(
+                "cov.star",
+                r#"
 def xx(x):
     return noop(x)
 
 xx(*[1])
 xx(*[2])
 "#
-            .to_owned(),
-            &Dialect::AllOptionsInternal,
-        )
-        .unwrap();
-        eval.enable_profile(&ProfileMode::Coverage).unwrap();
-        let mut globals = GlobalsBuilder::standard();
-        test_functions(&mut globals);
-        eval.eval_module(module, &globals.build()).unwrap();
+                .to_owned(),
+                &Dialect::AllOptionsInternal,
+            )
+            .unwrap();
+            eval.enable_profile(&ProfileMode::Coverage).unwrap();
+            let mut globals = GlobalsBuilder::standard();
+            test_functions(&mut globals);
+            eval.eval_module(ast, &globals.build()).unwrap();
 
-        let mut coverage: Vec<String> = eval
-            .coverage()
-            .unwrap()
-            .into_iter()
-            .map(|s| s.to_string())
-            .collect();
-        coverage.sort();
-        assert_eq!(
-            [
-                "cov.star:2:1-5:1",
-                "cov.star:3:5-19",
-                "cov.star:5:1-9",
-                "cov.star:6:1-9"
-            ]
-            .as_slice(),
-            coverage
-        );
+            let mut coverage: Vec<String> = eval
+                .coverage()
+                .unwrap()
+                .into_iter()
+                .map(|s| s.to_string())
+                .collect();
+            coverage.sort();
+            assert_eq!(
+                [
+                    "cov.star:2:1-5:1",
+                    "cov.star:3:5-19",
+                    "cov.star:5:1-9",
+                    "cov.star:6:1-9"
+                ]
+                .as_slice(),
+                coverage
+            );
+            crate::Result::Ok(())
+        })
+        .unwrap();
+    }
+
+    #[test]
+    fn test_empty() {
+        let mut a = StmtProfile::new();
+        a.enable();
+        let a = a.r#gen().unwrap();
+        a.gen_csv().unwrap();
     }
 
     #[test]
@@ -413,7 +428,7 @@ xx(*[2])
             file: &y,
             span: Span::new(Pos::new(2), Pos::new(4)),
         });
-        let a = a.gen().unwrap();
+        let a = a.r#gen().unwrap();
 
         let mut b = StmtProfile::new();
         b.enable();
@@ -425,7 +440,7 @@ xx(*[2])
             file: &z,
             span: Span::new(Pos::new(3), Pos::new(5)),
         });
-        let b = b.gen().unwrap();
+        let b = b.r#gen().unwrap();
 
         let ProfileDataImpl::Statement(merged) = ProfileData::merge([&a, &b]).unwrap().profile
         else {

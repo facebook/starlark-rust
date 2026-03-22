@@ -26,18 +26,18 @@ use crate as starlark;
 use crate::codemap::Span;
 use crate::environment::GlobalsBuilder;
 use crate::eval::Arguments;
+use crate::typing::ParamSpec;
+use crate::typing::Ty;
 use crate::typing::call_args::TyCallArgs;
 use crate::typing::callable::TyCallable;
 use crate::typing::error::TypingOrInternalError;
 use crate::typing::function::TyCustomFunctionImpl;
 use crate::typing::oracle::ctx::TypingOracleCtx;
 use crate::typing::structs::TyStruct;
-use crate::typing::ParamSpec;
-use crate::typing::Ty;
 use crate::util::arc_str::ArcStr;
+use crate::values::Heap;
 use crate::values::structs::value::FrozenStruct;
 use crate::values::structs::value::Struct;
-use crate::values::Heap;
 
 #[derive(
     Allocative, Clone, Copy, Dupe, Debug, Eq, PartialEq, Hash, Ord, PartialOrd
@@ -79,7 +79,7 @@ pub(crate) fn register_struct(builder: &mut GlobalsBuilder) {
         ty_custom_function = StructType,
         as_type = FrozenStruct,
     )]
-    fn r#struct<'v>(args: &Arguments<'v, '_>, heap: &'v Heap) -> starlark::Result<Struct<'v>> {
+    fn r#struct<'v>(args: &Arguments<'v, '_>, heap: Heap<'v>) -> starlark::Result<Struct<'v>> {
         args.no_positional_args(heap)?;
         // TODO(nga): missing optimization: practically most `struct` invocations are
         //   performed with fixed named arguments, e.g. `struct(a = 1, b = 2)`.

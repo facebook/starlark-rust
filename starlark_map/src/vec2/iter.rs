@@ -52,14 +52,14 @@ impl<'s, A, B> Iterator for Iter<'s, A, B> {
     }
 }
 
-impl<'s, A, B> ExactSizeIterator for Iter<'s, A, B> {
+impl<A, B> ExactSizeIterator for Iter<'_, A, B> {
     #[inline]
     fn len(&self) -> usize {
         self.aaa.len()
     }
 }
 
-impl<'s, A, B> DoubleEndedIterator for Iter<'s, A, B> {
+impl<A, B> DoubleEndedIterator for Iter<'_, A, B> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
         let a = self.aaa.next_back()?;
@@ -115,8 +115,14 @@ impl<A, B> Drop for IntoIter<A, B> {
     fn drop(&mut self) {
         unsafe {
             let rem = self.len();
-            ptr::drop_in_place(slice::from_raw_parts_mut(self.aaa_begin.as_ptr(), rem));
-            ptr::drop_in_place(slice::from_raw_parts_mut(self.bbb_begin.as_ptr(), rem));
+            ptr::drop_in_place(std::ptr::slice_from_raw_parts_mut(
+                self.aaa_begin.as_ptr(),
+                rem,
+            ));
+            ptr::drop_in_place(std::ptr::slice_from_raw_parts_mut(
+                self.bbb_begin.as_ptr(),
+                rem,
+            ));
             Vec2::<A, B>::dealloc_impl(self.bbb_ptr, self.cap);
         }
     }

@@ -22,9 +22,9 @@ use std::fmt;
 
 use derive_more::Display;
 use dupe::Dupe;
-use rand::rngs::SmallRng;
 use rand::Rng;
 use rand::SeedableRng;
+use rand::rngs::SmallRng;
 use starlark_derive::starlark_module;
 
 use crate as starlark;
@@ -134,9 +134,9 @@ impl Display for TestExpr {
             },
             TestExpr::BinOp(op, x_y) => {
                 let (x, y) = &**x_y;
-                write!(f, "({} {} {})", x, op, y)
+                write!(f, "({x} {op} {y})")
             }
-            TestExpr::Not(x) => write!(f, "(not {})", x),
+            TestExpr::Not(x) => write!(f, "(not {x})"),
         }
     }
 }
@@ -146,7 +146,6 @@ impl Display for TestExpr {
 /// * Return the result which is expected to be `bool`.
 /// * Count side effects.
 fn eval_program(program: &str) -> (bool, CountCalls) {
-    let module = Module::new();
     let ast = AstModule::parse("t.star", program.to_owned(), &Dialect::AllOptionsInternal).unwrap();
 
     let mut globals = GlobalsBuilder::standard();
@@ -154,25 +153,25 @@ fn eval_program(program: &str) -> (bool, CountCalls) {
     let globals = globals.build();
 
     let counts = CountCalls::default();
-    let r = {
+    let r = Module::with_temp_heap(|module| {
         let mut eval = Evaluator::new(&module);
         eval.extra = Some(&counts);
         let r = eval.eval_module(ast, &globals).unwrap();
-        r.unpack_bool().unwrap()
-    };
+        crate::Result::Ok(r.unpack_bool().unwrap())
+    })
+    .unwrap();
     (r, counts)
 }
 
 fn eval_if_else_with_starlark(expr: &TestExpr) -> (bool, CountCalls) {
     let program = format!(
         r#"
-if {}:
+if {expr}:
     r = True
 else:
     r = False
 r
-"#,
-        expr
+"#
     );
     eval_program(&program)
 }
@@ -181,11 +180,10 @@ fn eval_if_with_starlark(expr: &TestExpr) -> (bool, CountCalls) {
     let program = format!(
         r#"
 r = False
-if {}:
+if {expr}:
     r = True
 r
-"#,
-        expr
+"#
     );
     eval_program(&program)
 }
@@ -203,19 +201,19 @@ fn eval_manually(expr: &TestExpr) -> (bool, CountCalls) {
 fn test_if_else(expr: &TestExpr) {
     let expected = eval_manually(expr);
     let actual = eval_if_else_with_starlark(expr);
-    assert_eq!(expected, actual, "expression: {}", expr);
+    assert_eq!(expected, actual, "expression: {expr}");
 }
 
 fn test_if(expr: &TestExpr) {
     let expected = eval_manually(expr);
     let actual = eval_if_with_starlark(expr);
-    assert_eq!(expected, actual, "expression: {}", expr);
+    assert_eq!(expected, actual, "expression: {expr}");
 }
 
 fn test_expr_result(expr: &TestExpr) {
     let expected = eval_manually(expr);
     let actual = eval_expr_result(expr);
-    assert_eq!(expected, actual, "expression: {}", expr);
+    assert_eq!(expected, actual, "expression: {expr}");
 }
 
 fn test_ifs(expr: &TestExpr) {
@@ -319,7 +317,7 @@ fn max_depth_for_iter(i: usize) -> usize {
 
 fn random_expr(rng: &mut SmallRng, max_depth: usize) -> TestExpr {
     fn random_simple_expr(rng: &mut SmallRng) -> TestExpr {
-        match rng.gen_range(0..4) {
+        match rng.random_range(0..4) {
             0 => TestExpr::Const(true),
             1 => TestExpr::Const(false),
             2 => TestExpr::Count(true),
@@ -331,7 +329,7 @@ fn random_expr(rng: &mut SmallRng, max_depth: usize) -> TestExpr {
     if max_depth == 0 {
         random_simple_expr(rng)
     } else {
-        match rng.gen_range(0..4) {
+        match rng.random_range(0..4) {
             0 => random_simple_expr(rng),
             1 => TestExpr::Not(Box::new(random_expr(rng, max_depth - 1))),
             2 => TestExpr::BinOp(

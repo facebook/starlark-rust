@@ -17,9 +17,6 @@
 
 use proc_macro2::Ident;
 use proc_macro2::Span;
-use syn::parse::ParseStream;
-use syn::spanned::Spanned;
-use syn::visit::Visit;
 use syn::Attribute;
 use syn::Expr;
 use syn::FnArg;
@@ -31,12 +28,15 @@ use syn::PathArguments;
 use syn::ReturnType;
 use syn::Token;
 use syn::Type;
+use syn::parse::ParseStream;
+use syn::spanned::Spanned;
+use syn::visit::Visit;
 
+use crate::module::parse::ModuleKind;
 use crate::module::parse::is_attribute_docstring;
 use crate::module::parse::is_mut_something;
 use crate::module::parse::is_ref_something;
 use crate::module::parse::parse_visibility;
-use crate::module::parse::ModuleKind;
 use crate::module::simple_param::SimpleParam;
 use crate::module::typ::RegularParams;
 use crate::module::typ::SpecialParam;
@@ -49,6 +49,7 @@ use crate::module::typ::StarFun;
 use crate::module::typ::StarFunSource;
 use crate::module::typ::StarStmt;
 use crate::module::typ::ThisParam;
+use crate::module::util::is_type_name;
 use crate::util::GenericsUtil;
 
 #[derive(Default)]
@@ -318,7 +319,7 @@ pub(crate) fn parse_fun(func: ItemFn, module_kind: ModuleKind) -> syn::Result<St
         match parsed_arg {
             StarArgOrSpecial::Heap(special) => {
                 if heap.is_some() {
-                    return Err(syn::Error::new(span, "Repeated `&Heap` parameter"));
+                    return Err(syn::Error::new(span, "Repeated `Heap<'_>` parameter"));
                 }
                 heap = Some(special);
             }
@@ -376,7 +377,7 @@ pub(crate) fn parse_fun(func: ItemFn, module_kind: ModuleKind) -> syn::Result<St
     if eval.is_some() && heap.is_some() {
         return Err(syn::Error::new(
             sig_span,
-            "Can't have both `&mut Evaluator` and `&Heap` parameters",
+            "Can't have both `&mut Evaluator` and `Heap<'_>` parameters",
         ));
     }
 
@@ -587,7 +588,7 @@ enum StarArgOrSpecial {
     Arguments(StarArguments),
     /// `&mut Evaluator`.
     Eval(SpecialParam),
-    /// `&Heap`.
+    /// `Heap<'_>`.
     Heap(SpecialParam),
 }
 
@@ -609,13 +610,13 @@ fn is_eval(param: &SimpleParam, attrs: &FnParamAttrs) -> syn::Result<Option<Spec
     }
 }
 
-/// Function parameter is `heap: &Heap`.
+/// Function parameter is `heap: Heap<'_>`.
 fn is_heap(param: &SimpleParam, attrs: &FnParamAttrs) -> syn::Result<Option<SpecialParam>> {
-    if is_ref_something(&param.ty, "Heap") {
+    if is_type_name(&param.ty, "Heap") {
         if !attrs.is_empty() {
             return Err(syn::Error::new_spanned(
                 &param.ident,
-                "`&Heap` parameter cannot have attributes",
+                "`Heap<'_>` parameter cannot have attributes",
             ));
         }
         Ok(Some(SpecialParam {
@@ -697,22 +698,28 @@ fn parse_arg(
     check_lifetimes_in_type(&param.ty, has_v)?;
     let (param_attrs, param) = parse_fn_param_attrs(param)?;
 
-    if let Some(heap) = is_heap(&param, &param_attrs)? {
-        if this {
-            return Err(syn::Error::new(
-                span,
-                "Receiver parameter cannot be `&Heap`",
-            ));
+    match is_heap(&param, &param_attrs)? {
+        Some(heap) => {
+            if this {
+                return Err(syn::Error::new(
+                    span,
+                    "Receiver parameter cannot be `Heap<'_>`",
+                ));
+            }
+            return Ok(StarArgOrSpecial::Heap(heap));
         }
-        return Ok(StarArgOrSpecial::Heap(heap));
-    } else if let Some(eval) = is_eval(&param, &param_attrs)? {
-        if this {
-            return Err(syn::Error::new(
-                span,
-                "Receiver parameter cannot be `&mut Evaluator`",
-            ));
-        }
-        return Ok(StarArgOrSpecial::Eval(eval));
+        _ => match is_eval(&param, &param_attrs)? {
+            Some(eval) => {
+                if this {
+                    return Err(syn::Error::new(
+                        span,
+                        "Receiver parameter cannot be `&mut Evaluator`",
+                    ));
+                }
+                return Ok(StarArgOrSpecial::Eval(eval));
+            }
+            _ => {}
+        },
     }
 
     if this {

@@ -19,9 +19,9 @@
 mod t {
     use std::collections::HashMap;
     use std::hint;
+    use std::sync::Arc;
     use std::sync::atomic::AtomicUsize;
     use std::sync::atomic::Ordering;
-    use std::sync::Arc;
     use std::thread;
     use std::thread::ScopedJoinHandle;
     use std::time::Duration;
@@ -31,13 +31,13 @@ mod t {
     use dupe::Dupe;
 
     use crate::assert::test_functions;
-    use crate::debug::adapter::implementation::prepare_dap_adapter;
-    use crate::debug::adapter::implementation::resolve_breakpoints;
     use crate::debug::DapAdapter;
     use crate::debug::DapAdapterClient;
     use crate::debug::DapAdapterEvalHook;
     use crate::debug::StepKind;
     use crate::debug::VariablePath;
+    use crate::debug::adapter::implementation::prepare_dap_adapter;
+    use crate::debug::adapter::implementation::resolve_breakpoints;
     use crate::environment::GlobalsBuilder;
     use crate::environment::Module;
     use crate::eval::Evaluator;
@@ -171,20 +171,21 @@ mod t {
         let modules = HashMap::new();
         let loader = ReturnFileLoader { modules: &modules };
         let globals = GlobalsBuilder::extended().with(test_functions).build();
-        let env = Module::new();
-        let res = {
-            let mut eval = Evaluator::new(&env);
-            hook.add_dap_hooks(&mut eval);
-            eval.set_loader(&loader);
-            eval.eval_module(ast, &globals)?
-        };
+        Module::with_temp_heap(|env| {
+            let res = {
+                let mut eval = Evaluator::new(&env);
+                hook.add_dap_hooks(&mut eval);
+                eval.set_loader(&loader);
+                eval.eval_module(ast, &globals)?
+            };
 
-        env.set("_", res);
-        Ok(env
-            .freeze()
-            .expect("error freezing module")
-            .get("_")
-            .unwrap())
+            env.set("_", res);
+            Ok(env
+                .freeze()
+                .expect("error freezing module")
+                .get("_")
+                .unwrap())
+        })
     }
 
     fn join_timeout<T>(waiting: ScopedJoinHandle<T>, timeout: Duration) -> T {

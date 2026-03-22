@@ -21,21 +21,21 @@ use std::mem;
 
 use either::Either;
 use starlark_derive::starlark_module;
-use starlark_map::small_set::SmallSet;
 use starlark_map::Hashed;
+use starlark_map::small_set::SmallSet;
 use starlark_syntax::value_error;
 
 use crate as starlark;
 use crate::environment::MethodsBuilder;
+use crate::values::Heap;
+use crate::values::UnpackValue;
+use crate::values::Value;
+use crate::values::ValueOfUnchecked;
 use crate::values::none::NoneType;
 use crate::values::set::refs::SetMut;
 use crate::values::set::refs::SetRef;
 use crate::values::set::value::SetData;
 use crate::values::typing::StarlarkIter;
-use crate::values::Heap;
-use crate::values::UnpackValue;
-use crate::values::Value;
-use crate::values::ValueOfUnchecked;
 
 enum SetFromValue<'v> {
     Set(SmallSet<Value<'v>>),
@@ -45,16 +45,17 @@ enum SetFromValue<'v> {
 impl<'v> SetFromValue<'v> {
     fn from_value(
         value: ValueOfUnchecked<'v, StarlarkIter<Value<'v>>>,
-        heap: &'v Heap,
+        heap: Heap<'v>,
     ) -> crate::Result<Self> {
-        if let Some(v) = SetRef::unpack_value_opt(value.get()) {
-            Ok(SetFromValue::Ref(v))
-        } else {
-            let mut set = SmallSet::default();
-            for elem in value.get().iterate(heap)? {
-                set.insert_hashed(elem.get_hashed()?);
+        match SetRef::unpack_value_opt(value.get()) {
+            Some(v) => Ok(SetFromValue::Ref(v)),
+            _ => {
+                let mut set = SmallSet::default();
+                for elem in value.get().iterate(heap)? {
+                    set.insert_hashed(elem.get_hashed()?);
+                }
+                Ok(SetFromValue::Set(set))
             }
-            Ok(SetFromValue::Set(set))
         }
     }
 
@@ -101,7 +102,7 @@ pub(crate) fn set_methods(builder: &mut MethodsBuilder) {
     fn union<'v>(
         this: SetRef<'v>,
         #[starlark(require=pos)] other: ValueOfUnchecked<'v, StarlarkIter<Value<'v>>>,
-        heap: &'v Heap,
+        heap: Heap<'v>,
     ) -> starlark::Result<SetData<'v>> {
         if this.aref.content.is_empty() {
             let other_set = SetFromValue::from_value(other, heap)?;
@@ -129,7 +130,7 @@ pub(crate) fn set_methods(builder: &mut MethodsBuilder) {
     fn intersection<'v>(
         this: SetRef<'v>,
         #[starlark(require=pos)] other: ValueOfUnchecked<'v, StarlarkIter<Value<'v>>>,
-        heap: &'v Heap,
+        heap: Heap<'v>,
     ) -> starlark::Result<SetData<'v>> {
         let other_set = SetFromValue::from_value(other, heap)?;
         let mut data = SetData::default();
@@ -156,7 +157,7 @@ pub(crate) fn set_methods(builder: &mut MethodsBuilder) {
     fn symmetric_difference<'v>(
         this: SetRef<'v>,
         #[starlark(require=pos)] other: ValueOfUnchecked<'v, StarlarkIter<Value<'v>>>,
-        heap: &'v Heap,
+        heap: Heap<'v>,
     ) -> starlark::Result<SetData<'v>> {
         let other_set = SetFromValue::from_value(other, heap)?;
 
@@ -218,7 +219,7 @@ pub(crate) fn set_methods(builder: &mut MethodsBuilder) {
     fn update<'v>(
         this: Value<'v>,
         #[starlark(require=pos)] other: ValueOfUnchecked<'v, StarlarkIter<Value<'v>>>,
-        heap: &'v Heap,
+        heap: Heap<'v>,
     ) -> starlark::Result<NoneType> {
         let is_self_ptr = other.get().ptr_eq(this);
         let mut this = SetMut::from_value(this)?;
@@ -343,7 +344,7 @@ pub(crate) fn set_methods(builder: &mut MethodsBuilder) {
     fn difference<'v>(
         this: SetRef<'v>,
         #[starlark(require=pos)] other: ValueOfUnchecked<'v, StarlarkIter<Value<'v>>>,
-        heap: &'v Heap,
+        heap: Heap<'v>,
     ) -> starlark::Result<SetData<'v>> {
         if this.aref.content.is_empty() {
             other.get().iterate(heap)?;
@@ -378,17 +379,18 @@ pub(crate) fn set_methods(builder: &mut MethodsBuilder) {
     fn issuperset<'v>(
         this: SetRef<'v>,
         #[starlark(require=pos)] other: ValueOfUnchecked<'v, StarlarkIter<Value<'v>>>,
-        heap: &'v Heap,
+        heap: Heap<'v>,
     ) -> starlark::Result<bool> {
         let other_var;
-        let other = if let Some(other) = SetRef::unpack_value_opt(other.get()) {
-            if this.aref.content.len() < other.aref.content.len() {
-                return Ok(false);
+        let other = match SetRef::unpack_value_opt(other.get()) {
+            Some(other) => {
+                if this.aref.content.len() < other.aref.content.len() {
+                    return Ok(false);
+                }
+                other_var = other;
+                Either::Left(other_var.aref.content.iter_hashed().map(|v| Ok(v.copied())))
             }
-            other_var = other;
-            Either::Left(other_var.aref.content.iter_hashed().map(|v| Ok(v.copied())))
-        } else {
-            Either::Right(other.get().iterate(heap)?.map(|v| v.get_hashed()))
+            _ => Either::Right(other.get().iterate(heap)?.map(|v| v.get_hashed())),
         };
 
         for elem in other {
@@ -410,7 +412,7 @@ pub(crate) fn set_methods(builder: &mut MethodsBuilder) {
     fn issubset<'v>(
         this: SetRef<'v>,
         #[starlark(require=pos)] other: ValueOfUnchecked<'v, StarlarkIter<Value<'v>>>,
-        heap: &'v Heap,
+        heap: Heap<'v>,
     ) -> starlark::Result<bool> {
         if this.aref.content.is_empty() {
             other.get().iterate(heap)?;

@@ -91,14 +91,13 @@ pub(crate) fn thread_local_alloc_at_least(
     len: AlignedSize,
     chunk_count_in_bump: usize,
 ) -> ChunkPart {
-    let chunk = if let Some(chunk) =
-        PER_THREAD_ALLOCATOR.with_borrow_mut(|allocator| allocator.fetch(len))
-    {
-        chunk
-    } else {
-        let next_chunk_size = next_chunk_size(chunk_count_in_bump) - Chunk::HEADER_SIZE;
-        let len = cmp::max(len, next_chunk_size);
-        ChunkPart::alloc_at_least(len)
+    let chunk = match PER_THREAD_ALLOCATOR.with_borrow_mut(|allocator| allocator.fetch(len)) {
+        Some(chunk) => chunk,
+        _ => {
+            let next_chunk_size = next_chunk_size(chunk_count_in_bump) - Chunk::HEADER_SIZE;
+            let len = cmp::max(len, next_chunk_size);
+            ChunkPart::alloc_at_least(len)
+        }
     };
     debug_assert!(chunk.len() >= len);
     chunk
@@ -145,7 +144,13 @@ mod tests {
         let b = allocator
             .fetch(AlignedSize::new_bytes(3 * AValueHeader::ALIGN))
             .unwrap();
-        assert!(old_a_ptr == a.begin().as_ptr() || old_a_ptr == b.begin().as_ptr());
-        assert!(old_b_ptr == a.begin().as_ptr() || old_b_ptr == b.begin().as_ptr());
+        assert!(
+            std::ptr::eq(old_a_ptr, a.begin().as_ptr())
+                || std::ptr::eq(old_a_ptr, b.begin().as_ptr())
+        );
+        assert!(
+            std::ptr::eq(old_b_ptr, a.begin().as_ptr())
+                || std::ptr::eq(old_b_ptr, b.begin().as_ptr())
+        );
     }
 }

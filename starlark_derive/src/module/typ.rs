@@ -18,12 +18,11 @@
 use dupe::Dupe;
 use proc_macro2::Ident;
 use proc_macro2::Span;
-use syn::spanned::Spanned;
 use syn::Attribute;
 use syn::Block;
 use syn::Expr;
 use syn::Type;
-use syn::Visibility;
+use syn::spanned::Spanned;
 
 use crate::module::parse::ModuleKind;
 use crate::module::simple_param::SimpleParam;
@@ -32,15 +31,53 @@ use crate::module::util::unpack_option;
 
 #[derive(Debug)]
 pub(crate) struct StarModule {
-    pub module_kind: ModuleKind,
-    pub visibility: Visibility,
-    // We reuse the users globals_builder to make sure `use` statements etc
-    // make sense
-    pub globals_builder: Type,
-    pub name: Ident,
-    pub attrs: Vec<Attribute>,
-    pub docstring: Option<String>,
-    pub stmts: Vec<StarStmt>,
+    pub(crate) module_kind: ModuleKind,
+    /// The input `ItemFn`, with the body replaced by an empty block, and the one parameter having
+    /// been renamed to `globals_builder`
+    pub(crate) input: syn::ItemFn,
+    pub(crate) docstring: Option<String>,
+    pub(crate) stmts: Vec<StarStmt>,
+    pub(crate) generics: StarGenerics,
+}
+
+/// The generics the user provided on the starlark module
+#[derive(Debug)]
+pub(crate) struct StarGenerics {
+    /// The user provided generics
+    ///
+    /// This is what we use to instantiate functions we define with their generics, because the `'v`
+    /// lifetime is late bound and therefore never passed as an explicit type parameter
+    generics: syn::Generics,
+    /// The user provided generics with a `'v` param added in front.
+    ///
+    /// This is what we use to *declare* generics on functions that we define, because all of our
+    /// functions want a `'v` param
+    generics_with_v: syn::Generics,
+}
+
+impl StarGenerics {
+    pub(crate) fn new(g: syn::Generics) -> Self {
+        let mut with_v = g.clone();
+        with_v
+            .params
+            .insert(0, syn::GenericParam::Lifetime(syn::parse_quote! { 'v }));
+        Self {
+            generics: g,
+            generics_with_v: with_v,
+        }
+    }
+
+    pub(crate) fn decls(&self) -> syn::ImplGenerics<'_> {
+        self.generics_with_v.split_for_impl().0
+    }
+
+    pub(crate) fn turbofish(&self) -> syn::Turbofish<'_> {
+        self.generics.split_for_impl().1.as_turbofish()
+    }
+
+    pub(crate) fn where_clause(&self) -> Option<&syn::WhereClause> {
+        self.generics_with_v.split_for_impl().2
+    }
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -70,7 +107,7 @@ pub(crate) struct StarFun {
     pub attrs: Vec<Attribute>,
     pub this: Option<ThisParam>,
     pub args: RegularParams,
-    /// Has `&Heap` parameter.
+    /// Has `Heap<'_>` parameter.
     pub heap: Option<SpecialParam>,
     /// Has `&mut Evaluator` parameter.
     pub eval: Option<SpecialParam>,
@@ -102,7 +139,7 @@ impl StarFun {
 pub(crate) struct StarAttr {
     pub name: Ident,
     pub this: ThisParam,
-    /// Has `&Heap` parameter.
+    /// Has `Heap<'_>` parameter.
     pub heap: Option<SpecialParam>,
     pub attrs: Vec<Attribute>,
     /// `anyhow::Result<T>`.
@@ -157,6 +194,7 @@ pub(crate) struct StarArguments {
 }
 
 /// How we handle `&Arguments`.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub(crate) enum RegularParams {
     /// Pass `&Arguments` as is.

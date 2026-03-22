@@ -26,17 +26,19 @@ use starlark::syntax::AstModule;
 use starlark::syntax::Dialect;
 use starlark::values::Value;
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn allocation(n: usize) -> *mut u8 {
     mem::ManuallyDrop::new(Vec::with_capacity(n)).as_mut_ptr()
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn evaluate(s: *const u8) -> *mut u8 {
-    let length = u32::from_le_bytes(*(s as *const [u8; 4])) as usize;
-    let input = slice::from_raw_parts(s.offset(4), length);
-    let output = evaluate_buffers(input);
-    mem::ManuallyDrop::new(output).as_mut_ptr()
+    unsafe {
+        let length = u32::from_le_bytes(*(s as *const [u8; 4])) as usize;
+        let input = slice::from_raw_parts(s.offset(4), length);
+        let output = evaluate_buffers(input);
+        mem::ManuallyDrop::new(output).as_mut_ptr()
+    }
 }
 
 fn evaluate_buffers(input: &[u8]) -> Vec<u8> {
@@ -57,8 +59,9 @@ fn evaluate_starlark(content: &str) -> Result<String, starlark::Error> {
     let ast: AstModule =
         AstModule::parse("hello_world.star", content.to_owned(), &Dialect::Standard)?;
     let globals = Globals::standard();
-    let module: Module = Module::new();
-    let mut eval: Evaluator = Evaluator::new(&module);
-    let res: Value = eval.eval_module(ast, &globals)?;
-    Ok(res.to_string())
+    Module::with_temp_heap(|module| {
+        let mut eval: Evaluator = Evaluator::new(&module);
+        let res: Value = eval.eval_module(ast, &globals)?;
+        Ok::<_, starlark::Error>(res.to_string())
+    })
 }

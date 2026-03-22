@@ -15,17 +15,18 @@
  * limitations under the License.
  */
 
+use std::fmt;
 use std::ops::Deref;
 
 use dupe::Dupe;
 
 use crate::typing::Ty;
-use crate::values::type_repr::StarlarkTypeRepr;
 use crate::values::AllocValue;
 use crate::values::Heap;
 use crate::values::UnpackValue;
 use crate::values::Value;
 use crate::values::ValueOfUnchecked;
+use crate::values::type_repr::StarlarkTypeRepr;
 
 /// A wrapper that keeps the original value on the heap for use elsewhere,
 /// and also, when unpacked, unpacks the value to validate it is of
@@ -75,7 +76,13 @@ impl<'v, T: UnpackValue<'v>> UnpackValue<'v> for ValueOf<'v, T> {
 }
 
 impl<'v, T: UnpackValue<'v>> AllocValue<'v> for ValueOf<'v, T> {
-    fn alloc_value(self, _heap: &'v Heap) -> Value<'v> {
+    fn alloc_value(self, _heap: Heap<'v>) -> Value<'v> {
         self.value
+    }
+}
+
+impl<'v, T: fmt::Display + UnpackValue<'v>> fmt::Display for ValueOf<'v, T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.typed, f)
     }
 }

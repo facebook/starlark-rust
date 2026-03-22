@@ -20,8 +20,6 @@ use dupe::Dupe;
 use either::Either;
 
 use crate::typing::Ty;
-use crate::values::none::NoneType;
-use crate::values::type_repr::StarlarkTypeRepr;
 use crate::values::AllocFrozenValue;
 use crate::values::AllocValue;
 use crate::values::FrozenHeap;
@@ -29,6 +27,8 @@ use crate::values::FrozenValue;
 use crate::values::Heap;
 use crate::values::UnpackValue;
 use crate::values::Value;
+use crate::values::none::NoneType;
+use crate::values::type_repr::StarlarkTypeRepr;
 
 /// Equivalent of a Rust [`Option`], where `None`
 /// is encoded as [`NoneType`](crate::values::none::NoneType).
@@ -87,7 +87,7 @@ impl<'v, T: UnpackValue<'v>> UnpackValue<'v> for NoneOr<T> {
 }
 
 impl<'v, T: AllocValue<'v>> AllocValue<'v> for NoneOr<T> {
-    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
+    fn alloc_value(self, heap: Heap<'v>) -> Value<'v> {
         match self {
             NoneOr::None => Value::new_none(),
             NoneOr::Other(x) => x.alloc_value(heap),

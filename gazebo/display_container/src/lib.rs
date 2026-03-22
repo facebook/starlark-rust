@@ -1,10 +1,11 @@
 /*
  * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
- * This source code is licensed under both the MIT license found in the
- * LICENSE-MIT file in the root directory of this source tree and the Apache
+ * This source code is dual-licensed under either the MIT license found in the
+ * LICENSE-MIT file in the root directory of this source tree or the Apache
  * License, Version 2.0 found in the LICENSE-APACHE file in the root directory
- * of this source tree.
+ * of this source tree. You may select, at your option, one of the
+ * above-listed licenses.
  */
 
 //! Provides utilities to implement `Display`, which also provides an "alternate" display.
@@ -97,7 +98,7 @@ pub fn display_pair<'a, K: Display + 'a, V: Display + 'a>(
 
 struct DisplayPair<'a, K: Display, V: Display>(pub K, pub &'a str, pub V);
 
-impl<'a, K: Display, V: Display> Display for DisplayPair<'a, K, V> {
+impl<K: Display, V: Display> Display for DisplayPair<'_, K, V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         Display::fmt(&self.0, f)?;
         f.write_str(self.1)?;
@@ -200,9 +201,9 @@ pub fn fmt_container<T: Display, Iter: IntoIterator<Item = T>>(
 }
 
 /// Helper for display implementation of container-y types (like list, tuple).
-pub fn display_container<'a, C: 'a>(prefix: &'a str, suffix: &'a str, items: C) -> impl Display + 'a
+pub fn display_container<'a, C>(prefix: &'a str, suffix: &'a str, items: C) -> impl Display + 'a
 where
-    C: Copy + IntoIterator,
+    C: Copy + IntoIterator + 'a,
     <C as IntoIterator>::Item: Display,
 {
     struct Impl<'a, C> {
@@ -210,7 +211,7 @@ where
         suffix: &'a str,
         items: C,
     }
-    impl<'a, C> Display for Impl<'a, C>
+    impl<C> Display for Impl<'_, C>
     where
         C: Copy + IntoIterator,
         <C as IntoIterator>::Item: Display,
@@ -301,7 +302,7 @@ mod tests {
                     "]",
                     ": ",
                     // just wrap with `"` to make it clearer in the output
-                    self.0.iter().map(|(k, v)| (k, format!("\"{}\"", v))),
+                    self.0.iter().map(|(k, v)| (k, format!("\"{v}\""))),
                 )
             }
         }

@@ -23,8 +23,8 @@ use std::array;
 
 use allocative::Allocative;
 use once_cell::sync::Lazy;
-use starlark_derive::starlark_value;
 use starlark_derive::NoSerialize;
+use starlark_derive::starlark_value;
 
 use crate as starlark;
 use crate::eval::runtime::slots::LocalSlotId;
@@ -66,7 +66,7 @@ pub(crate) fn local_as_value(
     )> = Lazy::new(|| {
         let heap = FrozenHeap::new();
         let locals = array::from_fn(|i| {
-            heap.alloc_simple_typed(LocalAsValue {
+            heap.alloc_simple_typed_static(LocalAsValue {
                 local: LocalSlotId(i as u32),
             })
         });

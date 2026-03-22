@@ -23,11 +23,11 @@ use std::vec;
 use either::Either;
 
 use crate::typing::Ty;
+use crate::values::UnpackValue;
+use crate::values::Value;
 use crate::values::list::UnpackList;
 use crate::values::tuple::UnpackTuple;
 use crate::values::type_repr::StarlarkTypeRepr;
-use crate::values::UnpackValue;
-use crate::values::Value;
 
 /// Unpack a value of type `list[T]` or `tuple[T, ...]` into a vec.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
@@ -93,45 +93,46 @@ impl<'a, T> IntoIterator for &'a mut UnpackListOrTuple<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::values::types::list_or_tuple::UnpackListOrTuple;
     use crate::values::Heap;
     use crate::values::UnpackValue;
+    use crate::values::types::list_or_tuple::UnpackListOrTuple;
 
     #[test]
     fn test_unpack() {
-        let heap = Heap::new();
-        let list = heap.alloc(vec!["a", "b"]);
-        let tuple = heap.alloc(("a", "b"));
-        let list_of_ints = heap.alloc(vec![1, 2]);
-        let tuple_of_ints = heap.alloc((1, 2));
-        assert_eq!(
-            vec!["a", "b"],
-            UnpackListOrTuple::<&str>::unpack_value(list)
-                .unwrap()
-                .unwrap()
-                .items
-        );
-        assert_eq!(
-            vec!["a", "b"],
-            UnpackListOrTuple::<&str>::unpack_value(tuple)
-                .unwrap()
-                .unwrap()
-                .items
-        );
-        assert!(
-            UnpackListOrTuple::<&str>::unpack_value(list_of_ints)
-                .unwrap()
-                .is_none()
-        );
-        assert!(
-            UnpackListOrTuple::<&str>::unpack_value(tuple_of_ints)
-                .unwrap()
-                .is_none()
-        );
-        assert!(
-            UnpackListOrTuple::<&str>::unpack_value(heap.alloc(1))
-                .unwrap()
-                .is_none()
-        );
+        Heap::temp(|heap| {
+            let list = heap.alloc(vec!["a", "b"]);
+            let tuple = heap.alloc(("a", "b"));
+            let list_of_ints = heap.alloc(vec![1, 2]);
+            let tuple_of_ints = heap.alloc((1, 2));
+            assert_eq!(
+                vec!["a", "b"],
+                UnpackListOrTuple::<&str>::unpack_value(list)
+                    .unwrap()
+                    .unwrap()
+                    .items
+            );
+            assert_eq!(
+                vec!["a", "b"],
+                UnpackListOrTuple::<&str>::unpack_value(tuple)
+                    .unwrap()
+                    .unwrap()
+                    .items
+            );
+            assert!(
+                UnpackListOrTuple::<&str>::unpack_value(list_of_ints)
+                    .unwrap()
+                    .is_none()
+            );
+            assert!(
+                UnpackListOrTuple::<&str>::unpack_value(tuple_of_ints)
+                    .unwrap()
+                    .is_none()
+            );
+            assert!(
+                UnpackListOrTuple::<&str>::unpack_value(heap.alloc(1))
+                    .unwrap()
+                    .is_none()
+            );
+        });
     }
 }

@@ -19,11 +19,11 @@ use std::slice;
 use std::vec;
 
 use crate::typing::Ty;
+use crate::values::UnpackValue;
+use crate::values::Value;
 use crate::values::list::ListRef;
 use crate::values::list::ListType;
 use crate::values::type_repr::StarlarkTypeRepr;
-use crate::values::UnpackValue;
-use crate::values::Value;
 
 /// Unpack a value of type `list<T>` into a vec.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
@@ -94,23 +94,24 @@ impl<'a, T> IntoIterator for &'a mut UnpackList<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::values::list::UnpackList;
     use crate::values::Heap;
     use crate::values::UnpackValue;
+    use crate::values::list::UnpackList;
 
     #[test]
     fn test_unpack() {
-        let heap = Heap::new();
-        let v = heap.alloc(vec!["a", "b"]);
-        assert_eq!(
-            vec!["a", "b"],
-            UnpackList::<&str>::unpack_value(v).unwrap().unwrap().items
-        );
-        assert!(UnpackList::<u32>::unpack_value(v).unwrap().is_none());
-        assert!(
-            UnpackList::<&str>::unpack_value(heap.alloc(1))
-                .unwrap()
-                .is_none()
-        );
+        Heap::temp(|heap| {
+            let v = heap.alloc(vec!["a", "b"]);
+            assert_eq!(
+                vec!["a", "b"],
+                UnpackList::<&str>::unpack_value(v).unwrap().unwrap().items
+            );
+            assert!(UnpackList::<u32>::unpack_value(v).unwrap().is_none());
+            assert!(
+                UnpackList::<&str>::unpack_value(heap.alloc(1))
+                    .unwrap()
+                    .is_none()
+            );
+        });
     }
 }

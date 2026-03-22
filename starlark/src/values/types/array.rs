@@ -35,15 +35,12 @@ use crate as starlark;
 use crate::any::ProvidesStaticType;
 use crate::cast::transmute;
 use crate::private::Private;
-use crate::values::layout::avalue::alloc_static;
-use crate::values::layout::avalue::AValue;
-use crate::values::layout::avalue::AValueArray;
-use crate::values::layout::avalue::AValueImpl;
-use crate::values::layout::heap::repr::AValueRepr;
-use crate::values::types::list::value::display_list;
+use crate::values::AllocStaticSimple;
+use crate::values::FrozenValueTyped;
 use crate::values::Heap;
 use crate::values::StarlarkValue;
 use crate::values::Value;
+use crate::values::types::list::value::display_list;
 
 /// Fixed-capacity list.
 ///
@@ -84,23 +81,30 @@ impl<'v> Debug for Array<'v> {
 
 /// `Array` is not `Sync`, so wrap it into this struct to store it in static variable.
 /// Empty `Array` is logically `Sync`.
-pub(crate) struct ValueEmptyArray(AValueRepr<AValueImpl<'static, AValueArray>>);
+pub(crate) struct ValueEmptyArray(AllocStaticSimple<Array<'static>>);
 unsafe impl Sync for ValueEmptyArray {}
 
 pub(crate) static VALUE_EMPTY_ARRAY: ValueEmptyArray =
-    ValueEmptyArray(alloc_static(unsafe { Array::new(0, 0) }));
+    ValueEmptyArray(AllocStaticSimple::alloc(unsafe { Array::new(0, 0) }));
+
+// Manual registration for pagable serialization (can't use macro due to wrapper struct)
+inventory::submit! {
+    crate::__derive_refs::StaticValueEntry::new(
+        file!(),
+        line!(),
+        || VALUE_EMPTY_ARRAY.0.to_frozen_value()
+    )
+}
 
 impl ValueEmptyArray {
-    pub(crate) fn repr<'v>(
-        &'static self,
-    ) -> &'v AValueRepr<AValueImpl<'v, impl AValue<'v, StarlarkValue = Array<'v>>>> {
-        // Cast lifetimes. Cannot use `crate::cast::ptr_lifetime` here
-        // because type parameter of `AValue` also need to be casted.
+    pub(crate) fn unpack<'v>(&'static self) -> FrozenValueTyped<'v, Array<'v>> {
+        // SAFETY: `Array` is normally (correctly) invariant in `'v`, but for empty arrays it
+        // doesn't matter.
         unsafe {
             transmute!(
-                &AValueRepr<AValueImpl<AValueArray>>,
-                &AValueRepr<AValueImpl<AValueArray>>,
-                &self.0
+                FrozenValueTyped<'static, Array<'static>>,
+                FrozenValueTyped<'v, Array<'v>>,
+                self.0.unpack()
             )
         }
     }
@@ -168,8 +172,10 @@ impl<'v> Array<'v> {
     }
 
     unsafe fn get_unchecked(&self, index: usize) -> Value<'v> {
-        debug_assert!(index < self.len());
-        *self.ptr_at(index)
+        unsafe {
+            debug_assert!(index < self.len());
+            *self.ptr_at(index)
+        }
     }
 
     pub(crate) fn set_at(&self, index: usize, value: Value<'v>) {
@@ -305,7 +311,7 @@ impl<'v> StarlarkValue<'v> for Array<'v> {
         Ok(self.len() as i32)
     }
 
-    unsafe fn iter_next(&self, index: usize, _heap: &'v Heap) -> Option<Value<'v>> {
+    unsafe fn iter_next(&self, index: usize, _heap: Heap<'v>) -> Option<Value<'v>> {
         debug_assert!(self.len() == 0 || self.iter_count_is_non_zero());
         self.content().get(index).copied()
     }
@@ -337,28 +343,31 @@ mod tests {
 
     #[test]
     fn debug() {
-        let heap = Heap::new();
-        let array = heap.alloc_array(10);
-        array.push(heap.alloc(23));
-        // Just check it does not crash.
-        drop(array.to_string());
+        Heap::temp(|heap| {
+            let array = heap.alloc_array(10);
+            array.push(heap.alloc(23));
+            // Just check it does not crash.
+            drop(array.to_string());
+        });
     }
 
     #[test]
     fn display() {
-        let heap = Heap::new();
-        let array = heap.alloc_array(10);
-        array.push(heap.alloc(29));
-        array.push(Value::new_none());
-        assert_eq!("array([29, None], cap=10)", array.to_string());
+        Heap::temp(|heap| {
+            let array = heap.alloc_array(10);
+            array.push(heap.alloc(29));
+            array.push(Value::new_none());
+            assert_eq!("array([29, None], cap=10)", array.to_string());
+        });
     }
 
     #[test]
     fn push() {
-        let heap = Heap::new();
-        let array = heap.alloc_array(10);
-        array.push(heap.alloc(17));
-        array.push(heap.alloc(19));
-        assert_eq!(heap.alloc(19), array.content()[1]);
+        Heap::temp(|heap| {
+            let array = heap.alloc_array(10);
+            array.push(heap.alloc(17));
+            array.push(heap.alloc(19));
+            assert_eq!(heap.alloc(19), array.content()[1]);
+        });
     }
 }

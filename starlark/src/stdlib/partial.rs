@@ -20,29 +20,26 @@ use std::fmt::Display;
 
 use allocative::Allocative;
 use hashbrown::HashTable;
+use starlark_derive::NoSerialize;
 use starlark_derive::starlark_module;
 use starlark_derive::starlark_value;
-use starlark_derive::NoSerialize;
 use starlark_syntax::slice_vec_ext::SliceExt;
 use starlark_syntax::slice_vec_ext::VecExt;
 use starlark_syntax::value_error;
 
 use crate as starlark;
 use crate::any::ProvidesStaticType;
-use crate::coerce::coerce;
 use crate::coerce::Coerce;
+use crate::coerce::coerce;
 use crate::collections::symbol::symbol::Symbol;
 use crate::environment::GlobalsBuilder;
+use crate::eval::Arguments;
+use crate::eval::Evaluator;
 use crate::eval::runtime::arguments::ArgNames;
 use crate::eval::runtime::arguments::ArgumentsFull;
 use crate::eval::runtime::rust_loc::rust_loc;
-use crate::eval::Arguments;
-use crate::eval::Evaluator;
+use crate::register_avalue_simple_frozen;
 use crate::starlark_complex_values;
-use crate::values::dict::DictRef;
-use crate::values::function::FUNCTION_TYPE;
-use crate::values::layout::typed::string::StringValueLike;
-use crate::values::types::tuple::value::Tuple;
 use crate::values::Freeze;
 use crate::values::FreezeResult;
 use crate::values::Freezer;
@@ -53,6 +50,10 @@ use crate::values::StringValue;
 use crate::values::Trace;
 use crate::values::Value;
 use crate::values::ValueLike;
+use crate::values::dict::DictRef;
+use crate::values::function::FUNCTION_TYPE;
+use crate::values::layout::typed::string::StringValueLike;
+use crate::values::types::tuple::value::Tuple;
 
 #[starlark_module]
 pub fn partial(builder: &mut GlobalsBuilder) {
@@ -130,6 +131,8 @@ impl<'v, V: ValueLike<'v>, S> Display for PartialGen<V, S> {
 type Partial<'v> = PartialGen<Value<'v>, StringValue<'v>>;
 type FrozenPartial = PartialGen<FrozenValue, FrozenStringValue>;
 starlark_complex_values!(Partial);
+
+register_avalue_simple_frozen!(FrozenPartial);
 
 impl<'v> Freeze for Partial<'v> {
     type Frozen = FrozenPartial;
@@ -214,7 +217,7 @@ def sum(a, b, *args, **kwargs):
     return [args, kwargs]
 "#;
 
-        assert::eq(expected, &format!("{}{}", sum, expr));
+        assert::eq(expected, &format!("{sum}{expr}"));
     }
 
     #[test]

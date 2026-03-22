@@ -68,15 +68,15 @@ pub(crate) fn request_value_impl<'v, T: AnyLifetime<'v>>(value: Value<'v>) -> Op
 #[cfg(test)]
 mod tests {
     use allocative::Allocative;
-    use starlark_derive::starlark_value;
     use starlark_derive::NoSerialize;
+    use starlark_derive::starlark_value;
 
     use crate as starlark;
     use crate::any::ProvidesStaticType;
     use crate::starlark_simple_value;
-    use crate::values::demand::Demand;
     use crate::values::Heap;
     use crate::values::StarlarkValue;
+    use crate::values::demand::Demand;
 
     trait SomeTrait {
         fn payload(&self) -> u32;
@@ -116,12 +116,13 @@ mod tests {
 
     #[test]
     fn test_trait_downcast() {
-        let heap = Heap::new();
-        let value = heap.alloc_simple(MyValue { payload: 17 });
+        Heap::temp(|heap| {
+            let value = heap.alloc_simple(MyValue { payload: 17 });
 
-        assert!(value.request_value::<String>().is_none());
+            assert!(value.request_value::<String>().is_none());
 
-        let some_trait = value.request_value::<&dyn SomeTrait>().unwrap();
-        assert_eq!(17, some_trait.payload());
+            let some_trait = value.request_value::<&dyn SomeTrait>().unwrap();
+            assert_eq!(17, some_trait.payload());
+        });
     }
 }

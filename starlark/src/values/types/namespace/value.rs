@@ -22,11 +22,11 @@ use std::marker::PhantomData;
 use allocative::Allocative;
 use display_container::fmt_keyed_container;
 use serde::Serialize;
-use starlark_derive::starlark_value;
 use starlark_derive::Freeze;
 use starlark_derive::Trace;
-use starlark_map::small_map::SmallMap;
+use starlark_derive::starlark_value;
 use starlark_map::Hashed;
+use starlark_map::small_map::SmallMap;
 
 use crate as starlark;
 use crate::any::ProvidesStaticType;
@@ -36,14 +36,13 @@ use crate::docs::DocModule;
 use crate::starlark_complex_value;
 use crate::typing::Ty;
 use crate::util::arc_str::ArcStr;
-use crate::values::types::namespace::typing::TyNamespace;
-use crate::values::FreezeResult;
 use crate::values::FrozenValue;
 use crate::values::Heap;
 use crate::values::StarlarkValue;
 use crate::values::StringValueLike;
 use crate::values::Value;
 use crate::values::ValueLike;
+use crate::values::types::namespace::typing::TyNamespace;
 
 #[derive(Clone, Coerce, Debug, Trace, Freeze, Allocative)]
 #[repr(C)]
@@ -95,11 +94,11 @@ where
         collector.push_str("namespace(...)");
     }
 
-    fn get_attr(&self, attribute: &str, heap: &'v Heap) -> Option<Value<'v>> {
+    fn get_attr(&self, attribute: &str, heap: Heap<'v>) -> Option<Value<'v>> {
         self.get_attr_hashed(Hashed::new(attribute), heap)
     }
 
-    fn get_attr_hashed(&self, attribute: Hashed<&str>, _heap: &'v Heap) -> Option<Value<'v>> {
+    fn get_attr_hashed(&self, attribute: Hashed<&str>, _heap: Heap<'v>) -> Option<Value<'v>> {
         self.fields
             .get_hashed(attribute)
             .map(|v| v.value.to_value())

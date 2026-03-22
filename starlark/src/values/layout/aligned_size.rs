@@ -58,7 +58,7 @@ impl AlignedSize {
     #[inline]
     pub(crate) const fn new_bytes(bytes: usize) -> AlignedSize {
         assert!(
-            bytes % AValueHeader::ALIGN == 0,
+            bytes.is_multiple_of(AValueHeader::ALIGN),
             "AlignedSize must be aligned"
         );
         assert!(
@@ -107,7 +107,7 @@ impl AlignedSize {
 
     #[inline]
     pub(crate) fn unchecked_sub(self, rhs: AlignedSize) -> AlignedSize {
-        debug_assert!(self.bytes >= rhs.bytes, "{:?} - {:?}", self, rhs);
+        debug_assert!(self.bytes >= rhs.bytes, "{self:?} - {rhs:?}");
         AlignedSize {
             bytes: self.bytes - rhs.bytes,
         }

@@ -15,51 +15,49 @@
  * limitations under the License.
  */
 
-use std::any;
+use std::any::Any;
 use std::cell::Cell;
 use std::cell::RefCell;
 use std::cell::RefMut;
 use std::cmp;
-use std::convert::Infallible;
 use std::fmt;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::hash::Hash;
 use std::hash::Hasher;
-use std::intrinsics::copy_nonoverlapping;
 use std::marker::PhantomData;
 use std::mem;
 use std::mem::MaybeUninit;
 use std::ops::Deref;
 use std::ptr;
-use std::slice;
 use std::sync::Arc;
 
 use allocative::Allocative;
 use bumpalo::Bump;
 use dupe::Dupe;
+use dupe::IterDupedExt;
 use starlark_map::small_set::SmallSet;
 
 use crate::cast;
 use crate::cast::transmute;
-use crate::collections::maybe_uninit_backport::maybe_uninit_write_slice;
-use crate::collections::maybe_uninit_backport::maybe_uninit_write_slice_cloned;
-use crate::collections::Hashed;
 use crate::collections::StarlarkHashValue;
-use crate::eval::compiler::def::FrozenDef;
+use crate::environment::MethodFrozenHeapName;
 use crate::eval::runtime::profile::instant::ProfilerInstant;
-use crate::values::any::StarlarkAny;
-use crate::values::array::Array;
-use crate::values::array::VALUE_EMPTY_ARRAY;
-use crate::values::layout::avalue::any_array_avalue;
-use crate::values::layout::avalue::array_avalue;
-use crate::values::layout::avalue::complex;
-use crate::values::layout::avalue::complex_no_freeze;
-use crate::values::layout::avalue::frozen_list_avalue;
-use crate::values::layout::avalue::frozen_tuple_avalue;
-use crate::values::layout::avalue::list_avalue;
-use crate::values::layout::avalue::simple;
-use crate::values::layout::avalue::tuple_avalue;
+use crate::values::AllocFrozenValue;
+use crate::values::AllocValue;
+use crate::values::FrozenStringValue;
+use crate::values::FrozenValueOfUnchecked;
+use crate::values::FrozenValueTyped;
+use crate::values::HeapSendable;
+use crate::values::OwnedFrozenValue;
+use crate::values::OwnedFrozenValueTyped;
+use crate::values::StarlarkValue;
+use crate::values::StringValue;
+use crate::values::Trace;
+use crate::values::UnpackValue;
+use crate::values::ValueOf;
+use crate::values::ValueOfUnchecked;
+use crate::values::ValueTyped;
 use crate::values::layout::avalue::AValue;
 use crate::values::layout::avalue::AValueImpl;
 use crate::values::layout::heap::allocator::alloc::allocator::ChunkAllocator;
@@ -71,33 +69,14 @@ use crate::values::layout::heap::call_enter_exit::CallExit;
 use crate::values::layout::heap::call_enter_exit::NeedsDrop;
 use crate::values::layout::heap::call_enter_exit::NoDrop;
 use crate::values::layout::heap::fast_cell::FastCell;
-use crate::values::layout::heap::maybe_uninit_slice_util::maybe_uninit_write_from_exact_size_iter;
 use crate::values::layout::heap::profile::by_type::HeapSummary;
 use crate::values::layout::heap::repr::AValueOrForwardUnpack;
 use crate::values::layout::heap::repr::AValueRepr;
-use crate::values::layout::static_string::constant_string;
-use crate::values::layout::typed::string::StringValueLike;
+use crate::values::layout::heap::send::HeapSyncable;
 use crate::values::layout::value::FrozenValue;
 use crate::values::layout::value::Value;
-use crate::values::list::value::VALUE_EMPTY_FROZEN_LIST;
 use crate::values::string::intern::interner::FrozenStringValueInterner;
 use crate::values::string::intern::interner::StringValueInterner;
-use crate::values::string::str_type::StarlarkStr;
-use crate::values::AllocFrozenValue;
-use crate::values::AllocValue;
-use crate::values::ComplexValue;
-use crate::values::FreezeResult;
-use crate::values::FrozenRef;
-use crate::values::FrozenStringValue;
-use crate::values::FrozenValueOfUnchecked;
-use crate::values::FrozenValueTyped;
-use crate::values::StarlarkValue;
-use crate::values::StringValue;
-use crate::values::Trace;
-use crate::values::UnpackValue;
-use crate::values::ValueOf;
-use crate::values::ValueOfUnchecked;
-use crate::values::ValueTyped;
 
 #[derive(Copy, Clone, Dupe)]
 pub(crate) enum HeapKind {
@@ -105,35 +84,123 @@ pub(crate) enum HeapKind {
     Frozen,
 }
 
-/// A heap on which [`Value`]s can be allocated. The values will be annotated with the heap lifetime.
-#[derive(Default)]
-pub struct Heap {
+/// An owned heap on which [`Value`]s can be allocated.
+///
+/// Private for now, but there's no reason it couldn't be public as long as access is restricted to
+/// branded functions with signatures like those of `Heap::temp`
+struct OwnedHeap {
     /// Peak memory seen when a garbage collection takes place (may be lower than currently allocated)
     peak_allocated: Cell<usize>,
     arena: FastCell<Arena<Bump>>,
     str_interner: RefCell<StringValueInterner<'static>>,
+    /// Memory I depend on.
+    refs: RefCell<SmallSet<FrozenHeapRef>>,
+    ban_gc: Cell<bool>,
 }
 
-impl Debug for Heap {
+impl OwnedHeap {
+    /// Create a new [`OwnedHeap`].
+    fn new() -> Self {
+        Self {
+            peak_allocated: Default::default(),
+            arena: Default::default(),
+            str_interner: Default::default(),
+            refs: Default::default(),
+            ban_gc: Cell::new(true),
+        }
+    }
+}
+
+/// A heap on which [`Value`]s can be allocated. The values will be annotated with the heap lifetime.
+#[derive(Copy, Clone, Dupe)]
+// `PhantomData` is needed to make the type invariant in `'v` - without that, branding doesn't mean
+// anything.
+pub struct Heap<'v>(&'v OwnedHeap, PhantomData<fn(&'v ()) -> &'v ()>);
+
+impl<'v> Debug for Heap<'v> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut x = f.debug_struct("Heap");
         x.field(
             "bytes",
-            &self.arena.try_borrow().map(|x| x.allocated_bytes()),
+            &self.0.arena.try_borrow().map(|x| x.allocated_bytes()),
         );
         x.finish()
     }
 }
 
-impl Heap {
-    pub(crate) fn trace_interner<'v>(&'v self, tracer: &Tracer<'v>) {
+impl<'v> Heap<'v> {
+    /// Create a heap and use it within the closure
+    ///
+    /// Heap is discarded at the end of the closure.
+    pub fn temp<F, R>(f: F) -> R
+    where
+        F: for<'v2> FnOnce(Heap<'v2>) -> R,
+    {
+        let heap = OwnedHeap::new();
+        f(Heap(&heap, PhantomData))
+    }
+
+    /// Like `temp`, but `async`
+    pub async fn temp_async<F, R>(f: F) -> R
+    where
+        F: for<'v2> AsyncFnOnce(Heap<'v2>) -> R,
+    {
+        // It's interesting to note that this is in fact more expressive than `temp` alone. While
+        // it's possible for `temp` to return a future which the user can then await externally,
+        // that future can't capture a reference to the heap. Here though, we allow the future
+        // "returned" by this function to do so. We make that sound by also capturing the heap
+        // itself in the future.
+        let heap = OwnedHeap::new();
+        f(Heap(&heap, PhantomData)).await
+    }
+
+    pub(in crate::values::layout) fn string_interner(self) -> RefMut<'v, StringValueInterner<'v>> {
+        // SAFETY: The lifetime of the interner is the lifetime of the heap.
         unsafe {
             transmute!(
-                RefMut<'_, StringValueInterner<'static>>,
-                RefMut<'_, StringValueInterner<'v>>,
-                self.str_interner.borrow_mut()
+                RefMut<'v, StringValueInterner<'static>>,
+                RefMut<'v, StringValueInterner<'v>>,
+                self.0.str_interner.borrow_mut()
             )
-            .trace(tracer);
+        }
+    }
+
+    pub(crate) fn trace_interner(self, tracer: &Tracer<'v>) {
+        self.string_interner().trace(tracer);
+    }
+
+    pub(crate) fn referenced_heaps(self) -> Vec<FrozenHeapRef> {
+        self.0.refs.borrow().iter().duped().collect()
+    }
+
+    /// Get access to the underlying value within the context of this heap.
+    ///
+    /// Adds the frozen value's heap as a dependency of this heap.
+    ///
+    /// See the `branding` module for more details.
+    pub fn access_owned_frozen_value(self, v: &OwnedFrozenValue) -> Value<'v> {
+        self.add_reference(v.owner());
+
+        // SAFETY: We just added a reference to this heap
+        unsafe { v.unchecked_frozen_value().to_value() }
+    }
+
+    /// Similar to `access_owned_frozen_value`, but typed.
+    pub fn access_owned_frozen_value_typed<T: for<'a> StarlarkValue<'a>>(
+        self,
+        v: &OwnedFrozenValueTyped<T>,
+    ) -> ValueTyped<'v, T> {
+        self.add_reference(v.owner());
+
+        // SAFETY: We just added a reference to this heap
+        unsafe { v.value_typed().to_value_typed() }
+    }
+
+    /// Add a dependency onto the provided frozen heap.
+    pub fn add_reference(&self, h: &FrozenHeapRef) {
+        let mut refs = self.0.refs.borrow_mut();
+        if !refs.contains(h) {
+            refs.insert(h.dupe());
         }
     }
 }
@@ -150,13 +217,24 @@ pub struct FrozenHeap {
     str_interner: RefCell<FrozenStringValueInterner>,
 }
 
+/// Name/identifier for a frozen heap, used for heap graph tracking and metrics.
+#[derive(Debug)]
+pub enum FrozenHeapName {
+    /// For starlark Methods heaps.
+    Method(MethodFrozenHeapName),
+    /// For user/downstream code.
+    User(Box<dyn Any + Send + Sync + 'static>),
+}
+
 /// `FrozenHeap` when it is no longer modified and can be share between threads.
 /// Although, `arena` is not safe to share between threads, but at least `refs` is.
-#[derive(Default, Allocative)]
+#[derive(Allocative)]
 #[allow(clippy::non_send_fields_in_send_ty)]
 struct FrozenFrozenHeap {
     arena: Arena<ChunkAllocator>,
     refs: Box<[FrozenHeapRef]>,
+    #[allocative(skip)] // We don't really expect it to be big
+    name: Option<FrozenHeapName>,
 }
 
 // Safe because we never mutate the Arena other than with &mut
@@ -237,6 +315,22 @@ impl FrozenHeapRef {
             .as_ref()
             .map_or_else(HeapSummary::default, |a| a.arena.allocated_summary())
     }
+
+    /// Get the name of this heap.
+    ///
+    /// Names can be assigned when finalizing frozen heaps; in practice, this is done when freezing
+    /// modules, see [`Module::freeze_named`].
+    ///
+    /// The name is intentionally made available here and not at a higher point like the module
+    /// level so that it can be inspected even when traversing the dependency graph of frozen heaps.
+    pub fn name(&self) -> Option<&FrozenHeapName> {
+        self.0.as_ref().and_then(|a| a.name.as_ref())
+    }
+
+    /// Get the frozen heaps that this frozen heap depends on.
+    pub fn refs(&self) -> impl Iterator<Item = &FrozenHeapRef> {
+        self.0.as_ref().map(|h| h.refs.iter()).into_iter().flatten()
+    }
 }
 
 impl FrozenHeap {
@@ -246,9 +340,23 @@ impl FrozenHeap {
     }
 
     /// After all values have been allocated, convert the [`FrozenHeap`] into a
+    /// named [`FrozenHeapRef`] which can be [`clone`](Clone::clone)d, shared between threads,
+    /// and ensures the underlying values allocated on the [`FrozenHeap`] remain valid.
+    ///
+    /// The `name` identifies this heap and should be unique across heaps.
+    /// See [`FrozenHeapRef::name`] for more details.
+    pub fn into_ref_named(self, name: FrozenHeapName) -> FrozenHeapRef {
+        self.into_ref_impl(Some(name))
+    }
+
+    /// After all values have been allocated, convert the [`FrozenHeap`] into a
     /// [`FrozenHeapRef`] which can be [`clone`](Clone::clone)d, shared between threads,
     /// and ensures the underlying values allocated on the [`FrozenHeap`] remain valid.
     pub fn into_ref(self) -> FrozenHeapRef {
+        self.into_ref_impl(None)
+    }
+
+    pub(crate) fn into_ref_impl(self, name: Option<FrozenHeapName>) -> FrozenHeapRef {
         let FrozenHeap {
             mut arena, refs, ..
         } = self;
@@ -260,6 +368,7 @@ impl FrozenHeap {
             FrozenHeapRef(Some(Arc::new(FrozenFrozenHeap {
                 arena,
                 refs: refs.into_iter().collect(),
+                name,
             })))
         }
     }
@@ -278,16 +387,44 @@ impl FrozenHeap {
         }
     }
 
-    fn alloc_raw<T>(&self, x: AValueImpl<'static, T>) -> FrozenValue
+    pub(in crate::values::layout) fn string_interner(
+        &self,
+    ) -> RefMut<'_, FrozenStringValueInterner> {
+        self.str_interner.borrow_mut()
+    }
+
+    pub(in crate::values::layout) fn alloc_raw<'fv, T>(
+        &'fv self,
+        x: AValueImpl<'fv, T>,
+    ) -> FrozenValueTyped<'fv, T::StarlarkValue>
     where
-        T: AValue<'static, ExtraElem = ()> + Send + Sync,
+        T: AValue<'fv, ExtraElem = ()>,
+        T::StarlarkValue: HeapSendable<'fv>,
+        T::StarlarkValue: HeapSyncable<'fv>,
     {
         let v: &AValueRepr<AValueImpl<T>> = self.arena.alloc(x);
-        unsafe { FrozenValue::new_repr(cast::ptr_lifetime(v)) }
+        FrozenValueTyped::new_repr(v)
+    }
+
+    pub(in crate::values::layout) fn alloc_raw_extra<'fv, T>(
+        &'fv self,
+        x: AValueImpl<'fv, T>,
+    ) -> (
+        FrozenValueTyped<'fv, T::StarlarkValue>,
+        *mut [MaybeUninit<T::ExtraElem>],
+    )
+    where
+        T: AValue<'fv>,
+        T::StarlarkValue: HeapSendable<'fv>,
+        T::StarlarkValue: HeapSyncable<'fv>,
+    {
+        let (v, extra) = self.arena.alloc_extra(x);
+        let v = unsafe { FrozenValueTyped::new_repr(&*v) };
+        (v, extra)
     }
 
     #[inline]
-    fn alloc_str_init(
+    pub(in crate::values::layout) fn alloc_str_init(
         &self,
         len: usize,
         hash: StarlarkHashValue,
@@ -298,190 +435,6 @@ impl FrozenHeap {
         unsafe {
             let value = FrozenValue::new_ptr(&*v, true);
             FrozenStringValue::new_unchecked(value)
-        }
-    }
-
-    fn alloc_str_impl(&self, x: &str, hash: StarlarkHashValue) -> FrozenStringValue {
-        if let Some(x) = constant_string(x) {
-            x
-        } else {
-            self.alloc_str_init(x.len(), hash, |dest| unsafe {
-                copy_nonoverlapping(x.as_ptr(), dest, x.len())
-            })
-        }
-    }
-
-    /// Allocate a string on this heap. Be careful about the warnings around
-    /// [`FrozenValue`].
-    ///
-    /// Since the heap is frozen, we always prefer to intern the string in order
-    /// to deduplicate it and save some memory.
-    pub fn alloc_str(&self, x: &str) -> FrozenStringValue {
-        self.alloc_str_intern(x)
-    }
-
-    /// Intern string.
-    pub(crate) fn alloc_str_intern(&self, s: &str) -> FrozenStringValue {
-        if let Some(s) = constant_string(s) {
-            s
-        } else {
-            let s = Hashed::new(s);
-            self.str_interner
-                .borrow_mut()
-                .intern(s, || self.alloc_str_hashed(s))
-        }
-    }
-
-    /// Allocate prehashed string.
-    pub fn alloc_str_hashed(&self, x: Hashed<&str>) -> FrozenStringValue {
-        self.alloc_str_impl(x.key(), x.hash())
-    }
-
-    /// Allocate a tuple with the given elements on this heap.
-    pub(crate) fn alloc_tuple<'v>(&'v self, elems: &[FrozenValue]) -> FrozenValue {
-        if elems.is_empty() {
-            return FrozenValue::new_empty_tuple();
-        }
-
-        unsafe {
-            let (avalue, extra) = self
-                .arena
-                .alloc_extra::<_>(frozen_tuple_avalue(elems.len()));
-            let extra = &mut *extra;
-            maybe_uninit_write_slice(extra, elems);
-            FrozenValue::new_repr(&*avalue)
-        }
-    }
-
-    /// Allocate a tuple from iterator of elements.
-    pub(crate) fn alloc_tuple_iter(
-        &self,
-        elems: impl IntoIterator<Item = FrozenValue>,
-    ) -> FrozenValue {
-        let elems = elems.into_iter();
-        let (lower, upper) = elems.size_hint();
-        if Some(lower) == upper {
-            if lower == 0 {
-                return FrozenValue::new_empty_tuple();
-            }
-
-            unsafe {
-                let (avalue, extra) = self.arena.alloc_extra::<_>(frozen_tuple_avalue(lower));
-                let extra = &mut *extra;
-                maybe_uninit_write_from_exact_size_iter(extra, elems, FrozenValue::new_none());
-                FrozenValue::new_repr(&*avalue)
-            }
-        } else {
-            self.alloc_tuple(&elems.collect::<Vec<_>>())
-        }
-    }
-
-    /// Allocate a list with the given elements on this heap.
-    pub(crate) fn alloc_list(&self, elems: &[FrozenValue]) -> FrozenValue {
-        if elems.is_empty() {
-            return FrozenValue::new_repr(&VALUE_EMPTY_FROZEN_LIST);
-        }
-
-        unsafe {
-            let (avalue, elem_places) = self.arena.alloc_extra(frozen_list_avalue(elems.len()));
-            let elem_places = &mut *elem_places;
-            maybe_uninit_write_slice(elem_places, elems);
-            FrozenValue::new_repr(&*avalue)
-        }
-    }
-
-    pub(crate) fn alloc_list_iter(
-        &self,
-        elems: impl IntoIterator<Item = FrozenValue>,
-    ) -> FrozenValue {
-        let elems = elems.into_iter();
-        let (lower, upper) = elems.size_hint();
-        if Some(lower) == upper {
-            if lower == 0 {
-                return FrozenValue::new_repr(&VALUE_EMPTY_FROZEN_LIST);
-            }
-
-            unsafe {
-                let (avalue, elem_places) = self.arena.alloc_extra(frozen_list_avalue(lower));
-                let elem_places = &mut *elem_places;
-                maybe_uninit_write_from_exact_size_iter(
-                    elem_places,
-                    elems,
-                    FrozenValue::new_none(),
-                );
-                FrozenValue::new_repr(&*avalue)
-            }
-        } else {
-            self.alloc_list(&elems.collect::<Vec<_>>())
-        }
-    }
-
-    pub(crate) fn alloc_simple_typed<T: StarlarkValue<'static> + Send + Sync>(
-        &self,
-        val: T,
-    ) -> FrozenValueTyped<'static, T> {
-        // SAFETY: we we've just allocated `T`.
-        unsafe { FrozenValueTyped::new_unchecked(self.alloc_raw(simple(val))) }
-    }
-
-    /// Allocate a simple [`StarlarkValue`] on this heap.
-    ///
-    /// Simple value is any starlark value which:
-    /// * bound by `'static` lifetime (in particular, it cannot contain references to other `Value`s)
-    /// * is not special builtin (e.g. `None`)
-    pub fn alloc_simple<T: StarlarkValue<'static> + Send + Sync>(&self, val: T) -> FrozenValue {
-        self.alloc_simple_typed(val).to_frozen_value()
-    }
-
-    /// Allocate a simple [`StarlarkValue`] and return `FrozenRef` to it.
-    pub(crate) fn alloc_simple_frozen_ref<T: StarlarkValue<'static> + Send + Sync>(
-        &self,
-        value: T,
-    ) -> FrozenRef<'static, T> {
-        self.alloc_simple_typed(value).as_frozen_ref()
-    }
-
-    /// Allocate any value in the frozen heap.
-    pub fn alloc_any<T: Debug + Send + Sync>(&self, value: T) -> FrozenRef<'static, T> {
-        let value = self.alloc_simple_frozen_ref(StarlarkAny::new(value));
-        value.map(|r| &r.0)
-    }
-
-    pub(crate) fn alloc_any_debug_type_name<T: Send + Sync>(
-        &self,
-        value: T,
-    ) -> FrozenRef<'static, T> {
-        struct DebugValue<T>(T);
-        impl<T> Debug for DebugValue<T> {
-            fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-                f.debug_struct(any::type_name::<T>())
-                    .finish_non_exhaustive()
-            }
-        }
-        self.alloc_any(DebugValue(value)).map(|r| &r.0)
-    }
-
-    fn do_alloc_any_slice<T: Debug + Send + Sync + Clone>(
-        &self,
-        values: &[T],
-    ) -> FrozenRef<'static, [T]> {
-        let (_any_array, content) = self.arena.alloc_extra(any_array_avalue(values.len()));
-        let content = unsafe { &mut *content };
-        FrozenRef::new(&*maybe_uninit_write_slice_cloned(content, values))
-    }
-
-    /// Allocate a slice in the frozen heap.
-    pub(crate) fn alloc_any_slice<T: Debug + Send + Sync + Clone>(
-        &self,
-        values: &[T],
-    ) -> FrozenRef<'static, [T]> {
-        if values.is_empty() {
-            FrozenRef::new(&[])
-        } else if values.len() == 1 {
-            self.alloc_any(values[0].clone())
-                .map(|r| slice::from_ref(r))
-        } else {
-            self.do_alloc_any_slice(values)
         }
     }
 
@@ -513,136 +466,81 @@ impl FrozenHeap {
     pub fn allocated_summary(&self) -> HeapSummary {
         self.arena.allocated_summary()
     }
-}
 
-/// Used to `freeze` values by [`Freeze::freeze`](crate::values::Freeze::freeze).
-// A freezer is a pair of the FrozenHeap and a "magic" value,
-// which we happen to use for the slots (see `FrozenSlotsRef`)
-// but could be used for anything.
-pub struct Freezer {
-    /// Freezing into this heap.
-    pub(crate) heap: FrozenHeap,
-    /// Defs frozen by this freezer.
-    pub(crate) frozen_defs: RefCell<Vec<FrozenRef<'static, FrozenDef>>>,
-}
-
-impl Freezer {
-    pub(crate) fn new(heap: FrozenHeap) -> Self {
-        Freezer {
-            heap,
-            frozen_defs: RefCell::new(Vec::new()),
-        }
-    }
-
-    pub(crate) fn into_ref(self) -> FrozenHeapRef {
-        self.heap.into_ref()
-    }
-
-    /// Allocate a new value while freezing. Usually not a great idea.
-    pub fn alloc<'v, T: AllocFrozenValue>(&'v self, val: T) -> FrozenValue {
-        val.alloc_frozen_value(&self.heap)
-    }
-
-    pub(crate) fn reserve<'v, 'v2, T: AValue<'v2, ExtraElem = ()>>(
-        &'v self,
-    ) -> (FrozenValue, Reservation<'v2, T>) {
-        let (fv, r, extra) = self.reserve_with_extra::<T>(0);
-        let extra = unsafe { &mut *extra };
-        debug_assert!(extra.is_empty());
-        (fv, r)
-    }
-
-    pub(crate) fn reserve_with_extra<'v, 'v2, T: AValue<'v2>>(
+    pub(crate) fn reserve_with_extra<'v, 'v2, T>(
         &'v self,
         extra_len: usize,
     ) -> (
         FrozenValue,
         Reservation<'v2, T>,
         *mut [MaybeUninit<T::ExtraElem>],
-    ) {
-        let (r, extra) = self.heap.arena.reserve_with_extra::<T>(extra_len);
+    )
+    where
+        T: AValue<'v2>,
+        T::StarlarkValue: HeapSendable<'v2>,
+        T::StarlarkValue: HeapSyncable<'v2>,
+    {
+        let (r, extra) = self.arena.reserve_with_extra::<T>(extra_len);
         let fv = FrozenValue::new_ptr(unsafe { cast::ptr_lifetime(r.ptr()) }, false);
         (fv, r, extra)
     }
-
-    /// Freeze a nested value while freezing yourself.
-    pub fn freeze(&self, value: Value) -> FreezeResult<FrozenValue> {
-        // Case 1: We have our value encoded in our pointer
-        if let Some(x) = value.unpack_frozen() {
-            return Ok(x);
-        }
-
-        // Case 2: We have already been replaced with a forwarding, or need to freeze
-        let value = value.0.unpack_ptr().unwrap();
-        match value.unpack() {
-            AValueOrForwardUnpack::Forward(x) => {
-                Ok(unsafe { x.forward_ptr().unpack_frozen_value() })
-            }
-            AValueOrForwardUnpack::Header(v) => unsafe { v.unpack().heap_freeze(self) },
-        }
-    }
-
-    /// Frozen heap where the values are frozen to.
-    ///
-    /// Can be used to allocate additional values while freezing.
-    pub fn frozen_heap(&self) -> &FrozenHeap {
-        &self.heap
-    }
 }
 
-impl Heap {
-    /// Create a new [`Heap`].
-    pub fn new() -> Self {
-        Self::default()
-    }
-
+impl<'v> Heap<'v> {
     /// Number of bytes allocated on this heap, not including any memory
     /// allocated outside of the starlark heap.
-    pub fn allocated_bytes(&self) -> usize {
-        self.arena.borrow().allocated_bytes()
+    pub fn allocated_bytes(self) -> usize {
+        self.0.arena.borrow().allocated_bytes()
     }
 
     /// Peak memory allocated to this heap, even if the value is now lower
     /// as a result of a subsequent garbage collection.
     pub fn peak_allocated_bytes(&self) -> usize {
-        cmp::max(self.allocated_bytes(), self.peak_allocated.get())
+        cmp::max(self.allocated_bytes(), self.0.peak_allocated.get())
     }
 
     /// Number of bytes allocated by the heap but not yet filled.
     pub fn available_bytes(&self) -> usize {
-        self.arena.borrow().available_bytes()
+        self.0.arena.borrow().available_bytes()
     }
 
-    fn alloc_raw<'v, 'v2: 'v2>(
-        &'v self,
-        x: AValueImpl<'v2, impl AValue<'v2, ExtraElem = ()>>,
-    ) -> Value<'v> {
-        let arena = self.arena.borrow();
-        let v: &AValueRepr<_> = arena.alloc(x);
-
-        // We have an arena inside a RefCell which stores ValueMem<'v>
-        // However, we promise not to clear the RefCell other than for GC
-        // so we can make the `arena` available longer
-        unsafe {
-            let value = Value::new_repr(cast::ptr_lifetime(v));
-            transmute!(Value, Value, value)
-        }
-    }
-
-    fn alloc_raw_typed<'v, A: AValue<'v, ExtraElem = ()>>(
-        &'v self,
+    pub(in crate::values::layout) fn alloc_raw<A>(
+        self,
         x: AValueImpl<'v, A>,
-    ) -> ValueTyped<'v, A::StarlarkValue> {
-        unsafe { ValueTyped::new_unchecked(self.alloc_raw(x)) }
+    ) -> ValueTyped<'v, A::StarlarkValue>
+    where
+        A: AValue<'v, ExtraElem = ()>,
+        A::StarlarkValue: HeapSendable<'v>,
+    {
+        let arena = self.0.arena.borrow();
+        let v: &AValueRepr<_> = arena.alloc(x);
+        ValueTyped::new_repr(v)
     }
 
-    pub(crate) fn alloc_str_init<'v>(
-        &'v self,
+    pub(in crate::values::layout) fn alloc_raw_extra<A>(
+        self,
+        x: AValueImpl<'v, A>,
+    ) -> (
+        ValueTyped<'v, A::StarlarkValue>,
+        *mut [MaybeUninit<A::ExtraElem>],
+    )
+    where
+        A: AValue<'v>,
+        A::StarlarkValue: HeapSendable<'v>,
+    {
+        let arena = self.0.arena.borrow();
+        let (v, extra) = arena.alloc_extra(x);
+        let v = unsafe { ValueTyped::new_repr(&*v) };
+        (v, extra)
+    }
+
+    pub(in crate::values::layout) fn alloc_str_init(
+        self,
         len: usize,
         hash: StarlarkHashValue,
         init: impl FnOnce(*mut u8),
     ) -> StringValue<'v> {
-        let arena = self.arena.borrow();
+        let arena = self.0.arena.borrow();
         let v = arena.alloc_str_init(len, hash, init);
 
         // We have an arena inside a RefCell which stores ValueMem<'v>
@@ -654,228 +552,24 @@ impl Heap {
         }
     }
 
-    fn alloc_str_impl<'v>(&'v self, x: &str, hash: StarlarkHashValue) -> StringValue<'v> {
-        if let Some(x) = constant_string(x) {
-            x.to_string_value()
-        } else {
-            self.alloc_str_init(x.len(), hash, |dest| unsafe {
-                copy_nonoverlapping(x.as_ptr(), dest, x.len())
-            })
-        }
-    }
-
-    /// Allocate a string on the heap.
-    pub fn alloc_str<'v>(&'v self, x: &str) -> StringValue<'v> {
-        if let Some(x) = constant_string(x) {
-            x.to_string_value()
-        } else {
-            self.alloc_str_init(x.len(), StarlarkStr::UNINIT_HASH, |dest| unsafe {
-                copy_nonoverlapping(x.as_ptr(), dest, x.len())
-            })
-        }
-    }
-
-    /// Intern string.
-    pub fn alloc_str_intern<'v>(&'v self, x: &str) -> StringValue<'v> {
-        if let Some(x) = constant_string(x) {
-            x.to_string_value()
-        } else {
-            let x = Hashed::new(x);
-            let mut interner = self.str_interner.borrow_mut();
-            unsafe {
-                interner
-                    .intern(x, || self.alloc_str_impl(x.key(), x.hash()).cast_lifetime())
-                    .cast_lifetime()
-            }
-        }
-    }
-
-    /// Allocate a string on the heap, based on two concatenated strings.
-    pub fn alloc_str_concat<'v>(&'v self, x: &str, y: &str) -> StringValue<'v> {
-        if x.is_empty() {
-            self.alloc_str(y)
-        } else if y.is_empty() {
-            self.alloc_str(x)
-        } else {
-            self.alloc_str_init(x.len() + y.len(), StarlarkStr::UNINIT_HASH, |dest| unsafe {
-                copy_nonoverlapping(x.as_ptr(), dest, x.len());
-                copy_nonoverlapping(y.as_ptr(), dest.add(x.len()), y.len())
-            })
-        }
-    }
-
-    /// Allocate a string on the heap, based on three concatenated strings.
-    pub fn alloc_str_concat3<'v>(&'v self, x: &str, y: &str, z: &str) -> StringValue<'v> {
-        if x.is_empty() {
-            self.alloc_str_concat(y, z)
-        } else if y.is_empty() {
-            self.alloc_str_concat(x, z)
-        } else if z.is_empty() {
-            self.alloc_str_concat(x, y)
-        } else {
-            self.alloc_str_init(
-                x.len() + y.len() + z.len(),
-                StarlarkStr::UNINIT_HASH,
-                |dest| unsafe {
-                    copy_nonoverlapping(x.as_ptr(), dest, x.len());
-                    let dest = dest.add(x.len());
-                    copy_nonoverlapping(y.as_ptr(), dest, y.len());
-                    let dest = dest.add(y.len());
-                    copy_nonoverlapping(z.as_ptr(), dest, z.len());
-                },
-            )
-        }
-    }
-
-    /// Allocate a tuple with the given elements.
-    pub(crate) fn alloc_tuple<'v>(&'v self, elems: &[Value<'v>]) -> Value<'v> {
-        if elems.is_empty() {
-            return Value::new_empty_tuple();
-        }
-
-        unsafe {
-            let arena = self.arena.borrow();
-            let (avalue, extra) = arena.alloc_extra(tuple_avalue(elems.len()));
-            let extra = &mut *extra;
-            maybe_uninit_write_slice(extra, elems);
-            Value::new_repr(&*avalue)
-        }
-    }
-
-    pub(crate) fn alloc_tuple_iter<'v>(
-        &'v self,
-        elems: impl IntoIterator<Item = Value<'v>>,
-    ) -> Value<'v> {
-        let elems = elems.into_iter();
-        let (lower, upper) = elems.size_hint();
-        if Some(lower) == upper {
-            if lower == 0 {
-                return Value::new_empty_tuple();
-            }
-
-            unsafe {
-                let arena = self.arena.borrow();
-                let (avalue, extra) = arena.alloc_extra(tuple_avalue(lower));
-                let extra = &mut *extra;
-                maybe_uninit_write_from_exact_size_iter(extra, elems, Value::new_none());
-                Value::new_repr(&*avalue)
-            }
-        } else {
-            self.alloc_tuple(&elems.collect::<Vec<_>>())
-        }
-    }
-
-    pub(crate) fn alloc_array<'v>(&'v self, cap: usize) -> ValueTyped<'v, Array<'v>> {
-        if cap == 0 {
-            return FrozenValueTyped::new_repr(VALUE_EMPTY_ARRAY.repr()).to_value_typed();
-        }
-
-        let cap: u32 = cap.try_into().expect("capacity overflows u32::MAX");
-
-        unsafe {
-            let (avalue, _) = self.arena.borrow().alloc_extra(array_avalue(cap));
-            ValueTyped::new_repr(&*avalue)
-        }
-    }
-
-    /// Allocate a list with the given elements.
-    pub(crate) fn alloc_list<'v>(&'v self, elems: &[Value<'v>]) -> Value<'v> {
-        let array = self.alloc_array(elems.len());
-        array.extend_from_slice(elems);
-        self.alloc_raw(list_avalue(array))
-    }
-
-    /// Allocate a list with the given elements.
-    pub(crate) fn alloc_list_iter<'v>(
-        &'v self,
-        elems: impl IntoIterator<Item = Value<'v>>,
-    ) -> Value<'v> {
-        match self.try_alloc_list_iter(elems.into_iter().map(Ok)) {
-            Ok(value) => value,
-            Err(e) => {
-                let e: Infallible = e;
-                match e {}
-            }
-        }
-    }
-
-    /// Allocate a list with the given elements.
-    pub(crate) fn try_alloc_list_iter<'v, E>(
-        &'v self,
-        elems: impl IntoIterator<Item = Result<Value<'v>, E>>,
-    ) -> Result<Value<'v>, E> {
-        let elems = elems.into_iter();
-        let array = self.alloc_array(0);
-        let list = self.alloc_raw_typed(list_avalue(array));
-        list.0.try_extend(elems, self)?;
-        Ok(list.to_value())
-    }
-
-    /// Allocate a list by concatenating two slices.
-    pub(crate) fn alloc_list_concat<'v>(&'v self, a: &[Value<'v>], b: &[Value<'v>]) -> Value<'v> {
-        let array = self.alloc_array(a.len() + b.len());
-        array.extend_from_slice(a);
-        array.extend_from_slice(b);
-        self.alloc_raw(list_avalue(array))
-    }
-
-    pub(crate) fn alloc_char<'v>(&'v self, x: char) -> StringValue<'v> {
-        let mut dst = [0; 4];
-        let res = x.encode_utf8(&mut dst);
-        self.alloc_str(res)
-    }
-
-    /// Allocate a simple [`StarlarkValue`] on this heap.
-    ///
-    /// Simple value is any starlark value which:
-    /// * bound by `'static` lifetime (in particular, it cannot contain references to other `Value`s)
-    /// * is not special builtin (e.g. `None`)
-    ///
-    /// Must be [`Send`] and [`Sync`] because it will be reused in frozen values.
-    pub fn alloc_simple<'v, T: StarlarkValue<'static> + Send + Sync>(&'v self, x: T) -> Value<'v> {
-        self.alloc_raw(simple(x))
-    }
-
-    /// Allocate a [`ComplexValue`] on the [`Heap`].
-    pub fn alloc_complex<'v, T>(&'v self, x: T) -> Value<'v>
-    where
-        T: ComplexValue<'v>,
-        T::Frozen: StarlarkValue<'static>,
-    {
-        self.alloc_raw(complex(x))
-    }
-
-    /// Allocate a value which can be traced (garbage collected), but cannot be frozen.
-    pub fn alloc_complex_no_freeze<'v, T>(&'v self, x: T) -> Value<'v>
-    where
-        T: StarlarkValue<'v> + Trace<'v>,
-    {
-        // When specializations are stable, we can have single `alloc_complex` function,
-        // which enables or not enables freezing depending on whether `T` implements `Freeze`.
-        self.alloc_raw(complex_no_freeze(x))
-    }
-
     /// Allocate a new value on a [`Heap`].
-    pub fn alloc<'v, T: AllocValue<'v>>(&'v self, x: T) -> Value<'v> {
+    pub fn alloc<T: AllocValue<'v>>(self, x: T) -> Value<'v> {
         x.alloc_value(self)
     }
 
     /// Allocate a value and return [`ValueTyped`] of it.
     /// Can fail if the [`AllocValue`] trait generates a different type on the heap.
-    pub fn alloc_typed<'v, T: AllocValue<'v> + StarlarkValue<'v>>(
-        &'v self,
-        x: T,
-    ) -> ValueTyped<'v, T> {
+    pub fn alloc_typed<T: AllocValue<'v> + StarlarkValue<'v>>(self, x: T) -> ValueTyped<'v, T> {
         ValueTyped::new(self.alloc(x)).expect("just allocated value must have the right type")
     }
 
     /// Allocate a value and return [`ValueOfUnchecked`] of it.
-    pub fn alloc_typed_unchecked<'v, T: AllocValue<'v>>(&'v self, x: T) -> ValueOfUnchecked<'v, T> {
+    pub fn alloc_typed_unchecked<T: AllocValue<'v>>(self, x: T) -> ValueOfUnchecked<'v, T> {
         ValueOfUnchecked::new(self.alloc(x))
     }
 
     /// Allocate a value and return [`ValueOf`] of it.
-    pub fn alloc_value_of<'v, T>(&'v self, x: T) -> ValueOf<'v, &'v T>
+    pub fn alloc_value_of<T>(self, x: T) -> ValueOf<'v, &'v T>
     where
         T: AllocValue<'v>,
         &'v T: UnpackValue<'v>,
@@ -886,44 +580,61 @@ impl Heap {
             .expect("just allocate value must be unpackable to the type of value")
     }
 
-    pub(crate) unsafe fn visit_arena<'v>(
-        &'v self,
+    pub(crate) unsafe fn visit_arena(
+        self,
         forward_heap_kind: HeapKind,
         v: &mut impl ArenaVisitor<'v>,
     ) {
-        (*self.arena.get_mut()).visit_arena(HeapKind::Unfrozen, forward_heap_kind, v)
+        unsafe { (*self.0.arena.get_mut()).visit_arena(HeapKind::Unfrozen, forward_heap_kind, v) }
+    }
+
+    /// Allow gcing in this heap
+    ///
+    /// # SAFETY
+    ///
+    /// This is basically impossible to reason about, hence its existence in the first place
+    pub(crate) unsafe fn allow_gc(&self) {
+        self.0.ban_gc.set(false);
     }
 
     /// Garbage collect any values that are unused. This function is _unsafe_ in
     /// the sense that any `Value<'v>` not returned by `Tracer` _will become
     /// invalid_. Furthermore, any references to values, e.g `&'v str` will
     /// also become invalid.
-    pub(crate) unsafe fn garbage_collect<'v>(&'v self, f: impl FnOnce(&Tracer<'v>)) {
-        // Record the highest peak, so it never decreases
-        self.peak_allocated.set(self.peak_allocated_bytes());
-        self.garbage_collect_internal(f)
+    pub(crate) unsafe fn garbage_collect(self, f: impl FnOnce(&Tracer<'v>)) {
+        if self.0.ban_gc.get() {
+            return;
+        }
+
+        unsafe {
+            // Record the highest peak, so it never decreases
+            self.0.peak_allocated.set(self.peak_allocated_bytes());
+            self.garbage_collect_internal(f)
+        }
     }
 
-    unsafe fn garbage_collect_internal<'v>(&'v self, f: impl FnOnce(&Tracer<'v>)) {
-        // Must rewrite all Value's so they point at the new heap.
-        // Take the arena out of the heap to make sure nobody allocates in it,
-        // but hold the reference until the GC is done.
-        let _arena = self.arena.take();
+    unsafe fn garbage_collect_internal(self, f: impl FnOnce(&Tracer<'v>)) {
+        unsafe {
+            // Must rewrite all Value's so they point at the new heap.
+            // Take the arena out of the heap to make sure nobody allocates in it,
+            // but hold the reference until the GC is done.
+            let _arena = self.0.arena.take();
 
-        let tracer = Tracer::<'v> {
-            arena: Arena::default(),
-            phantom: PhantomData,
-        };
-        f(&tracer);
-        self.arena.set(tracer.arena);
+            let tracer = Tracer::<'v> {
+                arena: Arena::default(),
+                phantom: PhantomData,
+            };
+            f(&tracer);
+            self.0.arena.set(tracer.arena);
+        }
     }
 
     /// Obtain a summary of how much memory is currently allocated by this heap.
-    pub fn allocated_summary(&self) -> HeapSummary {
-        self.arena.borrow().allocated_summary()
+    pub fn allocated_summary(self) -> HeapSummary {
+        self.0.arena.borrow().allocated_summary()
     }
 
-    pub(crate) fn record_call_enter<'v>(&'v self, function: Value<'v>) {
+    pub(crate) fn record_call_enter(self, function: Value<'v>) {
         let time = ProfilerInstant::now();
         assert!(mem::needs_drop::<CallEnter<NeedsDrop>>());
         assert!(!mem::needs_drop::<CallEnter<NoDrop>>());
@@ -939,7 +650,7 @@ impl Heap {
         });
     }
 
-    pub(crate) fn record_call_exit<'v>(&'v self) {
+    pub(crate) fn record_call_exit(self) {
         let time = ProfilerInstant::now();
         assert!(mem::needs_drop::<CallExit<NeedsDrop>>());
         assert!(!mem::needs_drop::<CallExit<NoDrop>>());
@@ -1008,12 +719,10 @@ impl<'v> Tracer<'v> {
         let old_val = value.0.unpack_ptr().unwrap();
 
         // Case 2: We have already been replaced with a forwarding, or need to freeze
-        let res = match old_val.unpack() {
+        match old_val.unpack() {
             AValueOrForwardUnpack::Forward(x) => unsafe { x.forward_ptr().unpack_unfrozen_value() },
             AValueOrForwardUnpack::Header(v) => unsafe { v.unpack().heap_copy(self) },
-        };
-
-        res
+        }
     }
 }
 
@@ -1037,29 +746,31 @@ mod tests {
 
     #[test]
     fn test_string_reallocated_on_heap() {
-        let heap = Heap::new();
-        let first = heap.alloc_str("xx");
-        let second = heap.alloc_str("xx");
-        assert!(
-            !first.to_value().ptr_eq(second.to_value()),
-            "Plain allocations should recreate values. Note assertion negation."
-        );
+        Heap::temp(|heap| {
+            let first = heap.alloc_str("xx");
+            let second = heap.alloc_str("xx");
+            assert!(
+                !first.to_value().ptr_eq(second.to_value()),
+                "Plain allocations should recreate values. Note assertion negation."
+            );
+        });
     }
 
     #[test]
     fn test_interned_string_equal() {
-        let heap = Heap::new();
-        let first = heap.alloc_str_intern("xx");
-        let second = heap.alloc_str_intern("xx");
-        assert!(
-            first.to_value().ptr_eq(second.to_value()),
-            "Interned allocations should be equal."
-        );
+        Heap::temp(|heap| {
+            let first = heap.alloc_str_intern("xx");
+            let second = heap.alloc_str_intern("xx");
+            assert!(
+                first.to_value().ptr_eq(second.to_value()),
+                "Interned allocations should be equal."
+            );
+        });
     }
 
     #[starlark_module]
     fn validate_str_interning(globals: &mut GlobalsBuilder) {
-        fn append_x<'v>(str: StringValue<'v>, heap: &'v Heap) -> anyhow::Result<StringValue<'v>> {
+        fn append_x<'v>(str: StringValue<'v>, heap: Heap<'v>) -> anyhow::Result<StringValue<'v>> {
             Ok(heap.alloc_str_intern(&(str.as_str().to_owned() + "x")))
         }
     }

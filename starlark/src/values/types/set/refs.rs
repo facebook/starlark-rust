@@ -27,14 +27,14 @@ use super::value::FrozenSetData;
 use super::value::SetData;
 use crate::coerce::coerce;
 use crate::typing::Ty;
-use crate::values::layout::value::ValueLike;
-use crate::values::set::value::SetGen;
-use crate::values::type_repr::SetType;
-use crate::values::type_repr::StarlarkTypeRepr;
 use crate::values::FrozenValue;
 use crate::values::UnpackValue;
 use crate::values::Value;
 use crate::values::ValueError;
+use crate::values::layout::value::ValueLike;
+use crate::values::set::value::SetGen;
+use crate::values::type_repr::SetType;
+use crate::values::type_repr::StarlarkTypeRepr;
 
 /// Define the set type.
 pub struct SetRef<'v> {
@@ -64,7 +64,7 @@ pub struct SetMut<'v> {
 impl<'v> SetMut<'v> {
     /// Downcast the value to a mutable set reference.
     #[inline]
-    pub fn from_value(x: Value<'v>) -> anyhow::Result<SetMut> {
+    pub fn from_value(x: Value<'v>) -> anyhow::Result<SetMut<'v>> {
         #[derive(thiserror::Error, Debug)]
         #[error("Value is not set, value type: `{0}`")]
         struct NotSetError(&'static str);

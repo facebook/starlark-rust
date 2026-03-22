@@ -24,6 +24,9 @@ use starlark_derive::starlark_module;
 
 use crate as starlark;
 use crate::environment::MethodsBuilder;
+use crate::values::Heap;
+use crate::values::Value;
+use crate::values::ValueOfUnchecked;
 use crate::values::dict::DictMut;
 use crate::values::dict::DictRef;
 use crate::values::list::AllocList;
@@ -31,9 +34,6 @@ use crate::values::list::ListRef;
 use crate::values::list::UnpackList;
 use crate::values::none::NoneType;
 use crate::values::typing::StarlarkIter;
-use crate::values::Heap;
-use crate::values::Value;
-use crate::values::ValueOfUnchecked;
 
 #[starlark_module]
 pub(crate) fn dict_methods(registry: &mut MethodsBuilder) {
@@ -107,7 +107,7 @@ pub(crate) fn dict_methods(registry: &mut MethodsBuilder) {
     /// ```
     fn items<'v>(
         this: DictRef<'v>,
-        heap: &'v Heap,
+        heap: Heap<'v>,
     ) -> anyhow::Result<ValueOfUnchecked<'v, UnpackList<(Value<'v>, Value<'v>)>>> {
         Ok(heap.alloc_typed_unchecked(AllocList(this.iter())).cast())
     }
@@ -128,7 +128,7 @@ pub(crate) fn dict_methods(registry: &mut MethodsBuilder) {
     #[starlark(speculative_exec_safe)]
     fn keys<'v>(
         this: DictRef<'v>,
-        heap: &'v Heap,
+        heap: Heap<'v>,
     ) -> anyhow::Result<ValueOfUnchecked<'v, &'v ListRef<'v>>> {
         Ok(ValueOfUnchecked::new(heap.alloc(AllocList(this.keys()))))
     }
@@ -283,7 +283,7 @@ pub(crate) fn dict_methods(registry: &mut MethodsBuilder) {
     /// `D.update([pairs][, name=value[, ...])` makes a sequence of key/value
     /// insertions into dictionary D, then returns `None.`
     ///
-    /// If the positional argument `pairs` is present, it must be `None`,
+    /// If the positional argument `pairs` is present, it must be
     /// another `dict`, or some other iterable.
     /// If it is another `dict`, then its key/value pairs are inserted into D.
     /// If it is an iterable, it must provide a sequence of pairs (or other
@@ -311,7 +311,7 @@ pub(crate) fn dict_methods(registry: &mut MethodsBuilder) {
             ValueOfUnchecked<'v, Either<DictRef<'v>, StarlarkIter<(Value<'v>, Value<'v>)>>>,
         >,
         #[starlark(kwargs)] kwargs: DictRef<'v>,
-        heap: &'v Heap,
+        heap: Heap<'v>,
     ) -> starlark::Result<NoneType> {
         let pairs = if pairs.map(|x| x.get().ptr_eq(this)) == Some(true) {
             // someone has done `x.update(x)` - that isn't illegal, but we will have issues
@@ -324,20 +324,23 @@ pub(crate) fn dict_methods(registry: &mut MethodsBuilder) {
 
         let mut this = DictMut::from_value(this)?;
         if let Some(pairs) = pairs {
-            if let Some(dict) = DictRef::from_value(pairs) {
-                for (k, v) in dict.iter_hashed() {
-                    this.aref.insert_hashed(k, v);
+            match DictRef::from_value(pairs) {
+                Some(dict) => {
+                    for (k, v) in dict.iter_hashed() {
+                        this.aref.insert_hashed(k, v);
+                    }
                 }
-            } else {
-                for v in pairs.iterate(heap)? {
-                    let mut it = v.iterate(heap)?;
-                    // `StarlarkIterator` is fused.
-                    let (Some(k), Some(v), None) = (it.next(), it.next(), it.next()) else {
-                        return Err(anyhow::anyhow!(
+                _ => {
+                    for v in pairs.iterate(heap)? {
+                        let mut it = v.iterate(heap)?;
+                        // `StarlarkIterator` is fused.
+                        let (Some(k), Some(v), None) = (it.next(), it.next(), it.next()) else {
+                            return Err(anyhow::anyhow!(
                             "dict.update expect a list of pairs or a dictionary as first argument, got a list of non-pairs.",
                         ).into());
-                    };
-                    this.aref.insert_hashed(k.get_hashed()?, v);
+                        };
+                        this.aref.insert_hashed(k.get_hashed()?, v);
+                    }
                 }
             }
         }
@@ -365,7 +368,7 @@ pub(crate) fn dict_methods(registry: &mut MethodsBuilder) {
     #[starlark(speculative_exec_safe)]
     fn values<'v>(
         this: DictRef<'v>,
-        heap: &'v Heap,
+        heap: Heap<'v>,
     ) -> anyhow::Result<ValueOfUnchecked<'v, &'v ListRef<'v>>> {
         Ok(ValueOfUnchecked::new(heap.alloc_list_iter(this.values())))
     }

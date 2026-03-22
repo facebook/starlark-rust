@@ -24,11 +24,28 @@ use std::ops::Deref;
 use allocative::Allocative;
 use dupe::Dupe;
 use equivalent::Equivalent;
+#[cfg(feature = "pagable_dep")]
+use pagable::Pagable;
+use serde::Deserialize;
+use serde::Serialize;
+use strong_hash::StrongHash;
 
 use crate::hash_value::StarlarkHashValue;
 
 /// A key and its hash.
-#[derive(PartialEq, Eq, Debug, Clone, Copy, Dupe, Allocative)]
+#[derive(
+    PartialEq,
+    Eq,
+    Debug,
+    Clone,
+    Copy,
+    Dupe,
+    Allocative,
+    Serialize,
+    Deserialize
+)]
+#[cfg_attr(feature = "pagable_dep", derive(Pagable))]
+#[cfg_attr(feature = "pagable_dep", pagable(bound = "K: Pagable + 'static"))]
 pub struct Hashed<K> {
     hash: StarlarkHashValue,
     key: K,
@@ -40,6 +57,13 @@ impl<K> Hash for Hashed<K> {
     fn hash<S: Hasher>(&self, state: &mut S) {
         // Only hash the hash, not the key.
         self.hash.hash(state)
+    }
+}
+
+impl<K: StrongHash> StrongHash for Hashed<K> {
+    fn strong_hash<S: Hasher>(&self, state: &mut S) {
+        // Only hash the key, not the (weak) hash.
+        self.key.strong_hash(state);
     }
 }
 
@@ -110,7 +134,7 @@ impl<K> Hashed<K> {
     }
 }
 
-impl<'a, K> Hashed<&'a K> {
+impl<K> Hashed<&K> {
     /// Make `Hashed<K>` from `Hashed<&K>`.
     pub fn copied(self) -> Hashed<K>
     where
@@ -128,7 +152,7 @@ impl<'a, K> Hashed<&'a K> {
     }
 }
 
-impl<'a, K: ?Sized> Hashed<&'a K> {
+impl<K: ?Sized> Hashed<&K> {
     /// Make `Hashed<K>` from `Hashed<&K>`, where `T` is the owned form of `K`.
     pub fn owned<T>(self) -> Hashed<T>
     where

@@ -57,7 +57,7 @@ impl<'v, 'a> ParametersParser<'v, 'a> {
     }
 
     /// Obtain the next optional parameter (without a default value).
-    pub fn next_opt<T: UnpackValue<'v>>(&mut self) -> anyhow::Result<Option<T>> {
+    pub fn next_opt<T: UnpackValue<'v>>(&mut self) -> crate::Result<Option<T>> {
         match self.get_next()? {
             (None, _) => Ok(None),
             (Some(v), name) => Ok(Some(T::unpack_named_param(v, name)?)),
@@ -65,13 +65,12 @@ impl<'v, 'a> ParametersParser<'v, 'a> {
     }
 
     /// Obtain the next parameter. Fail if the parameter is optional and not provided.
-    pub fn next<T: UnpackValue<'v>>(&mut self) -> anyhow::Result<T> {
+    pub fn next<T: UnpackValue<'v>>(&mut self) -> crate::Result<T> {
         let (v, name) = self.get_next()?;
         let Some(v) = v else {
             return Err(other_error!(
                 "Requested non-optional param {name} which was declared optional in signature"
-            )
-            .into_anyhow());
+            ));
         };
         T::unpack_named_param(v, name)
     }
@@ -91,10 +90,10 @@ mod tests {
     use crate::docs::DocParams;
     use crate::docs::DocString;
     use crate::docs::DocStringKind;
+    use crate::eval::ParametersSpecParam;
     use crate::eval::compiler::def::FrozenDef;
     use crate::eval::runtime::params::display::PARAM_FMT_OPTIONAL;
     use crate::eval::runtime::params::spec::ParametersSpec;
-    use crate::eval::ParametersSpecParam;
     use crate::typing::Ty;
     use crate::values::FrozenValue;
 
@@ -180,7 +179,7 @@ mod tests {
     fn test_can_fill_with_args() {
         fn test(sig: &str, pos: usize, names: &[&str], expected: bool) {
             let a = Assert::new();
-            let module = a.pass_module(&format!("def f({}): pass", sig));
+            let module = a.pass_module(&format!("def f({sig}): pass"));
             let f = module.get("f").unwrap().downcast::<FrozenDef>().unwrap();
             let parameters_spec = &f.parameters;
             assert_eq!(expected, parameters_spec.can_fill_with_args(pos, names));

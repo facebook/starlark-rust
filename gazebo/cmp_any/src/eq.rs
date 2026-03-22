@@ -1,10 +1,11 @@
 /*
  * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
- * This source code is licensed under both the MIT license found in the
- * LICENSE-MIT file in the root directory of this source tree and the Apache
+ * This source code is dual-licensed under either the MIT license found in the
+ * LICENSE-MIT file in the root directory of this source tree or the Apache
  * License, Version 2.0 found in the LICENSE-APACHE file in the root directory
- * of this source tree.
+ * of this source tree. You may select, at your option, one of the
+ * above-listed licenses.
  */
 
 use std::any::Any;
@@ -76,7 +77,7 @@ mod tests {
     struct Wrap<T>(T);
 
     impl<T: PartialEq + 'static> Wrap<T> {
-        fn token(&self) -> PartialEqAny {
+        fn token(&self) -> PartialEqAny<'_> {
             PartialEqAny::new(&self.0)
         }
     }
@@ -87,17 +88,17 @@ mod tests {
         let w2 = Wrap(1);
         let w3 = Wrap(2);
 
-        assert_eq!(w1.token() == w2.token(), true);
-        assert_eq!(w1.token() == w3.token(), false);
+        assert!(w1.token() == w2.token());
+        assert!(w1.token() != w3.token());
 
         let w4 = Wrap("foo");
         let w5 = Wrap("foo");
         let w6 = Wrap("bar");
 
-        assert_eq!(w4.token() == w5.token(), true);
-        assert_eq!(w4.token() == w6.token(), false);
+        assert!(w4.token() == w5.token());
+        assert!(w4.token() != w6.token());
 
-        assert_eq!(w1.token() == w6.token(), false);
+        assert!(w1.token() != w6.token());
     }
 
     #[test]
@@ -106,7 +107,7 @@ mod tests {
         let w = Wrap(1);
         let f = PartialEqAny::always_false();
 
-        assert_eq!(f == f, false);
-        assert_eq!(f == w.token(), false);
+        assert!(f != f);
+        assert!(f != w.token());
     }
 }

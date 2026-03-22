@@ -16,8 +16,8 @@
  */
 
 use std::cell::RefCell;
-use std::collections::hash_map;
 use std::collections::HashMap;
+use std::collections::hash_map;
 use std::fmt;
 use std::fmt::Debug;
 use std::fmt::Formatter;
@@ -27,14 +27,16 @@ use allocative::Allocative;
 use dupe::Dupe;
 use starlark_map::small_map::SmallMap;
 
+use crate::eval::ProfileData;
 use crate::eval::runtime::profile::data::ProfileDataImpl;
 use crate::eval::runtime::profile::flamegraph::FlameGraphData;
 use crate::eval::runtime::profile::flamegraph::FlameGraphNode;
 use crate::eval::runtime::profile::heap::RetainedHeapProfileMode;
 use crate::eval::runtime::profile::instant::ProfilerInstant;
 use crate::eval::runtime::small_duration::SmallDuration;
-use crate::eval::ProfileData;
 use crate::util::arc_str::ArcStr;
+use crate::values::Heap;
+use crate::values::Value;
 use crate::values::layout::heap::arena::ArenaVisitor;
 use crate::values::layout::heap::heap_type::HeapKind;
 use crate::values::layout::heap::profile::alloc_counts::AllocCounts;
@@ -45,8 +47,6 @@ use crate::values::layout::heap::profile::summary_by_function::HeapSummaryByFunc
 use crate::values::layout::heap::repr::AValueOrForward;
 use crate::values::layout::heap::repr::AValueOrForwardUnpack;
 use crate::values::layout::pointer::RawPointer;
-use crate::values::Heap;
-use crate::values::Value;
 
 /// A mapping from function Value to FunctionId, which must be continuous
 #[derive(Default)]
@@ -172,7 +172,7 @@ impl<'v> ArenaVisitor<'v> for StackCollector {
             typ,
             AllocCounts {
                 count: 1,
-                bytes: value.get_ref().total_memory(),
+                bytes: value.get_ref().total_memory_for_profile(),
             },
         );
     }
@@ -286,15 +286,15 @@ impl<'c> StackFrameWithContext<'c> {
         })
     }
 
-    /// Write this stack frame's data to a file in flamegraph.pl format.
-    fn write_flame_graph(&self, node: &mut FlameGraphNode) {
+    /// Accumulate this stack frame's data into the given FlameGraphNode
+    fn gen_flame_graph_data(&self, node: &mut FlameGraphNode) {
         for (k, v) in &self.frame.allocs.summary {
             node.child((*k).into()).add(v.bytes as u64);
         }
 
         for (id, frame) in self.callees() {
             let child_node = node.child(id.dupe());
-            frame.write_flame_graph(child_node);
+            frame.gen_flame_graph_data(child_node);
         }
     }
 }
@@ -328,7 +328,7 @@ impl Default for AggregateHeapProfileInfo {
 }
 
 impl AggregateHeapProfileInfo {
-    pub(crate) fn collect(heap: &Heap, retained: Option<HeapKind>) -> AggregateHeapProfileInfo {
+    pub(crate) fn collect(heap: Heap<'_>, retained: Option<HeapKind>) -> AggregateHeapProfileInfo {
         let mut collector = StackCollector::new(retained);
         unsafe {
             heap.visit_arena(HeapKind::Unfrozen, &mut collector);
@@ -340,7 +340,7 @@ impl AggregateHeapProfileInfo {
         }
     }
 
-    fn root(&self) -> StackFrameWithContext {
+    fn root(&self) -> StackFrameWithContext<'_> {
         StackFrameWithContext {
             frame: &self.root,
             strings: &self.strings,
@@ -359,14 +359,14 @@ impl AggregateHeapProfileInfo {
         AggregateHeapProfileInfo { strings, root }
     }
 
-    /// Write this out recursively to a file.
-    pub fn gen_flame_graph(&self) -> String {
+    /// Generate the flame graph data and return it as a string.
+    pub fn gen_flame_graph_data(&self) -> String {
         let mut data = FlameGraphData::default();
-        self.root().write_flame_graph(data.root());
+        self.root().gen_flame_graph_data(data.root());
         data.write()
     }
 
-    /// Write per-function summary in CSV format.
+    /// Generate per-function summary in CSV format.
     pub fn gen_summary_csv(&self) -> String {
         HeapSummaryByFunction::init(self).gen_csv()
     }
@@ -387,6 +387,9 @@ impl RetainedHeapProfile {
     pub(crate) fn to_profile(&self) -> ProfileData {
         ProfileData {
             profile: match self.mode {
+                RetainedHeapProfileMode::FlameAndSummary => {
+                    ProfileDataImpl::HeapRetained(Box::new(self.info.clone()))
+                }
                 RetainedHeapProfileMode::Flame => {
                     ProfileDataImpl::HeapFlameRetained(Box::new(self.info.clone()))
                 }
@@ -403,13 +406,13 @@ mod tests {
     use dupe::Dupe;
 
     use crate::const_frozen_string;
+    use crate::values::Freezer;
+    use crate::values::FrozenHeap;
+    use crate::values::Heap;
     use crate::values::layout::heap::heap_type::HeapKind;
     use crate::values::layout::heap::profile::aggregated::AggregateHeapProfileInfo;
     use crate::values::layout::heap::profile::aggregated::StackFrame;
     use crate::values::layout::heap::profile::summary_by_function::HeapSummaryByFunction;
-    use crate::values::Freezer;
-    use crate::values::FrozenHeap;
-    use crate::values::Heap;
 
     fn total_alloc_count(frame: &StackFrame) -> usize {
         frame.allocs.total().count
@@ -422,63 +425,68 @@ mod tests {
 
     #[test]
     fn test_stacks_collect() {
-        let heap = Heap::new();
-        heap.record_call_enter(const_frozen_string!("enter").to_value());
-        heap.alloc_str("xxyy");
-        heap.alloc_str("zzww");
-        heap.record_call_exit();
+        Heap::temp(|heap| {
+            heap.record_call_enter(const_frozen_string!("enter").to_value());
+            heap.alloc_str("xxyy");
+            heap.alloc_str("zzww");
+            heap.record_call_exit();
 
-        let stacks = AggregateHeapProfileInfo::collect(&heap, None);
-        assert!(stacks.root.allocs.summary.is_empty());
-        assert_eq!(1, stacks.root.callees.len());
-        assert_eq!(2, total_alloc_count(&stacks.root));
+            let stacks = AggregateHeapProfileInfo::collect(heap, None);
+            assert!(stacks.root.allocs.summary.is_empty());
+            assert_eq!(1, stacks.root.callees.len());
+            assert_eq!(2, total_alloc_count(&stacks.root));
+        });
     }
 
     #[test]
     fn test_stacks_collect_retained() {
-        let heap = Heap::new();
-        heap.record_call_enter(const_frozen_string!("enter").to_value());
-        let s0 = heap.alloc_str("xxyy");
-        let s1 = heap.alloc_str("zzww");
-        heap.alloc_str("rrtt");
-        heap.record_call_exit();
+        Heap::temp(|heap| {
+            heap.record_call_enter(const_frozen_string!("enter").to_value());
+            let s0 = heap.alloc_str("xxyy");
+            let s1 = heap.alloc_str("zzww");
+            heap.alloc_str("rrtt");
+            heap.record_call_exit();
 
-        let freezer = Freezer::new(FrozenHeap::new());
-        freezer.freeze(s0.to_value()).unwrap();
-        freezer.freeze(s1.to_value()).unwrap();
+            let frozen_heap = FrozenHeap::new();
+            let freezer = Freezer::new(&frozen_heap);
+            freezer.freeze(s0.to_value()).unwrap();
+            freezer.freeze(s1.to_value()).unwrap();
 
-        let stacks = AggregateHeapProfileInfo::collect(&heap, Some(HeapKind::Frozen));
-        assert!(stacks.root.allocs.summary.is_empty());
-        assert_eq!(1, stacks.root.callees.len());
-        // 3 allocated, 2 retained.
-        assert_eq!(
-            2,
-            stacks
-                .root
-                .callees
-                .values()
-                .next()
-                .unwrap()
-                .allocs
-                .summary
-                .get("string")
-                .unwrap()
-                .count
-        );
-        assert_eq!(2, total_alloc_count(&stacks.root));
+            let stacks = AggregateHeapProfileInfo::collect(heap, Some(HeapKind::Frozen));
+            assert!(stacks.root.allocs.summary.is_empty());
+            assert_eq!(1, stacks.root.callees.len());
+            // 3 allocated, 2 retained.
+            assert_eq!(
+                2,
+                stacks
+                    .root
+                    .callees
+                    .values()
+                    .next()
+                    .unwrap()
+                    .allocs
+                    .summary
+                    .get("string")
+                    .unwrap()
+                    .count
+            );
+            assert_eq!(2, total_alloc_count(&stacks.root));
+        });
     }
 
     #[test]
     fn test_merge() {
         fn make() -> AggregateHeapProfileInfo {
-            let heap = Heap::new();
-            heap.record_call_enter(const_frozen_string!("xx").to_value());
-            let s = heap.alloc_str("abc");
-            heap.record_call_exit();
-            let freezer = Freezer::new(FrozenHeap::new());
-            freezer.freeze(s.to_value()).unwrap();
+            Heap::temp(|heap| {
+                heap.record_call_enter(const_frozen_string!("xx").to_value());
+                let s = heap.alloc_str("abc");
+                heap.record_call_exit();
+                let frozen_heap = FrozenHeap::new();
+                let freezer = Freezer::new(&frozen_heap);
+                freezer.freeze(s.to_value()).unwrap();
 
-            AggregateHeapProfileInfo::collect(&heap, Some(HeapKind::Frozen))
+                AggregateHeapProfileInfo::collect(heap, Some(HeapKind::Frozen))
+            })
         }
 
         let merge = AggregateHeapProfileInfo::merge([&make(), &make(), &make()]);

@@ -35,56 +35,55 @@ pub(crate) struct BeforeStmt<'a, 'e: 'a> {
 // TODO(cjhopman): pull DAP into the crate, and hide this function.
 #[doc(hidden)]
 pub enum BeforeStmtFunc<'a, 'e: 'a> {
-    Fn(&'a dyn for<'v1> Fn(FileSpanRef, &mut Evaluator<'v1, 'a, 'e>)),
-    Dyn(Box<dyn BeforeStmtFuncDyn<'a, 'e>>),
+    Fn(&'a dyn Fn(FileSpanRef, bool, &mut Evaluator<'_, '_, 'e>)),
+    Dyn(Box<dyn BeforeStmtFuncDyn<'e>>),
 }
 
 impl<'a, 'e: 'a> BeforeStmtFunc<'a, 'e> {
     pub(crate) fn call<'v>(
         &mut self,
         span: FileSpanRef,
+        continued: bool,
         eval: &mut Evaluator<'v, 'a, 'e>,
     ) -> crate::Result<()> {
         match self {
             BeforeStmtFunc::Fn(f) => {
-                f(span, eval);
+                f(span, continued, eval);
                 Ok(())
             }
-            BeforeStmtFunc::Dyn(d) => d.call(span, eval),
+            BeforeStmtFunc::Dyn(d) => d.call(span, continued, eval),
         }
+    }
+
+    pub(crate) fn from_fn(
+        value: &'a dyn Fn(FileSpanRef, bool, &mut Evaluator<'_, '_, 'e>),
+    ) -> Self {
+        Self::Fn(value)
+    }
+
+    #[doc(hidden)]
+    pub fn from_dyn(value: Box<dyn BeforeStmtFuncDyn<'e>>) -> Self {
+        Self::Dyn(value)
     }
 }
 
 /// This is used by DAP, and it is not public API.
 // TODO(cjhopman): pull DAP into the crate, and hide this function.
 #[doc(hidden)]
-pub trait BeforeStmtFuncDyn<'a, 'e: 'a> {
+pub trait BeforeStmtFuncDyn<'e> {
     /// This is used by DAP, and it is not public API.
     // TODO(cjhopman): pull DAP into the crate, and hide this function.
     #[doc(hidden)]
     fn call<'v>(
         &mut self,
         span: FileSpanRef,
-        eval: &mut Evaluator<'v, 'a, 'e>,
+        continued: bool,
+        eval: &mut Evaluator<'v, '_, 'e>,
     ) -> crate::Result<()>;
 }
 
 impl<'a, 'e: 'a> BeforeStmt<'a, 'e> {
     pub(crate) fn enabled(&self) -> bool {
         self.instrument || !self.before_stmt.is_empty()
-    }
-}
-
-impl<'a, 'e: 'a> From<&'a dyn for<'v1> Fn(FileSpanRef, &mut Evaluator<'v1, 'a, 'e>)>
-    for BeforeStmtFunc<'a, 'e>
-{
-    fn from(value: &'a dyn for<'v1> Fn(FileSpanRef, &mut Evaluator<'v1, 'a, 'e>)) -> Self {
-        Self::Fn(value)
-    }
-}
-
-impl<'a, 'e: 'a> From<Box<dyn BeforeStmtFuncDyn<'a, 'e>>> for BeforeStmtFunc<'a, 'e> {
-    fn from(value: Box<dyn BeforeStmtFuncDyn<'a, 'e>>) -> Self {
-        Self::Dyn(value)
     }
 }

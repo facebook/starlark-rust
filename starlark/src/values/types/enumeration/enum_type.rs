@@ -26,13 +26,13 @@ use display_container::fmt_container;
 use dupe::Dupe;
 use either::Either;
 use once_cell::unsync::OnceCell;
-use starlark_derive::starlark_module;
-use starlark_derive::starlark_value;
 use starlark_derive::Coerce;
 use starlark_derive::NoSerialize;
 use starlark_derive::Trace;
-use starlark_map::small_map::SmallMap;
+use starlark_derive::starlark_module;
+use starlark_derive::starlark_value;
 use starlark_map::Equivalent;
+use starlark_map::small_map::SmallMap;
 
 use crate as starlark;
 use crate::any::ProvidesStaticType;
@@ -41,22 +41,15 @@ use crate::environment::MethodsBuilder;
 use crate::environment::MethodsStatic;
 use crate::eval::Arguments;
 use crate::eval::Evaluator;
+use crate::register_avalue_simple_frozen;
+use crate::typing::ParamSpec;
+use crate::typing::Ty;
 use crate::typing::callable::TyCallable;
 use crate::typing::starlark_value::TyStarlarkValue;
 use crate::typing::user::TyUser;
+use crate::typing::user::TyUserFields;
 use crate::typing::user::TyUserIndex;
 use crate::typing::user::TyUserParams;
-use crate::typing::ParamSpec;
-use crate::typing::Ty;
-use crate::values::enumeration::matcher::EnumTypeMatcher;
-use crate::values::enumeration::ty_enum_type::TyEnumData;
-use crate::values::enumeration::value::EnumValueGen;
-use crate::values::enumeration::EnumValue;
-use crate::values::function::FUNCTION_TYPE;
-use crate::values::index::convert_index;
-use crate::values::list::AllocList;
-use crate::values::types::type_instance_id::TypeInstanceId;
-use crate::values::typing::type_compiled::type_matcher_factory::TypeMatcherFactory;
 use crate::values::Freeze;
 use crate::values::FreezeResult;
 use crate::values::Freezer;
@@ -66,6 +59,16 @@ use crate::values::StarlarkValue;
 use crate::values::StringValue;
 use crate::values::Value;
 use crate::values::ValueLike;
+use crate::values::ValueTyped;
+use crate::values::dict::value::ValueStr;
+use crate::values::enumeration::EnumValue;
+use crate::values::enumeration::matcher::EnumTypeMatcher;
+use crate::values::enumeration::ty_enum_type::TyEnumData;
+use crate::values::function::FUNCTION_TYPE;
+use crate::values::index::convert_index;
+use crate::values::list::AllocList;
+use crate::values::types::type_instance_id::TypeInstanceId;
+use crate::values::typing::type_compiled::type_matcher_factory::TypeMatcherFactory;
 
 #[derive(thiserror::Error, Debug)]
 enum EnumError {
@@ -168,12 +171,17 @@ pub type EnumType<'v> = EnumTypeGen<Value<'v>>;
 /// Frozen enum type.
 pub type FrozenEnumType = EnumTypeGen<FrozenValue>;
 
+register_avalue_simple_frozen!(FrozenEnumType);
+
 impl<'v> EnumType<'v> {
-    pub(crate) fn new(elements: Vec<StringValue<'v>>, heap: &'v Heap) -> crate::Result<Value<'v>> {
+    pub(crate) fn new(
+        elements: Vec<StringValue<'v>>,
+        heap: Heap<'v>,
+    ) -> crate::Result<ValueTyped<'v, EnumType<'v>>> {
         // We are constructing the enum and all elements in one go.
         // They both point at each other, which adds to the complexity.
-        let id = TypeInstanceId::gen();
-        let typ = heap.alloc(EnumType {
+        let id = TypeInstanceId::r#gen();
+        let typ = heap.alloc_typed(EnumType {
             id,
             ty_enum_data: OnceCell::new(),
             elements: UnsafeCell::new(SmallMap::new()),
@@ -183,7 +191,7 @@ impl<'v> EnumType<'v> {
         for (i, x) in elements.iter().enumerate() {
             let v = heap.alloc(EnumValue {
                 id,
-                typ,
+                typ: typ.to_value(),
                 index: i as i32,
                 value: x.to_value(),
             });
@@ -195,10 +203,9 @@ impl<'v> EnumType<'v> {
         }
 
         // Here we tie the cycle
-        let t = typ.downcast_ref::<EnumType>().unwrap();
         unsafe {
             // SAFETY: we own unique reference to `t`.
-            *t.elements.get() = res;
+            *typ.elements.get() = res;
         }
         Ok(typ)
     }
@@ -236,7 +243,8 @@ impl<'v, V> StarlarkValue<'v> for EnumTypeGen<V>
 where
     Self: ProvidesStaticType<'v>,
     Value<'v>: Equivalent<V>,
-    V: ValueLike<'v> + EnumCell,
+    V: ValueLike<'v> + EnumCell + Equivalent<V>,
+    for<'a> ValueStr<'a>: Equivalent<V>,
 {
     type Canonical = FrozenEnumType;
 
@@ -253,11 +261,26 @@ where
         Ok(self.construct(val)?.to_value())
     }
 
+    fn get_attr(&self, attribute: &str, _heap: Heap<'v>) -> Option<Value<'v>> {
+        self.elements()
+            .get(&ValueStr(attribute))
+            .map(|v| v.to_value())
+    }
+
+    fn dir_attr(&self) -> Vec<String> {
+        // The unwrap here is safe because the new() method requires the elements be
+        // of type StringValue<'v>
+        self.elements()
+            .keys()
+            .map(|key| key.to_value().unpack_str().unwrap().to_owned())
+            .collect()
+    }
+
     fn length(&self) -> crate::Result<i32> {
         Ok(self.elements().len() as i32)
     }
 
-    fn at(&self, index: Value, _heap: &'v Heap) -> crate::Result<Value<'v>> {
+    fn at(&self, index: Value, _heap: Heap<'v>) -> crate::Result<Value<'v>> {
         let i = convert_index(index, self.elements().len() as i32)? as usize;
         // Must be in the valid range since convert_index checks that, so just unwrap
         Ok(self
@@ -268,7 +291,7 @@ where
             .to_value())
     }
 
-    unsafe fn iterate(&self, me: Value<'v>, _heap: &'v Heap) -> crate::Result<Value<'v>> {
+    unsafe fn iterate(&self, me: Value<'v>, _heap: Heap<'v>) -> crate::Result<Value<'v>> {
         Ok(me)
     }
 
@@ -278,7 +301,7 @@ where
         (rem, Some(rem))
     }
 
-    unsafe fn iter_next(&self, index: usize, _heap: &'v Heap) -> Option<Value<'v>> {
+    unsafe fn iter_next(&self, index: usize, _heap: Heap<'v>) -> Option<Value<'v>> {
         self.elements().values().nth(index).map(|v| v.to_value())
     }
 
@@ -286,7 +309,7 @@ where
 
     fn get_methods() -> Option<&'static Methods> {
         static RES: MethodsStatic = MethodsStatic::new();
-        RES.methods(enum_type_methods)
+        RES.methods_for_type::<Self::Canonical>(enum_type_methods)
     }
 
     fn eval_type(&self) -> Option<Ty> {
@@ -312,11 +335,29 @@ where
                     ..TyUserParams::default()
                 },
             )?);
+
+            // The unwrap here is safe because the new() method requires the elements be
+            // of type StringValue<'v>
+            let fields_map: starlark_map::sorted_map::SortedMap<String, Ty> = self
+                .elements()
+                .keys()
+                .map(|key| {
+                    (
+                        key.to_value().unpack_str().unwrap().to_owned(),
+                        ty_enum_value.dupe(),
+                    )
+                })
+                .collect();
+
             let ty_enum_type = Ty::custom(TyUser::new(
-                format!("enum[{}]", variable_name),
+                format!("enum[{variable_name}]"),
                 TyStarlarkValue::new::<EnumType>(),
-                TypeInstanceId::gen(),
+                TypeInstanceId::r#gen(),
                 TyUserParams {
+                    fields: TyUserFields {
+                        known: fields_map,
+                        unknown: false,
+                    },
                     index: Some(TyUserIndex {
                         index: Ty::int(),
                         result: ty_enum_value.dupe(),
@@ -337,16 +378,6 @@ where
             )?);
             Ok(Arc::new(TyEnumData {
                 name: variable_name.to_owned(),
-                variants: self
-                    .elements()
-                    .iter()
-                    .map(|(_, enum_value)| {
-                        let enum_value: &EnumValueGen<_> =
-                            EnumValue::from_value(enum_value.to_value())
-                                .expect("known to be enum value");
-                        Ty::of_value(enum_value.value)
-                    })
-                    .collect(),
                 id: self.id,
                 ty_enum_value,
                 ty_enum_type,
@@ -358,7 +389,7 @@ where
 #[starlark_module]
 fn enum_type_methods(builder: &mut MethodsBuilder) {
     #[starlark(attribute)]
-    fn r#type<'v>(this: Value, heap: &Heap) -> starlark::Result<Value<'v>> {
+    fn r#type<'v>(this: Value, heap: Heap<'_>) -> starlark::Result<Value<'v>> {
         let this = EnumType::from_value(this).unwrap();
         let ty_enum_type = match this {
             Either::Left(x) => x.ty_enum_data(),
@@ -528,6 +559,58 @@ def test():
     accept_str(Currency("GBP"))
 "#,
             "Expected type `str` but got `Currency`",
+        );
+    }
+
+    #[test]
+    fn test_enum_attribute_access() {
+        assert::pass(
+            r#"
+Color = enum("RED", "GREEN", "BLUE")
+
+def test():
+    red = Color.RED
+    green = Color.GREEN
+    blue = Color.BLUE
+
+    assert_eq(red, Color("RED"))
+    assert_eq(green, Color("GREEN"))
+    assert_eq(blue, Color("BLUE"))
+
+    assert_eq(red.value, "RED")
+    assert_eq(green.value, "GREEN")
+    assert_eq(blue.value, "BLUE")
+
+test()
+"#,
+        );
+    }
+
+    #[test]
+    fn test_enum_attribute_access_invalid() {
+        assert::fail(
+            r#"
+Color = enum("RED", "GREEN", "BLUE")
+
+def test():
+    purple = Color.PURPLE
+
+test()
+"#,
+            "Object of type `function` has no attribute `PURPLE`",
+        );
+    }
+
+    #[test]
+    fn test_enum_attribute_access_type() {
+        assert::fail(
+            r#"
+Color = enum("RED", "GREEN", "BLUE")
+
+def foo() -> str:
+    return Color.RED
+"#,
+            "Expected type `str` but got `Color`",
         );
     }
 }

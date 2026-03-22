@@ -21,19 +21,19 @@ use starlark_derive::starlark_module;
 use crate as starlark;
 use crate::codemap::Span;
 use crate::environment::GlobalsBuilder;
+use crate::typing::ParamSpec;
+use crate::typing::Ty;
+use crate::typing::TypingOracleCtx;
 use crate::typing::call_args::TyCallArgs;
 use crate::typing::callable::TyCallable;
 use crate::typing::error::TypingOrInternalError;
 use crate::typing::function::TyCustomFunctionImpl;
-use crate::typing::ParamSpec;
-use crate::typing::Ty;
-use crate::typing::TypingOracleCtx;
-use crate::values::tuple::UnpackTuple;
-use crate::values::typing::StarlarkIter;
 use crate::values::FrozenValue;
 use crate::values::Heap;
 use crate::values::Value;
 use crate::values::ValueOfUnchecked;
+use crate::values::tuple::UnpackTuple;
+use crate::values::typing::StarlarkIter;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd, Allocative)]
 struct ZipType;
@@ -86,7 +86,7 @@ pub(crate) fn register_zip(globals: &mut GlobalsBuilder) {
     #[starlark(speculative_exec_safe, ty_custom_function = ZipType)]
     fn zip<'v>(
         #[starlark(args)] args: UnpackTuple<ValueOfUnchecked<'v, StarlarkIter<FrozenValue>>>,
-        heap: &'v Heap,
+        heap: Heap<'v>,
     ) -> starlark::Result<Vec<Value<'v>>> {
         let mut v = Vec::new();
         let mut first = true;

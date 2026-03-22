@@ -16,10 +16,10 @@
  */
 
 #![doc(hidden)]
-use crate::values::typing::type_compiled::compiled::TypeCompiled;
 use crate::values::Heap;
 use crate::values::StarlarkValue;
 use crate::values::Value;
+use crate::values::typing::type_compiled::compiled::TypeCompiled;
 
 #[derive(Debug, thiserror::Error)]
 enum TypingMacroRefsError {
@@ -31,7 +31,7 @@ enum TypingMacroRefsError {
 pub fn starlark_value_bit_or_for_type<'v, S: StarlarkValue<'v>>(
     this: &S,
     other: Value<'v>,
-    heap: &'v Heap,
+    heap: Heap<'v>,
 ) -> crate::Result<Value<'v>> {
     let Some(this) = this.eval_type() else {
         let mut repr = String::new();

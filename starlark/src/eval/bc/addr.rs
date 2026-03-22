@@ -29,9 +29,9 @@ use dupe::Dupe;
 use crate::eval::bc::if_debug::IfDebug;
 use crate::eval::bc::instr::BcInstr;
 use crate::eval::bc::opcode::BcOpcode;
+use crate::eval::bc::repr::BC_INSTR_ALIGN;
 use crate::eval::bc::repr::BcInstrHeader;
 use crate::eval::bc::repr::BcInstrRepr;
-use crate::eval::bc::repr::BC_INSTR_ALIGN;
 
 /// Address relative to bytecode start.
 #[derive(
@@ -121,7 +121,7 @@ pub(crate) struct BcPtrAddr<'b> {
 impl<'b> BcPtrAddr<'b> {
     /// Constructor.
     unsafe fn new(ptr: *const u8, range: IfDebug<BcPtrRange>) -> BcPtrAddr<'b> {
-        debug_assert!(ptr as usize % BC_INSTR_ALIGN == 0);
+        debug_assert!((ptr as usize).is_multiple_of(BC_INSTR_ALIGN));
         range.if_debug(|range| range.assert_in_range(ptr));
         BcPtrAddr {
             ptr,

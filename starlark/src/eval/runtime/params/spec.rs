@@ -24,8 +24,8 @@ use dupe::Dupe;
 use starlark_derive::Coerce;
 use starlark_derive::Freeze;
 use starlark_derive::Trace;
-use starlark_map::small_map::SmallMap;
 use starlark_map::Hashed;
+use starlark_map::small_map::SmallMap;
 use starlark_syntax::function_error;
 use starlark_syntax::other_error;
 use starlark_syntax::syntax::def::DefParamIndices;
@@ -37,26 +37,25 @@ use crate::collections::symbol::map::SymbolMap;
 use crate::docs::DocParam;
 use crate::docs::DocParams;
 use crate::docs::DocString;
+use crate::eval::Arguments;
+use crate::eval::Evaluator;
+use crate::eval::ParametersParser;
 use crate::eval::runtime::arguments::ArgSymbol;
 use crate::eval::runtime::arguments::ArgumentsImpl;
 use crate::eval::runtime::arguments::FunctionError;
 use crate::eval::runtime::arguments::ResolvedArgName;
-use crate::eval::runtime::params::display::fmt_param_spec;
-use crate::eval::runtime::params::display::ParamFmt;
 use crate::eval::runtime::params::display::PARAM_FMT_OPTIONAL;
-use crate::eval::Arguments;
-use crate::eval::Evaluator;
-use crate::eval::ParametersParser;
+use crate::eval::runtime::params::display::ParamFmt;
+use crate::eval::runtime::params::display::fmt_param_spec;
 use crate::hint::unlikely;
 use crate::typing::ParamIsRequired;
 use crate::typing::Ty;
-use crate::values::dict::Dict;
-use crate::values::dict::DictRef;
-use crate::values::FreezeResult;
 use crate::values::Heap;
 use crate::values::StringValue;
 use crate::values::Value;
 use crate::values::ValueLike;
+use crate::values::dict::Dict;
+use crate::values::dict::DictRef;
 
 /// Describe parameter for [`ParametersSpec`].
 #[derive(
@@ -145,7 +144,7 @@ pub struct ParametersSpec<V> {
     indices: DefParamIndices,
 }
 
-impl<V: Copy> ParametersSpecBuilder<V> {
+impl<V> ParametersSpecBuilder<V> {
     fn add(&mut self, name: &str, val: ParameterKind<V>) {
         assert!(
             !matches!(val, ParameterKind::Args | ParameterKind::KWargs),
@@ -172,7 +171,7 @@ impl<V: Copy> ParametersSpecBuilder<V> {
         self.params.push((name.to_owned(), val));
         if self.current_style != CurrentParameterStyle::PosOnly {
             let old = self.names.insert(name, i.try_into().unwrap());
-            assert!(old.is_none(), "Repeated parameter `{}`", name);
+            assert!(old.is_none(), "Repeated parameter `{name}`");
         }
         if self.args.is_none() && self.current_style != CurrentParameterStyle::NamedOnly {
             // If you've already seen `args` or `no_args`, you can't enter these
@@ -307,15 +306,13 @@ impl<V: Copy> ParametersSpecBuilder<V> {
         let _ = current_style;
         let positional_only: u32 = positional_only.try_into().unwrap();
         let positional: u32 = positional.try_into().unwrap();
-        assert!(
-            positional_only <= positional,
-            "building `{}`",
-            function_name
-        );
+        assert!(positional_only <= positional, "building `{function_name}`");
+        let (param_names, param_kinds): (Vec<String>, Vec<ParameterKind<V>>) =
+            params.into_iter().unzip();
         ParametersSpec {
             function_name,
-            param_kinds: params.iter().map(|p| p.1).collect(),
-            param_names: params.into_iter().map(|p| p.0).collect(),
+            param_kinds: param_kinds.into_boxed_slice(),
+            param_names: param_names.into_boxed_slice(),
             names,
             indices: DefParamIndices {
                 num_positional_only: positional_only,
@@ -353,10 +350,7 @@ impl<V> ParametersSpec<V> {
         args: bool,
         named_only: impl IntoIterator<Item = (&'a str, ParametersSpecParam<V>)>,
         kwargs: bool,
-    ) -> ParametersSpec<V>
-    where
-        V: Copy,
-    {
+    ) -> ParametersSpec<V> {
         let pos_only = pos_only.into_iter();
         let pos_or_named = pos_or_named.into_iter();
         let named_only = named_only.into_iter();
@@ -395,10 +389,7 @@ impl<V> ParametersSpec<V> {
     pub fn new_named_only<'a>(
         function_name: &str,
         named_only: impl IntoIterator<Item = (&'a str, ParametersSpecParam<V>)>,
-    ) -> ParametersSpec<V>
-    where
-        V: Copy,
-    {
+    ) -> ParametersSpec<V> {
         Self::new_parts(
             function_name,
             std::iter::empty(),
@@ -433,7 +424,7 @@ impl<V> ParametersSpec<V> {
             if cfg!(test) {
                 panic!("{}", args);
             }
-            format!("<{}>", args)
+            format!("<{args}>")
         }
 
         if let Some(args) = self.indices.args {
@@ -493,6 +484,59 @@ impl<V> ParametersSpec<V> {
     pub(crate) fn has_args_or_kwargs(&self) -> bool {
         self.indices.args.is_some() || self.indices.kwargs.is_some()
     }
+
+    /// Generate documentation for each of the parameters, using a custom formatter for default values.
+    pub fn documentation_with_default_value_formatter<F>(
+        &self,
+        parameter_types: Vec<Ty>,
+        mut parameter_docs: HashMap<String, Option<DocString>>,
+        formatter: F,
+    ) -> DocParams
+    where
+        F: Fn(&V) -> String,
+    {
+        assert_eq!(
+            self.param_kinds.len(),
+            parameter_types.len(),
+            "function: `{}`",
+            self.function_name,
+        );
+
+        let mut dp = |i: usize| -> DocParam {
+            let name = self.param_names[i].as_str();
+            let name = name.strip_prefix("**").unwrap_or(name);
+            let name = name.strip_prefix("*").unwrap_or(name);
+
+            let docs = parameter_docs.remove(name).flatten();
+
+            let name = name.to_owned();
+
+            DocParam {
+                name,
+                docs,
+                typ: parameter_types[i].dupe(),
+                default_value: match &self.param_kinds[i] {
+                    ParameterKind::Required => None,
+                    ParameterKind::Optional => Some(PARAM_FMT_OPTIONAL.to_owned()),
+                    ParameterKind::Defaulted(v) => Some(formatter(v)),
+                    ParameterKind::Args => None,
+                    ParameterKind::KWargs => None,
+                },
+            }
+        };
+
+        DocParams {
+            pos_only: self.indices.pos_only().map(&mut dp).collect(),
+            pos_or_named: self.indices.pos_or_named().map(&mut dp).collect(),
+            args: self.indices.args.map(|a| a as usize).map(&mut dp),
+            named_only: self
+                .indices
+                .named_only(self.param_kinds.len())
+                .map(&mut dp)
+                .collect(),
+            kwargs: self.indices.kwargs.map(|a| a as usize).map(&mut dp),
+        }
+    }
 }
 
 impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
@@ -515,7 +559,7 @@ impl<'v> ParametersSpec<Value<'v>> {
         &self,
         args: &Arguments<'v, '_>,
         slots: &mut [Option<Value<'v>>],
-        heap: &'v Heap,
+        heap: Heap<'v>,
     ) -> crate::Result<()> {
         self.collect_inline(&args.0, slots, heap)
     }
@@ -527,7 +571,7 @@ impl<'v> ParametersSpec<Value<'v>> {
     fn collect_into_impl<const N: usize>(
         &self,
         args: &Arguments<'v, '_>,
-        heap: &'v Heap,
+        heap: Heap<'v>,
     ) -> crate::Result<[Option<Value<'v>>; N]> {
         let mut slots = [(); N].map(|_| None);
         self.collect(args, &mut slots, heap)?;
@@ -541,7 +585,7 @@ impl<'v> ParametersSpec<Value<'v>> {
         &self,
         args: &A,
         slots: &mut [Option<Value<'v>>],
-        heap: &'v Heap,
+        heap: Heap<'v>,
     ) -> crate::Result<()>
     where
         'v: 'a,
@@ -569,7 +613,7 @@ impl<'v> ParametersSpec<Value<'v>> {
         &self,
         args: &A,
         slots: &mut [Option<Value<'v>>],
-        heap: &'v Heap,
+        heap: Heap<'v>,
     ) -> crate::Result<()>
     where
         'v: 'a,
@@ -609,7 +653,7 @@ impl<'v> ParametersSpec<Value<'v>> {
                 }
             }
 
-            fn alloc(self, heap: &'v Heap) -> Value<'v> {
+            fn alloc(self, heap: Heap<'v>) -> Value<'v> {
                 let kwargs = match self.kwargs {
                     Some(kwargs) => Dict::new(coerce(kwargs)),
                     None => Dict::default(),
@@ -836,55 +880,6 @@ impl<'v> ParametersSpec<Value<'v>> {
         true
     }
 
-    /// Generate documentation for each of the parameters.
-    fn documentation_impl(
-        &self,
-        parameter_types: Vec<Ty>,
-        mut parameter_docs: HashMap<String, Option<DocString>>,
-    ) -> DocParams {
-        assert_eq!(
-            self.param_kinds.len(),
-            parameter_types.len(),
-            "function: `{}`",
-            self.function_name,
-        );
-
-        let mut dp = |i: usize| -> DocParam {
-            let name = self.param_names[i].as_str();
-            let name = name.strip_prefix("**").unwrap_or(name);
-            let name = name.strip_prefix("*").unwrap_or(name);
-
-            let docs = parameter_docs.remove(name).flatten();
-
-            let name = name.to_owned();
-
-            DocParam {
-                name,
-                docs,
-                typ: parameter_types[i].dupe(),
-                default_value: match self.param_kinds[i] {
-                    ParameterKind::Required => None,
-                    ParameterKind::Optional => Some(PARAM_FMT_OPTIONAL.to_owned()),
-                    ParameterKind::Defaulted(v) => Some(v.to_value().to_repr()),
-                    ParameterKind::Args => None,
-                    ParameterKind::KWargs => None,
-                },
-            }
-        };
-
-        DocParams {
-            pos_only: self.indices.pos_only().map(&mut dp).collect(),
-            pos_or_named: self.indices.pos_or_named().map(&mut dp).collect(),
-            args: self.indices.args.map(|a| a as usize).map(&mut dp),
-            named_only: self
-                .indices
-                .named_only(self.param_kinds.len())
-                .map(&mut dp)
-                .collect(),
-            kwargs: self.indices.kwargs.map(|a| a as usize).map(&mut dp),
-        }
-    }
-
     /// Create a [`ParametersParser`] for given arguments.
     #[inline]
     fn parser_impl<R, F>(
@@ -923,7 +918,7 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
     pub fn collect_into<const N: usize>(
         &self,
         args: &Arguments<'v, '_>,
-        heap: &'v Heap,
+        heap: Heap<'v>,
     ) -> crate::Result<[Option<Value<'v>>; N]> {
         self.as_value().collect_into_impl(args, heap)
     }
@@ -935,7 +930,7 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
         &self,
         args: &Arguments<'v, '_>,
         slots: &mut [Option<Value<'v>>],
-        heap: &'v Heap,
+        heap: Heap<'v>,
     ) -> crate::Result<()> {
         self.as_value().collect_impl(args, slots, heap)
     }
@@ -952,8 +947,11 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
         parameter_types: Vec<Ty>,
         parameter_docs: HashMap<String, Option<DocString>>,
     ) -> DocParams {
-        self.as_value()
-            .documentation_impl(parameter_types, parameter_docs)
+        self.as_value().documentation_with_default_value_formatter(
+            parameter_types,
+            parameter_docs,
+            |v| v.to_value().to_repr(),
+        )
     }
 
     /// Create a [`ParametersParser`] for given arguments.
@@ -977,7 +975,7 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
         &self,
         args: &A,
         slots: &mut [Option<Value<'v>>],
-        heap: &'v Heap,
+        heap: Heap<'v>,
     ) -> crate::Result<()>
     where
         'v: 'a,

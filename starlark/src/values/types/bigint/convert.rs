@@ -18,9 +18,6 @@
 use num_bigint::BigInt;
 
 use crate::typing::Ty;
-use crate::values::type_repr::StarlarkTypeRepr;
-use crate::values::types::int::int_or_big::StarlarkInt;
-use crate::values::types::int::int_or_big::StarlarkIntRef;
 use crate::values::AllocFrozenValue;
 use crate::values::AllocValue;
 use crate::values::FrozenHeap;
@@ -28,6 +25,9 @@ use crate::values::FrozenValue;
 use crate::values::Heap;
 use crate::values::UnpackValue;
 use crate::values::Value;
+use crate::values::type_repr::StarlarkTypeRepr;
+use crate::values::types::int::int_or_big::StarlarkInt;
+use crate::values::types::int::int_or_big::StarlarkIntRef;
 
 impl StarlarkTypeRepr for u32 {
     type Canonical = <i32 as StarlarkTypeRepr>::Canonical;
@@ -39,7 +39,7 @@ impl StarlarkTypeRepr for u32 {
 
 impl<'v> AllocValue<'v> for u32 {
     #[inline]
-    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
+    fn alloc_value(self, heap: Heap<'v>) -> Value<'v> {
         heap.alloc(StarlarkInt::from(self))
     }
 }
@@ -61,7 +61,7 @@ impl StarlarkTypeRepr for u64 {
 
 impl<'v> AllocValue<'v> for u64 {
     #[inline]
-    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
+    fn alloc_value(self, heap: Heap<'v>) -> Value<'v> {
         heap.alloc(StarlarkInt::from(self))
     }
 }
@@ -83,7 +83,7 @@ impl StarlarkTypeRepr for i64 {
 
 impl<'v> AllocValue<'v> for i64 {
     #[inline]
-    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
+    fn alloc_value(self, heap: Heap<'v>) -> Value<'v> {
         heap.alloc(StarlarkInt::from(self))
     }
 }
@@ -105,7 +105,7 @@ impl StarlarkTypeRepr for usize {
 
 impl<'v> AllocValue<'v> for usize {
     #[inline]
-    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
+    fn alloc_value(self, heap: Heap<'v>) -> Value<'v> {
         heap.alloc(StarlarkInt::from(self))
     }
 }
@@ -127,7 +127,7 @@ impl StarlarkTypeRepr for isize {
 
 impl<'v> AllocValue<'v> for isize {
     #[inline]
-    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
+    fn alloc_value(self, heap: Heap<'v>) -> Value<'v> {
         heap.alloc(StarlarkInt::from(self))
     }
 }
@@ -149,7 +149,7 @@ impl StarlarkTypeRepr for BigInt {
 
 impl<'v> AllocValue<'v> for BigInt {
     #[inline]
-    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
+    fn alloc_value(self, heap: Heap<'v>) -> Value<'v> {
         heap.alloc(StarlarkInt::from(self))
     }
 }

@@ -38,8 +38,9 @@ use std::process::Command;
 use either::Either;
 use lsp_types::CompletionItemKind;
 use lsp_types::Url;
-use starlark::analysis::find_call_name::AstModuleFindCallName;
+use starlark::StarlarkResultExt;
 use starlark::analysis::AstModuleLint;
+use starlark::analysis::find_call_name::AstModuleFindCallName;
 use starlark::docs::DocModule;
 use starlark::environment::FrozenModule;
 use starlark::environment::Globals;
@@ -48,7 +49,6 @@ use starlark::errors::EvalMessage;
 use starlark::eval::Evaluator;
 use starlark::syntax::AstModule;
 use starlark::syntax::Dialect;
-use starlark::StarlarkResultExt;
 use starlark_lsp::completion::StringCompletionResult;
 use starlark_lsp::completion::StringCompletionType;
 use starlark_lsp::error::eval_message_to_lsp_diagnostic;
@@ -134,7 +134,7 @@ struct FilesystemCompletionOptions {
 pub(crate) fn main(
     lsp: bool,
     print_non_none: bool,
-    is_interactive: bool,
+    interactive_module: Option<Module>,
     prelude: &[PathBuf],
     dialect: Dialect,
     globals: Globals,
@@ -148,7 +148,7 @@ pub(crate) fn main(
         ContextMode::Check,
         print_non_none,
         prelude,
-        is_interactive,
+        interactive_module,
         dialect,
         globals,
     )?;
@@ -159,20 +159,20 @@ pub(crate) fn main(
     Ok(())
 }
 
-pub(crate) struct BazelContext {
+pub(crate) struct BazelContext<'v> {
     pub(crate) workspace_name: Option<String>,
     pub(crate) external_output_base: Option<PathBuf>,
     pub(crate) mode: ContextMode,
     pub(crate) print_non_none: bool,
     pub(crate) prelude: Vec<FrozenModule>,
-    pub(crate) module: Option<Module>,
+    pub(crate) module: Option<Module<'v>>,
     pub(crate) dialect: Dialect,
     pub(crate) globals: Globals,
     pub(crate) builtin_docs: HashMap<LspUrl, String>,
     pub(crate) builtin_symbols: HashMap<String, LspUrl>,
 }
 
-impl BazelContext {
+impl<'v> BazelContext<'v> {
     const DEFAULT_WORKSPACE_NAME: &'static str = "__main__";
     const BUILD_FILE_NAMES: [&'static str; 2] = ["BUILD", "BUILD.bazel"];
     const LOADABLE_EXTENSIONS: [&'static str; 1] = ["bzl"];
@@ -181,28 +181,29 @@ impl BazelContext {
         mode: ContextMode,
         print_non_none: bool,
         prelude: &[PathBuf],
-        module: bool,
+        module: Option<Module<'v>>,
         dialect: Dialect,
         globals: Globals,
     ) -> anyhow::Result<Self> {
         let prelude: Vec<_> = prelude
             .iter()
             .map(|x| {
-                let env = Module::new();
-                {
-                    let mut eval = Evaluator::new(&env);
-                    let module = AstModule::parse_file(x, &dialect).into_anyhow_result()?;
-                    eval.eval_module(module, &globals).into_anyhow_result()?;
-                }
-                Ok(env.freeze()?)
+                Module::with_temp_heap(|env| {
+                    {
+                        let mut eval = Evaluator::new(&env);
+                        let module = AstModule::parse_file(x, &dialect).into_anyhow_result()?;
+                        eval.eval_module(module, &globals).into_anyhow_result()?;
+                    }
+                    Ok::<_, anyhow::Error>(env.freeze()?)
+                })
             })
             .collect::<anyhow::Result<_>>()?;
 
-        let module = if module {
-            Some(Self::new_module(&prelude))
-        } else {
-            None
-        };
+        if let Some(module) = &module {
+            for p in &prelude {
+                module.import_public_symbols(p);
+            }
+        }
         let mut builtin_docs: HashMap<LspUrl, String> = HashMap::new();
         let mut builtin_symbols: HashMap<String, LspUrl> = HashMap::new();
         for (name, item) in globals.documentation().members {
@@ -259,10 +260,10 @@ impl BazelContext {
     }
 
     // Convert an anyhow over iterator of EvalMessage, into an iterator of EvalMessage
-    fn err(
+    fn err<T: Iterator<Item = EvalMessage>>(
         file: &str,
-        result: starlark::Result<EvalResult<impl Iterator<Item = EvalMessage>>>,
-    ) -> EvalResult<impl Iterator<Item = EvalMessage>> {
+        result: starlark::Result<EvalResult<T>>,
+    ) -> EvalResult<impl Iterator<Item = EvalMessage> + use<T>> {
         match result {
             Err(e) => EvalResult {
                 messages: Either::Left(iter::once(EvalMessage::from_error(Path::new(file), &e))),
@@ -275,15 +276,11 @@ impl BazelContext {
         }
     }
 
-    fn new_module(prelude: &[FrozenModule]) -> Module {
-        let module = Module::new();
-        for p in prelude {
-            module.import_public_symbols(p);
-        }
-        module
-    }
-
-    fn go(&self, file: &str, ast: AstModule) -> EvalResult<impl Iterator<Item = EvalMessage>> {
+    fn go(
+        &self,
+        file: &str,
+        ast: AstModule,
+    ) -> EvalResult<impl Iterator<Item = EvalMessage> + use<>> {
         let mut warnings = Either::Left(iter::empty());
         let mut errors = Either::Left(iter::empty());
         let final_ast = match self.mode {
@@ -302,15 +299,28 @@ impl BazelContext {
         }
     }
 
-    fn run(&self, file: &str, ast: AstModule) -> EvalResult<impl Iterator<Item = EvalMessage>> {
-        let new_module;
-        let module = match self.module.as_ref() {
-            Some(module) => module,
-            None => {
-                new_module = Self::new_module(&self.prelude);
-                &new_module
-            }
-        };
+    fn run(
+        &self,
+        file: &str,
+        ast: AstModule,
+    ) -> EvalResult<impl Iterator<Item = EvalMessage> + use<>> {
+        match self.module.as_ref() {
+            Some(module) => self.run_with_module(file, ast, module),
+            None => Module::with_temp_heap(|module| {
+                for p in &self.prelude {
+                    module.import_public_symbols(p);
+                }
+                self.run_with_module(file, ast, &module)
+            }),
+        }
+    }
+
+    fn run_with_module(
+        &self,
+        file: &str,
+        ast: AstModule,
+        module: &Module,
+    ) -> EvalResult<impl Iterator<Item = EvalMessage> + use<>> {
         let mut eval = Evaluator::new(module);
         eval.enable_terminal_breakpoint_console();
         Self::err(
@@ -318,7 +328,7 @@ impl BazelContext {
             eval.eval_module(ast, &self.globals)
                 .map(|v| {
                     if self.print_non_none && !v.is_none() {
-                        println!("{}", v);
+                        println!("{v}");
                     }
                     EvalResult {
                         messages: iter::empty(),
@@ -329,7 +339,7 @@ impl BazelContext {
         )
     }
 
-    fn check(&self, module: &AstModule) -> impl Iterator<Item = EvalMessage> {
+    fn check(&self, module: &AstModule) -> impl Iterator<Item = EvalMessage> + use<> {
         let globals = if self.prelude.is_empty() {
             None
         } else {
@@ -356,7 +366,7 @@ impl BazelContext {
         &self,
         filename: &str,
         content: String,
-    ) -> EvalResult<impl Iterator<Item = EvalMessage>> {
+    ) -> EvalResult<impl Iterator<Item = EvalMessage> + use<>> {
         Self::err(
             filename,
             AstModule::parse(filename, content, &self.dialect)
@@ -463,7 +473,7 @@ impl BazelContext {
         }
     }
 
-    fn get_repository_names(&self) -> Vec<Cow<str>> {
+    fn get_repository_names(&self) -> Vec<Cow<'_, str>> {
         let mut names = Vec::new();
         if let Some(workspace_name) = &self.workspace_name {
             names.push(Cow::Borrowed(workspace_name.as_str()));
@@ -552,7 +562,6 @@ impl BazelContext {
                             }));
                         }
                     }
-                    continue;
                 } else if options.files != FilesystemFileCompletionOptions::None {
                     // Check if it's in the list of allowed extensions. If we have a list, and it
                     // doesn't contain the extension, or the file has no extension, skip this file.
@@ -617,7 +626,7 @@ impl BazelContext {
     }
 }
 
-impl LspContext for BazelContext {
+impl<'v> LspContext for BazelContext<'v> {
     fn parse_file_with_contents(&self, uri: &LspUrl, content: String) -> LspEvalResult {
         match uri {
             LspUrl::File(uri) => {
@@ -637,27 +646,32 @@ impl LspContext for BazelContext {
         path: &str,
         current_file: &LspUrl,
         workspace_root: Option<&std::path::Path>,
-    ) -> anyhow::Result<LspUrl> {
-        let label = Label::parse(path)?;
+    ) -> Result<LspUrl, String> {
+        (|| {
+            let label = Label::parse(path)?;
 
-        let folder = self.resolve_folder(&label, current_file, workspace_root)?;
+            let folder = self.resolve_folder(&label, current_file, workspace_root)?;
 
-        // Try the presumed filename first, and check if it exists.
-        let presumed_path = folder.join(label.name);
-        if presumed_path.exists() {
-            return Ok(Url::from_file_path(presumed_path).unwrap().try_into()?);
-        }
-
-        // If the presumed filename doesn't exist, try to find a build file from the build system
-        // and use that instead.
-        for build_file_name in Self::BUILD_FILE_NAMES {
-            let path = folder.join(build_file_name);
-            if path.exists() {
-                return Ok(Url::from_file_path(path).unwrap().try_into()?);
+            // Try the presumed filename first, and check if it exists.
+            let presumed_path = folder.join(label.name);
+            if presumed_path.exists() {
+                return Ok(Url::from_file_path(presumed_path).unwrap().try_into()?);
             }
-        }
 
-        Err(ResolveLoadError::TargetNotFound(path.to_owned()).into())
+            // If the presumed filename doesn't exist, try to find a build file from the build system
+            // and use that instead.
+            for build_file_name in Self::BUILD_FILE_NAMES {
+                let path = folder.join(build_file_name);
+                if path.exists() {
+                    return Ok(Url::from_file_path(path).unwrap().try_into()?);
+                }
+            }
+
+            Err(anyhow::Error::from(ResolveLoadError::TargetNotFound(
+                path.to_owned(),
+            )))
+        })()
+        .map_err(|e| e.to_string())
     }
 
     fn render_as_load(
@@ -665,7 +679,7 @@ impl LspContext for BazelContext {
         target: &LspUrl,
         current_file: &LspUrl,
         workspace_root: Option<&Path>,
-    ) -> anyhow::Result<String> {
+    ) -> Result<String, String> {
         match (target, current_file) {
             // Check whether the target and the current file are in the same package.
             (LspUrl::File(target_path), LspUrl::File(current_file_path)) if matches!((target_path.parent(), current_file_path.parent()), (Some(a), Some(b)) if a == b) =>
@@ -674,7 +688,9 @@ impl LspContext for BazelContext {
                 let target_filename = target_path.file_name();
                 match target_filename {
                     Some(filename) => Ok(format!(":{}", filename.to_string_lossy())),
-                    None => Err(RenderLoadError::MissingTargetFilename(target_path.clone()).into()),
+                    None => {
+                        Err(RenderLoadError::MissingTargetFilename(target_path.clone()).to_string())
+                    }
                 }
             }
             (LspUrl::File(target_path), _) => {
@@ -704,7 +720,8 @@ impl LspContext for BazelContext {
                         filename.to_string_lossy()
                     )),
                     None => Err(
-                        RenderLoadError::MissingTargetFilename(target_path.to_path_buf()).into(),
+                        RenderLoadError::MissingTargetFilename(target_path.to_path_buf())
+                            .to_string(),
                     ),
                 }
             }
@@ -713,7 +730,7 @@ impl LspContext for BazelContext {
                 target.clone(),
                 current_file.clone(),
             )
-            .into()),
+            .to_string()),
         }
     }
 
@@ -722,7 +739,7 @@ impl LspContext for BazelContext {
         literal: &str,
         current_file: &LspUrl,
         workspace_root: Option<&Path>,
-    ) -> anyhow::Result<Option<StringLiteralResult>> {
+    ) -> Result<Option<StringLiteralResult>, String> {
         self.resolve_load(literal, current_file, workspace_root)
             .map(|url| {
                 let original_target_name = Path::new(literal).file_name();
@@ -748,18 +765,18 @@ impl LspContext for BazelContext {
             })
     }
 
-    fn get_load_contents(&self, uri: &LspUrl) -> anyhow::Result<Option<String>> {
+    fn get_load_contents(&self, uri: &LspUrl) -> Result<Option<String>, String> {
         match uri {
             LspUrl::File(path) => match path.is_absolute() {
                 true => match fs::read_to_string(path) {
                     Ok(contents) => Ok(Some(contents)),
                     Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
-                    Err(e) => Err(e.into()),
+                    Err(e) => Err(e.to_string()),
                 },
-                false => Err(ContextError::NotAbsolute(uri.clone()).into()),
+                false => Err(ContextError::NotAbsolute(uri.clone()).to_string()),
             },
             LspUrl::Starlark(_) => Ok(self.builtin_docs.get(uri).cloned()),
-            _ => Err(ContextError::WrongScheme("file://".to_owned(), uri.clone()).into()),
+            _ => Err(ContextError::WrongScheme("file://".to_owned(), uri.clone()).to_string()),
         }
     }
 
@@ -771,7 +788,7 @@ impl LspContext for BazelContext {
         &self,
         _current_file: &LspUrl,
         symbol: &str,
-    ) -> anyhow::Result<Option<LspUrl>> {
+    ) -> Result<Option<LspUrl>, String> {
         Ok(self.builtin_symbols.get(symbol).cloned())
     }
 
@@ -781,7 +798,7 @@ impl LspContext for BazelContext {
         kind: StringCompletionType,
         current_value: &str,
         workspace_root: Option<&Path>,
-    ) -> anyhow::Result<Vec<StringCompletionResult>> {
+    ) -> Result<Vec<StringCompletionResult>, String> {
         let offer_repository_names = current_value.is_empty()
             || current_value == "@"
             || (current_value.starts_with('@') && !current_value.contains('/'))
@@ -791,7 +808,7 @@ impl LspContext for BazelContext {
             self.get_repository_names()
                 .into_iter()
                 .map(|name| {
-                    let name_with_at = format!("@{}", name);
+                    let name_with_at = format!("@{name}");
                     let insert_text = format!("{}//", &name_with_at);
 
                     StringCompletionResult {
@@ -859,7 +876,8 @@ impl LspContext for BazelContext {
                         targets: complete_targets,
                     },
                     &mut names,
-                )?;
+                )
+                .map_err(|e| e.to_string())?;
             }
         }
 

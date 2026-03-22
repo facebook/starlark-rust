@@ -1,15 +1,16 @@
 /*
  * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
- * This source code is licensed under both the MIT license found in the
- * LICENSE-MIT file in the root directory of this source tree and the Apache
+ * This source code is dual-licensed under either the MIT license found in the
+ * LICENSE-MIT file in the root directory of this source tree or the Apache
  * License, Version 2.0 found in the LICENSE-APACHE file in the root directory
- * of this source tree.
+ * of this source tree. You may select, at your option, one of the
+ * above-listed licenses.
  */
 
 use quote::quote;
-use syn::parse_macro_input;
 use syn::DeriveInput;
+use syn::parse_macro_input;
 
 use crate::util::duplicate_impl;
 
@@ -19,7 +20,7 @@ pub fn derive_clone_(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
 
     let name = &input.ident;
     let body = duplicate_impl(&input.data, &quote! { ::std::clone::Clone::clone });
-    let gen = quote! {
+    let generated = quote! {
         // Clippy wants us to use Copy if we can - we prefer to be agnostic.
         // Add unknown_lints temporarily.
         #[allow(unknown_lints)]
@@ -30,5 +31,5 @@ pub fn derive_clone_(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
             }
         }
     };
-    gen.into()
+    generated.into()
 }

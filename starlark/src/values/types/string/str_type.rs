@@ -30,8 +30,8 @@ use std::sync::atomic;
 
 use allocative::Allocative;
 use serde::Serialize;
-use starlark_derive::starlark_value;
 use starlark_derive::ProvidesStaticType;
+use starlark_derive::starlark_value;
 use starlark_map::Hashed;
 use starlark_map::StarlarkHashValue;
 use starlark_map::StarlarkHasher;
@@ -45,15 +45,18 @@ use crate::environment::Methods;
 use crate::environment::MethodsStatic;
 use crate::private::Private;
 use crate::typing::Ty;
-use crate::values::index::apply_slice;
-use crate::values::none::NoneOr;
-use crate::values::string::interpolation;
-use crate::values::string::repr::string_repr;
+use crate::values::Freeze;
+use crate::values::FreezeResult;
+use crate::values::Freezer;
 use crate::values::Heap;
 use crate::values::StarlarkValue;
 use crate::values::UnpackValue;
 use crate::values::Value;
 use crate::values::ValueError;
+use crate::values::index::apply_slice;
+use crate::values::none::NoneOr;
+use crate::values::string::interpolation;
+use crate::values::string::repr::string_repr;
 
 /// The result of calling `type()` on strings.
 pub const STRING_TYPE: &str = "string";
@@ -77,6 +80,22 @@ pub(crate) struct StarlarkStrN<const N: usize> {
 #[repr(C)]
 pub struct StarlarkStr {
     str: StarlarkStrN<0>,
+}
+
+impl<const N: usize> Freeze for StarlarkStrN<N> {
+    type Frozen = StarlarkStrN<N>;
+
+    fn freeze(self, _freezer: &Freezer) -> FreezeResult<Self::Frozen> {
+        Ok(self)
+    }
+}
+
+impl Freeze for StarlarkStr {
+    type Frozen = StarlarkStr;
+
+    fn freeze(self, _freezer: &Freezer) -> FreezeResult<Self::Frozen> {
+        Ok(self)
+    }
 }
 
 impl Deref for StarlarkStr {
@@ -121,7 +140,7 @@ impl StarlarkStr {
     #[doc(hidden)]
     #[inline]
     pub const fn payload_len_for_len(len: usize) -> usize {
-        (len + mem::size_of::<usize>() - 1) / mem::size_of::<usize>()
+        len.div_ceil(mem::size_of::<usize>())
     }
 
     /// Unsafe because if you do `unpack` on this it will blow up
@@ -146,7 +165,7 @@ impl StarlarkStr {
     }
 
     #[inline]
-    pub(crate) fn as_aligned_padded_str(&self) -> AlignedPaddedStr {
+    pub(crate) fn as_aligned_padded_str(&self) -> AlignedPaddedStr<'_> {
         unsafe { AlignedPaddedStr::new(self.len(), self.str.body.as_ptr()) }
     }
 
@@ -208,11 +227,6 @@ impl Display for StarlarkStr {
     }
 }
 
-pub(crate) fn str_methods() -> Option<&'static Methods> {
-    static RES: MethodsStatic = MethodsStatic::new();
-    RES.methods(crate::values::types::string::methods::string_methods)
-}
-
 #[starlark_value(type = STRING_TYPE)]
 impl<'v> StarlarkValue<'v> for StarlarkStr {
     fn is_special(_: Private) -> bool
@@ -223,7 +237,10 @@ impl<'v> StarlarkValue<'v> for StarlarkStr {
     }
 
     fn get_methods() -> Option<&'static Methods> {
-        str_methods()
+        static RES: MethodsStatic = MethodsStatic::new();
+        RES.methods_for_type::<Self::Canonical>(
+            crate::values::types::string::methods::string_methods,
+        )
     }
 
     fn collect_repr(&self, buffer: &mut String) {
@@ -261,7 +278,7 @@ impl<'v> StarlarkValue<'v> for StarlarkStr {
         }
     }
 
-    fn at(&self, index: Value<'v>, heap: &'v Heap) -> crate::Result<Value<'v>> {
+    fn at(&self, index: Value<'v>, heap: Heap<'v>) -> crate::Result<Value<'v>> {
         // This method is disturbingly hot. Use the logic from `convert_index`,
         // but modified to be UTF8 string friendly.
         let i = i32::unpack_param(index)?;
@@ -298,7 +315,7 @@ impl<'v> StarlarkValue<'v> for StarlarkStr {
         start: Option<Value<'v>>,
         stop: Option<Value<'v>>,
         stride: Option<Value<'v>>,
-        heap: &'v Heap,
+        heap: Heap<'v>,
     ) -> crate::Result<Value<'v>> {
         let s = self;
         if matches!(stride, Some(stride) if stride.unpack_i32() != Some(1)) {
@@ -324,7 +341,7 @@ impl<'v> StarlarkValue<'v> for StarlarkStr {
         }
     }
 
-    fn add(&self, other: Value<'v>, heap: &'v Heap) -> Option<crate::Result<Value<'v>>> {
+    fn add(&self, other: Value<'v>, heap: Heap<'v>) -> Option<crate::Result<Value<'v>>> {
         if let Some(other_str) = other.unpack_str() {
             if self.is_empty() {
                 Some(Ok(other))
@@ -336,7 +353,7 @@ impl<'v> StarlarkValue<'v> for StarlarkStr {
         }
     }
 
-    fn mul(&self, other: Value<'v>, heap: &'v Heap) -> Option<crate::Result<Value<'v>>> {
+    fn mul(&self, other: Value<'v>, heap: Heap<'v>) -> Option<crate::Result<Value<'v>>> {
         let l = match i32::unpack_value(other) {
             Ok(Some(l)) => l,
             Ok(None) => return None,
@@ -349,11 +366,11 @@ impl<'v> StarlarkValue<'v> for StarlarkStr {
         Some(Ok(heap.alloc(result)))
     }
 
-    fn rmul(&self, lhs: Value<'v>, heap: &'v Heap) -> Option<crate::Result<Value<'v>>> {
+    fn rmul(&self, lhs: Value<'v>, heap: Heap<'v>) -> Option<crate::Result<Value<'v>>> {
         self.mul(lhs, heap)
     }
 
-    fn percent(&self, other: Value<'v>, heap: &'v Heap) -> crate::Result<Value<'v>> {
+    fn percent(&self, other: Value<'v>, heap: Heap<'v>) -> crate::Result<Value<'v>> {
         Ok(heap.alloc(interpolation::percent(self, other)?))
     }
 
@@ -374,9 +391,9 @@ impl Serialize for StarlarkStr {
 #[cfg(test)]
 mod tests {
     use crate::assert;
-    use crate::values::index::apply_slice;
     use crate::values::Heap;
     use crate::values::Value;
+    use crate::values::index::apply_slice;
 
     #[test]
     fn test_string_corruption() {
@@ -418,20 +435,23 @@ mod tests {
 
     #[test]
     fn test_string_hash() {
-        let heap = Heap::new();
-        for x in EXAMPLES {
-            assert_eq!(
-                heap.alloc_str(x).get_hashed().hash(),
-                heap.alloc(*x).get_hashed().unwrap().hash()
-            );
-        }
+        Heap::temp(|heap| {
+            for x in EXAMPLES {
+                assert_eq!(
+                    heap.alloc_str(x).get_hashed().hash(),
+                    heap.alloc(*x).get_hashed().unwrap().hash()
+                );
+            }
+        });
     }
 
     // If hash was zero, we'd need to mask the value in the hash cache.
+
     #[test]
     fn test_zero_length_string_hash_is_not_zero() {
-        let heap = Heap::new();
-        assert_ne!(0, heap.alloc("").get_hash().unwrap().get());
+        Heap::temp(|heap| {
+            assert_ne!(0, heap.alloc("").get_hash().unwrap().get());
+        });
     }
 
     #[test]
@@ -455,45 +475,46 @@ len("😿") == 1
 
     #[test]
     fn test_slice_string() {
-        let heap = Heap::new();
-        for example in EXAMPLES {
-            let s = heap.alloc_str(example).to_value();
-            for i in -5..=6 {
-                for j in -5..=6 {
-                    let start = if i == 6 {
-                        None
-                    } else {
-                        Some(Value::testing_new_int(i))
-                    };
-                    let stop = if j == 6 {
-                        None
-                    } else {
-                        Some(Value::testing_new_int(j))
-                    };
-                    // Compare list slicing (comparatively simple) to string slicing (complex unicode)
-                    let res1 = apply_slice(&example.chars().collect::<Vec<_>>(), start, stop, None)
-                        .unwrap()
-                        .iter()
-                        .collect::<String>();
-                    let res2 = s
-                        .slice(start, stop, None, &heap)
-                        .unwrap()
-                        .unpack_str()
-                        .unwrap();
-                    assert_eq!(
-                        &res1,
-                        res2,
-                        "{:?}[{}:{}]",
-                        example,
-                        start.map_or("".to_owned(), |x| x.to_string()),
-                        stop.map_or("".to_owned(), |x| x.to_string())
-                    );
+        Heap::temp(|heap| {
+            for example in EXAMPLES {
+                let s = heap.alloc_str(example).to_value();
+                for i in -5..=6 {
+                    for j in -5..=6 {
+                        let start = if i == 6 {
+                            None
+                        } else {
+                            Some(Value::testing_new_int(i))
+                        };
+                        let stop = if j == 6 {
+                            None
+                        } else {
+                            Some(Value::testing_new_int(j))
+                        };
+                        // Compare list slicing (comparatively simple) to string slicing (complex unicode)
+                        let res1 =
+                            apply_slice(&example.chars().collect::<Vec<_>>(), start, stop, None)
+                                .unwrap()
+                                .iter()
+                                .collect::<String>();
+                        let res2 = s
+                            .slice(start, stop, None, heap)
+                            .unwrap()
+                            .unpack_str()
+                            .unwrap();
+                        assert_eq!(
+                            &res1,
+                            res2,
+                            "{:?}[{}:{}]",
+                            example,
+                            start.map_or("".to_owned(), |x| x.to_string()),
+                            stop.map_or("".to_owned(), |x| x.to_string())
+                        );
+                    }
                 }
             }
-        }
 
-        assert::all_true(
-            r#"
+            assert::all_true(
+                r#"
 "abc"[1:] == "bc" # Remove the first element
 "abc"[:-1] == "ab" # Remove the last element
 "abc"[1:-1] == "b" # Remove the first and the last element
@@ -501,7 +522,8 @@ len("😿") == 1
 "banana"[4::-2] == "nnb" # Select one element out of 2 in reverse order, starting at index 4
 "242"[ -0:-2:-1] == "" # From https://github.com/facebook/starlark-rust/issues/35
 "#,
-        );
+            );
+        });
     }
 
     #[test]
@@ -526,25 +548,26 @@ len("😿") == 1
     #[test]
     fn test_string_index() -> crate::Result<()> {
         fn test_str(str: &str) -> crate::Result<()> {
-            let chars = str.chars().collect::<Vec<char>>();
-            let heap = Heap::new();
-            let val = heap.alloc(str);
-            let len = chars.len() as i32;
-            assert_eq!(val.length()?, len);
-            for (i, char) in chars.iter().enumerate() {
-                let char_str = char.to_string();
-                assert_eq!(
-                    val.at(heap.alloc(i), &heap)?.unpack_str(),
-                    Some(char_str.as_str())
-                );
-                assert_eq!(
-                    val.at(heap.alloc(-len + (i as i32)), &heap)?.unpack_str(),
-                    Some(char_str.as_str())
-                );
-            }
-            assert!(val.at(heap.alloc(len), &heap).is_err());
-            assert!(val.at(heap.alloc(-(len + 1)), &heap).is_err());
-            Ok(())
+            Heap::temp(|heap| {
+                let chars = str.chars().collect::<Vec<char>>();
+                let val = heap.alloc(str);
+                let len = chars.len() as i32;
+                assert_eq!(val.length()?, len);
+                for (i, char) in chars.iter().enumerate() {
+                    let char_str = char.to_string();
+                    assert_eq!(
+                        val.at(heap.alloc(i), heap)?.unpack_str(),
+                        Some(char_str.as_str())
+                    );
+                    assert_eq!(
+                        val.at(heap.alloc(-len + (i as i32)), heap)?.unpack_str(),
+                        Some(char_str.as_str())
+                    );
+                }
+                assert!(val.at(heap.alloc(len), heap).is_err());
+                assert!(val.at(heap.alloc(-(len + 1)), heap).is_err());
+                Ok(())
+            })
         }
 
         for x in EXAMPLES {

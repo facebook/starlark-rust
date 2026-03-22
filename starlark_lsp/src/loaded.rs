@@ -18,7 +18,6 @@
 use dupe::Dupe;
 use starlark::syntax::AstModule;
 use starlark_syntax::syntax::ast::StmtP;
-use starlark_syntax::syntax::module::AstModuleFields;
 use starlark_syntax::syntax::top_level_stmts::top_level_stmts;
 
 /// A loaded symbol. Returned from [`AstModule::loaded_symbols`].
@@ -34,7 +33,7 @@ pub struct LoadedSymbol<'a> {
 pub(crate) trait AstModuleLoadedSymbols {
     /// Which symbols are loaded by this module. These are the top-level load
     /// statements.
-    fn loaded_symbols<'a>(&'a self) -> Vec<LoadedSymbol<'a>>;
+    fn loaded_symbols(&self) -> Vec<LoadedSymbol<'_>>;
 }
 
 impl AstModuleLoadedSymbols for AstModule {

@@ -15,9 +15,9 @@
  * limitations under the License.
  */
 
+use std::alloc::Layout;
 use std::alloc::alloc;
 use std::alloc::dealloc;
-use std::alloc::Layout;
 use std::cell::Cell;
 use std::cell::RefCell;
 use std::mem;
@@ -85,7 +85,7 @@ impl Alloca {
     }
 
     pub fn with_capacity(size_bytes: usize) -> Self {
-        let size_words = (size_bytes + ALIGN - 1) / ALIGN;
+        let size_words = size_bytes.div_ceil(ALIGN);
         let layout = Layout::array::<Align>(size_words).unwrap();
         let buffer = Buffer::alloc(layout);
         Self {
@@ -131,14 +131,14 @@ impl Alloca {
 
     #[inline(always)]
     fn len_in_to_to_len_in_words<T>(len: usize) -> usize {
-        if mem::size_of::<T>() % ALIGN == 0 {
+        if mem::size_of::<T>().is_multiple_of(ALIGN) {
             // Special case to make common case fast:
             // https://rust.godbolt.org/z/adh3nzdzs
             len * (mem::size_of::<T>() / ALIGN)
         } else {
             // Multiplication does not overflow because we know that `[T; len]`
             // is within the size of the current buffer, which is smaller than `isize::MAX`.
-            (len * mem::size_of::<T>() + ALIGN - 1) / ALIGN
+            (len * mem::size_of::<T>()).div_ceil(ALIGN)
         }
     }
 
@@ -171,7 +171,7 @@ impl Alloca {
         // If the pointer changed, it means a callback called alloca again,
         // which allocated a new buffer. So we are abandoning the current allocation here,
         // and new allocations will use the new buffer even if the current buffer has space.
-        if likely(self.alloc.get() == stop) {
+        if likely(std::ptr::eq(self.alloc.get(), stop)) {
             self.alloc.set(old);
         }
 

@@ -32,42 +32,46 @@ use dupe::Dupe;
 use starlark_map::StarlarkHasher;
 
 use crate::codemap::Span;
+use crate::typing::Ty;
+use crate::typing::TyBasic;
+use crate::typing::TyFunction;
+use crate::typing::TypingBinOp;
+use crate::typing::TypingOracleCtx;
 use crate::typing::call_args::TyCallArgs;
 use crate::typing::callable::TyCallable;
 use crate::typing::error::InternalError;
 use crate::typing::error::TypingNoContextError;
 use crate::typing::error::TypingNoContextOrInternalError;
 use crate::typing::error::TypingOrInternalError;
-use crate::typing::Ty;
-use crate::typing::TyBasic;
-use crate::typing::TyFunction;
-use crate::typing::TypingBinOp;
-use crate::typing::TypingOracleCtx;
+use crate::values::Value;
 use crate::values::typing::type_compiled::alloc::TypeMatcherAlloc;
 use crate::values::typing::type_compiled::compiled::TypeCompiled;
 use crate::values::typing::type_compiled::factory::TypeCompiledFactory;
 use crate::values::typing::type_compiled::matcher::TypeMatcherBox;
 use crate::values::typing::type_compiled::matcher::TypeMatcherBoxAlloc;
-use crate::values::Value;
 
 /// Custom type implementation. [`Display`] must implement the representation of the type.
 pub trait TyCustomImpl: Debug + Display + Hash + Ord + Allocative + Send + Sync + 'static {
+    /// The type name used for display and error messages.
     fn as_name(&self) -> Option<&str>;
+    /// Type-check a call expression, returning the result type.
     fn validate_call(
         &self,
         span: Span,
         _args: &TyCallArgs,
         oracle: TypingOracleCtx,
     ) -> Result<Ty, TypingOrInternalError> {
-        Err(oracle.msg_error(span, format!("Value of type `{}` is not callable", self)))
+        Err(oracle.msg_error(span, format!("Value of type `{self}` is not callable")))
     }
     /// Must override if implementing `validate_call`.
     fn as_callable(&self) -> Option<TyCallable> {
         None
     }
+    /// Underlying `TyFunction`, if this type wraps one.
     fn as_function(&self) -> Option<&TyFunction> {
         None
     }
+    /// Result type of `self <op> rhs`.
     fn bin_op(
         &self,
         bin_op: TypingBinOp,
@@ -77,9 +81,11 @@ pub trait TyCustomImpl: Debug + Display + Hash + Ord + Allocative + Send + Sync 
         let _unused = (bin_op, rhs, ctx);
         Err(TypingNoContextOrInternalError::Typing)
     }
+    /// Element type when iterating (`for x in self`).
     fn iter_item(&self) -> Result<Ty, TypingNoContextError> {
         Err(TypingNoContextError)
     }
+    /// Result type of `self[item]`.
     fn index(
         &self,
         item: &TyBasic,
@@ -88,10 +94,13 @@ pub trait TyCustomImpl: Debug + Display + Hash + Ord + Allocative + Send + Sync 
         let _unused = (item, ctx);
         Err(TypingNoContextOrInternalError::Typing)
     }
+    /// Type of `self.attr`.
     fn attribute(&self, attr: &str) -> Result<Ty, TypingNoContextError>;
+    /// Merge `x | other` into a single custom type, or fail.
     fn union2(x: Arc<Self>, other: Arc<Self>) -> Result<Arc<Self>, (Arc<Self>, Arc<Self>)> {
         if x == other { Ok(x) } else { Err((x, other)) }
     }
+    /// Whether `x` and `y` could represent overlapping values.
     fn intersects(x: &Self, y: &Self) -> bool {
         let _ignore = (x, y);
         true
@@ -100,15 +109,14 @@ pub trait TyCustomImpl: Debug + Display + Hash + Ord + Allocative + Send + Sync 
     fn intersects_with(&self, _other: &TyBasic) -> bool {
         false
     }
-
     /// Create runtime type matcher for values.
     fn matcher<T: TypeMatcherAlloc>(&self, factory: T) -> T::Result;
 }
 
 pub(crate) trait TyCustomDyn: Debug + Display + Allocative + Send + Sync + 'static {
-    fn eq_token(&self) -> PartialEqAny;
+    fn eq_token(&self) -> PartialEqAny<'_>;
     fn hash_code(&self) -> u64;
-    fn cmp_token(&self) -> (OrdAny, &'static str);
+    fn cmp_token(&self) -> (OrdAny<'_>, &'static str);
     fn into_any(self: Arc<Self>) -> Arc<dyn Any + Send + Sync>;
     fn as_any(&self) -> &dyn Any;
 
@@ -150,7 +158,7 @@ pub(crate) trait TyCustomDyn: Debug + Display + Allocative + Send + Sync + 'stat
 }
 
 impl<T: TyCustomImpl> TyCustomDyn for T {
-    fn eq_token(&self) -> PartialEqAny {
+    fn eq_token(&self) -> PartialEqAny<'_> {
         PartialEqAny::new(self)
     }
 
@@ -160,7 +168,7 @@ impl<T: TyCustomImpl> TyCustomDyn for T {
         hasher.finish()
     }
 
-    fn cmp_token(&self) -> (OrdAny, &'static str) {
+    fn cmp_token(&self) -> (OrdAny<'_>, &'static str) {
         (OrdAny::new(self), any::type_name::<Self>())
     }
 
@@ -288,13 +296,10 @@ impl TyCustom {
         }
         match other {
             TyBasic::Custom(other) => Ok(Self::intersects(self, other)),
-            TyBasic::Callable(c) => {
-                if let Some(this) = self.0.as_callable_dyn() {
-                    ctx.callables_intersect(&this, c)
-                } else {
-                    Ok(false)
-                }
-            }
+            TyBasic::Callable(c) => match self.0.as_callable_dyn() {
+                Some(this) => ctx.callables_intersect(&this, c),
+                _ => Ok(false),
+            },
             _ => Ok(false),
         }
     }

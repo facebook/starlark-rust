@@ -1,34 +1,35 @@
 /*
  * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
- * This source code is licensed under both the MIT license found in the
- * LICENSE-MIT file in the root directory of this source tree and the Apache
+ * This source code is dual-licensed under either the MIT license found in the
+ * LICENSE-MIT file in the root directory of this source tree or the Apache
  * License, Version 2.0 found in the LICENSE-APACHE file in the root directory
- * of this source tree.
+ * of this source tree. You may select, at your option, one of the
+ * above-listed licenses.
  */
 
 use proc_macro2::TokenStream;
 use quote::quote;
 use quote::quote_spanned;
-use syn::spanned::Spanned;
 use syn::Data;
 use syn::DataStruct;
 use syn::DeriveInput;
 use syn::Fields;
+use syn::spanned::Spanned;
 
 pub fn derive_default_(input: DeriveInput) -> proc_macro::TokenStream {
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
 
     let name = &input.ident;
     let body = default_impl(&input.data);
-    let gen = quote! {
+    let r#gen = quote! {
         impl #impl_generics ::std::default::Default for #name #ty_generics #where_clause {
             fn default() -> Self {
                 #body
             }
         }
     };
-    gen.into()
+    r#gen.into()
 }
 
 fn default_struct(data: &DataStruct) -> TokenStream {

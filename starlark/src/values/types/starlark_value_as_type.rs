@@ -24,8 +24,8 @@ use std::fmt::Formatter;
 use std::marker::PhantomData;
 
 use allocative::Allocative;
-use starlark_derive::starlark_value;
 use starlark_derive::NoSerialize;
+use starlark_derive::starlark_value;
 
 use crate as starlark;
 use crate::any::ProvidesStaticType;
@@ -34,20 +34,17 @@ use crate::docs::DocMember;
 use crate::docs::DocProperty;
 use crate::docs::DocType;
 use crate::typing::Ty;
-use crate::values::layout::avalue::alloc_static;
-use crate::values::layout::avalue::AValueBasic;
-use crate::values::layout::avalue::AValueImpl;
-use crate::values::layout::heap::repr::AValueRepr;
-use crate::values::type_repr::StarlarkTypeRepr;
-use crate::values::typing::ty::AbstractType;
-use crate::values::typing::TypeType;
 use crate::values::AllocFrozenValue;
+use crate::values::AllocStaticSimple;
 use crate::values::AllocValue;
 use crate::values::FrozenHeap;
 use crate::values::FrozenValue;
 use crate::values::Heap;
 use crate::values::StarlarkValue;
 use crate::values::Value;
+use crate::values::type_repr::StarlarkTypeRepr;
+use crate::values::typing::TypeType;
+use crate::values::typing::ty::AbstractType;
 
 #[derive(Debug, NoSerialize, Allocative, ProvidesStaticType)]
 struct StarlarkValueAsTypeStarlarkValue(fn() -> Ty, fn() -> DocItem);
@@ -58,6 +55,14 @@ impl<'v> StarlarkValue<'v> for StarlarkValueAsTypeStarlarkValue {
 
     fn eval_type(&self) -> Option<Ty> {
         Some((self.0)())
+    }
+
+    fn at(&self, _index: Value<'v>, _heap: Heap<'v>) -> crate::Result<Value<'v>> {
+        let base_ty = (self.0)();
+        Err(crate::Error::new_other(anyhow::anyhow!(
+            "Type `{}` does not support type parameters",
+            base_ty,
+        )))
     }
 
     fn documentation(&self) -> DocItem {
@@ -79,10 +84,10 @@ impl Display for StarlarkValueAsTypeStarlarkValue {
 /// use allocative::Allocative;
 /// use starlark::any::ProvidesStaticType;
 /// use starlark::environment::GlobalsBuilder;
-/// use starlark::values::starlark_value;
-/// use starlark::values::starlark_value_as_type::StarlarkValueAsType;
 /// use starlark::values::NoSerialize;
 /// use starlark::values::StarlarkValue;
+/// use starlark::values::starlark_value;
+/// use starlark::values::starlark_value_as_type::StarlarkValueAsType;
 /// #[derive(
 ///     Debug,
 ///     derive_more::Display,
@@ -104,7 +109,7 @@ impl Display for StarlarkValueAsTypeStarlarkValue {
 /// }
 /// ```
 pub struct StarlarkValueAsType<T: StarlarkTypeRepr>(
-    &'static AValueRepr<AValueImpl<'static, AValueBasic<StarlarkValueAsTypeStarlarkValue>>>,
+    &'static AllocStaticSimple<StarlarkValueAsTypeStarlarkValue>,
     PhantomData<fn(&T)>,
 );
 
@@ -132,7 +137,7 @@ impl<T: StarlarkTypeRepr> StarlarkValueAsType<T> {
     {
         StarlarkValueAsType(
             &const {
-                alloc_static(StarlarkValueAsTypeStarlarkValue(
+                AllocStaticSimple::alloc(StarlarkValueAsTypeStarlarkValue(
                     T::starlark_type_repr,
                     || DocItem::Type(DocType::from_starlark_value::<T>()),
                 ))
@@ -145,7 +150,7 @@ impl<T: StarlarkTypeRepr> StarlarkValueAsType<T> {
     pub const fn new_no_docs() -> Self {
         StarlarkValueAsType(
             &const {
-                alloc_static(StarlarkValueAsTypeStarlarkValue(
+                AllocStaticSimple::alloc(StarlarkValueAsTypeStarlarkValue(
                     T::starlark_type_repr,
                     || {
                         DocItem::Member(DocMember::Property(DocProperty {
@@ -169,34 +174,34 @@ impl<T: StarlarkTypeRepr> StarlarkTypeRepr for StarlarkValueAsType<T> {
 }
 
 impl<'v, T: StarlarkTypeRepr> AllocValue<'v> for StarlarkValueAsType<T> {
-    fn alloc_value(self, _heap: &'v Heap) -> Value<'v> {
-        FrozenValue::new_repr(self.0).to_value()
+    fn alloc_value(self, _heap: Heap<'v>) -> Value<'v> {
+        self.0.to_frozen_value().to_value()
     }
 }
 
 impl<T: StarlarkTypeRepr> AllocFrozenValue for StarlarkValueAsType<T> {
     fn alloc_frozen_value(self, _heap: &FrozenHeap) -> FrozenValue {
-        FrozenValue::new_repr(self.0)
+        self.0.to_frozen_value()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use allocative::Allocative;
-    use starlark_derive::starlark_module;
-    use starlark_derive::starlark_value;
     use starlark_derive::NoSerialize;
     use starlark_derive::ProvidesStaticType;
+    use starlark_derive::starlark_module;
+    use starlark_derive::starlark_value;
 
     use crate as starlark;
     use crate::assert::Assert;
     use crate::environment::GlobalsBuilder;
-    use crate::values::types::starlark_value_as_type::tests;
-    use crate::values::types::starlark_value_as_type::StarlarkValueAsType;
     use crate::values::AllocValue;
     use crate::values::Heap;
     use crate::values::StarlarkValue;
     use crate::values::Value;
+    use crate::values::types::starlark_value_as_type::StarlarkValueAsType;
+    use crate::values::types::starlark_value_as_type::tests;
 
     #[derive(
         derive_more::Display,
@@ -211,7 +216,7 @@ mod tests {
     impl<'v> StarlarkValue<'v> for CompilerArgs {}
 
     impl<'v> AllocValue<'v> for CompilerArgs {
-        fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
+        fn alloc_value(self, heap: Heap<'v>) -> Value<'v> {
             heap.alloc_simple(self)
         }
     }
@@ -264,6 +269,38 @@ def h(x: CompilerArgs): pass
 noop(h)(1)
             "#,
             r#"Value `1` of type `int` does not match the type annotation"#,
+        );
+    }
+
+    #[test]
+    fn test_unsupported_param_on_custom_type() {
+        let mut a = Assert::new();
+        a.globals_add(compiler_args_globals);
+        a.fail(
+            r#"
+def f(x: CompilerArgs[int]): pass
+"#,
+            "does not support type parameters",
+        );
+    }
+
+    #[test]
+    fn test_supported_param_list() {
+        let a = Assert::new();
+        a.pass(
+            r#"
+def f(x: list[str]): pass
+"#,
+        );
+    }
+
+    #[test]
+    fn test_supported_param_dict() {
+        let a = Assert::new();
+        a.pass(
+            r#"
+def f(x: dict[str, int]): pass
+"#,
         );
     }
 }

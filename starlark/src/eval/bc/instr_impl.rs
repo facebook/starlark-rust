@@ -24,11 +24,15 @@ use std::ptr;
 use starlark_syntax::eval_exception::EvalException;
 
 use crate::coerce::coerce;
-use crate::collections::symbol::symbol::Symbol;
 use crate::collections::Hashed;
 use crate::collections::SmallMap;
+use crate::collections::symbol::symbol::Symbol;
 use crate::const_frozen_string;
 use crate::environment::slots::ModuleSlotId;
+use crate::eval::Arguments;
+use crate::eval::DefInfo;
+use crate::eval::Evaluator;
+use crate::eval::ParametersSpec;
 use crate::eval::bc::addr::BcAddrOffset;
 use crate::eval::bc::addr::BcAddrOffsetNeg;
 use crate::eval::bc::addr::BcPtrAddr;
@@ -53,31 +57,19 @@ use crate::eval::compiler::def::Def;
 use crate::eval::compiler::def::FrozenDef;
 use crate::eval::compiler::def::ParameterCompiled;
 use crate::eval::compiler::def::ParametersCompiled;
+use crate::eval::compiler::expr::EvalError;
 use crate::eval::compiler::expr::get_attr_hashed_bind;
 use crate::eval::compiler::expr::get_attr_hashed_raw;
-use crate::eval::compiler::expr::EvalError;
 use crate::eval::compiler::expr_throw_starlark_result;
+use crate::eval::compiler::stmt::AssignError;
 use crate::eval::compiler::stmt::add_assign;
 use crate::eval::compiler::stmt::bit_or_assign;
 use crate::eval::compiler::stmt::possible_gc;
-use crate::eval::compiler::stmt::AssignError;
 use crate::eval::runtime::arguments::ResolvedArgName;
 use crate::eval::runtime::frame_span::FrameSpan;
 use crate::eval::runtime::profile::instant::ProfilerInstant;
 use crate::eval::runtime::slots::LocalCapturedSlotId;
 use crate::eval::runtime::slots::LocalSlotId;
-use crate::eval::Arguments;
-use crate::eval::DefInfo;
-use crate::eval::Evaluator;
-use crate::eval::ParametersSpec;
-use crate::values::dict::Dict;
-use crate::values::int::pointer_i32::PointerI32;
-use crate::values::layout::value_not_special::FrozenValueNotSpecial;
-use crate::values::string::dot_format::format_one;
-use crate::values::string::interpolation::percent_s_one;
-use crate::values::types::known_methods::KnownMethod;
-use crate::values::types::list::value::ListData;
-use crate::values::typing::type_compiled::compiled::TypeCompiled;
 use crate::values::FrozenRef;
 use crate::values::FrozenStringValue;
 use crate::values::FrozenValue;
@@ -87,6 +79,14 @@ use crate::values::StarlarkValue;
 use crate::values::StringValue;
 use crate::values::StringValueLike;
 use crate::values::Value;
+use crate::values::dict::Dict;
+use crate::values::int::pointer_i32::PointerI32;
+use crate::values::layout::value_not_special::FrozenValueNotSpecial;
+use crate::values::string::dot_format::format_one;
+use crate::values::string::interpolation::percent_s_one;
+use crate::values::types::known_methods::KnownMethod;
+use crate::values::types::list::value::ListData;
+use crate::values::typing::type_compiled::compiled::TypeCompiled;
 
 /// Instructions which either fail or proceed to the following instruction,
 /// and it returns error with span.
@@ -459,7 +459,7 @@ pub(crate) type InstrEqInt = InstrNoFlow<InstrEqIntImpl>;
 
 impl InstrBinOpImpl for InstrEqImpl {
     #[inline(always)]
-    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, _heap: &'v Heap) -> crate::Result<Value<'v>> {
+    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, _heap: Heap<'v>) -> crate::Result<Value<'v>> {
         v0.equals(v1).map(Value::new_bool)
     }
 }
@@ -552,38 +552,38 @@ pub(crate) type InstrBitNot = InstrUnOp<InstrBitNotImpl>;
 
 impl InstrUnOpImpl for InstrNotImpl {
     #[inline(always)]
-    fn eval<'v>(v: Value<'v>, _heap: &'v Heap) -> crate::Result<Value<'v>> {
+    fn eval<'v>(v: Value<'v>, _heap: Heap<'v>) -> crate::Result<Value<'v>> {
         Ok(Value::new_bool(!v.to_bool()))
     }
 }
 
 impl InstrUnOpImpl for InstrPlusImpl {
     #[inline(always)]
-    fn eval<'v>(v: Value<'v>, heap: &'v Heap) -> crate::Result<Value<'v>> {
+    fn eval<'v>(v: Value<'v>, heap: Heap<'v>) -> crate::Result<Value<'v>> {
         v.plus(heap)
     }
 }
 
 impl InstrUnOpImpl for InstrMinusImpl {
     #[inline(always)]
-    fn eval<'v>(v: Value<'v>, heap: &'v Heap) -> crate::Result<Value<'v>> {
+    fn eval<'v>(v: Value<'v>, heap: Heap<'v>) -> crate::Result<Value<'v>> {
         v.minus(heap)
     }
 }
 
 impl InstrUnOpImpl for InstrBitNotImpl {
     #[inline(always)]
-    fn eval<'v>(v: Value<'v>, heap: &'v Heap) -> crate::Result<Value<'v>> {
+    fn eval<'v>(v: Value<'v>, heap: Heap<'v>) -> crate::Result<Value<'v>> {
         v.bit_not(heap)
     }
 }
 
 pub(crate) trait InstrBinOpImpl: 'static {
-    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: &'v Heap) -> crate::Result<Value<'v>>;
+    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: Heap<'v>) -> crate::Result<Value<'v>>;
 }
 
 pub(crate) trait InstrUnOpImpl: 'static {
-    fn eval<'v>(v: Value<'v>, heap: &'v Heap) -> crate::Result<Value<'v>>;
+    fn eval<'v>(v: Value<'v>, heap: Heap<'v>) -> crate::Result<Value<'v>>;
 }
 
 pub(crate) struct InstrBinOpWrapper<I: InstrBinOpImpl>(marker::PhantomData<I>);
@@ -658,98 +658,98 @@ pub(crate) type InstrIn = InstrBinOp<InstrInImpl>;
 
 impl InstrBinOpImpl for InstrAddImpl {
     #[inline(always)]
-    fn eval<'v>(l: Value<'v>, r: Value<'v>, heap: &'v Heap) -> crate::Result<Value<'v>> {
+    fn eval<'v>(l: Value<'v>, r: Value<'v>, heap: Heap<'v>) -> crate::Result<Value<'v>> {
         l.add(r, heap)
     }
 }
 
 impl InstrBinOpImpl for InstrAddAssignImpl {
     #[inline(always)]
-    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: &'v Heap) -> crate::Result<Value<'v>> {
+    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: Heap<'v>) -> crate::Result<Value<'v>> {
         add_assign(v0, v1, heap)
     }
 }
 
 impl InstrBinOpImpl for InstrSubImpl {
     #[inline(always)]
-    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: &'v Heap) -> crate::Result<Value<'v>> {
+    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: Heap<'v>) -> crate::Result<Value<'v>> {
         v0.sub(v1, heap)
     }
 }
 
 impl InstrBinOpImpl for InstrMultiplyImpl {
     #[inline(always)]
-    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: &'v Heap) -> crate::Result<Value<'v>> {
+    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: Heap<'v>) -> crate::Result<Value<'v>> {
         v0.mul(v1, heap)
     }
 }
 
 impl InstrBinOpImpl for InstrPercentImpl {
     #[inline(always)]
-    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: &'v Heap) -> crate::Result<Value<'v>> {
+    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: Heap<'v>) -> crate::Result<Value<'v>> {
         v0.percent(v1, heap)
     }
 }
 
 impl InstrBinOpImpl for InstrFloorDivideImpl {
     #[inline(always)]
-    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: &'v Heap) -> crate::Result<Value<'v>> {
+    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: Heap<'v>) -> crate::Result<Value<'v>> {
         v0.floor_div(v1, heap)
     }
 }
 
 impl InstrBinOpImpl for InstrDivideImpl {
     #[inline(always)]
-    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: &'v Heap) -> crate::Result<Value<'v>> {
+    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: Heap<'v>) -> crate::Result<Value<'v>> {
         v0.div(v1, heap)
     }
 }
 
 impl InstrBinOpImpl for InstrBitAndImpl {
     #[inline(always)]
-    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: &'v Heap) -> crate::Result<Value<'v>> {
+    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: Heap<'v>) -> crate::Result<Value<'v>> {
         v0.bit_and(v1, heap)
     }
 }
 
 impl InstrBinOpImpl for InstrBitOrImpl {
     #[inline(always)]
-    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: &'v Heap) -> crate::Result<Value<'v>> {
+    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: Heap<'v>) -> crate::Result<Value<'v>> {
         v0.bit_or(v1, heap)
     }
 }
 
 impl InstrBinOpImpl for InstrBitOrAssignImpl {
     #[inline(always)]
-    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: &'v Heap) -> crate::Result<Value<'v>> {
+    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: Heap<'v>) -> crate::Result<Value<'v>> {
         bit_or_assign(v0, v1, heap)
     }
 }
 
 impl InstrBinOpImpl for InstrBitXorImpl {
     #[inline(always)]
-    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: &'v Heap) -> crate::Result<Value<'v>> {
+    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: Heap<'v>) -> crate::Result<Value<'v>> {
         v0.bit_xor(v1, heap)
     }
 }
 
 impl InstrBinOpImpl for InstrLeftShiftImpl {
     #[inline(always)]
-    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: &'v Heap) -> crate::Result<Value<'v>> {
+    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: Heap<'v>) -> crate::Result<Value<'v>> {
         v0.left_shift(v1, heap)
     }
 }
 
 impl InstrBinOpImpl for InstrRightShiftImpl {
     #[inline(always)]
-    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: &'v Heap) -> crate::Result<Value<'v>> {
+    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: Heap<'v>) -> crate::Result<Value<'v>> {
         v0.right_shift(v1, heap)
     }
 }
 
 impl InstrBinOpImpl for InstrInImpl {
     #[inline(always)]
-    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, _heap: &'v Heap) -> crate::Result<Value<'v>> {
+    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, _heap: Heap<'v>) -> crate::Result<Value<'v>> {
         Ok(Value::new_bool(v1.is_in(v0)?))
     }
 }
@@ -801,7 +801,7 @@ pub(crate) struct InstrCompare<I: InstrCompareImpl>(marker::PhantomData<I>);
 
 impl<I: InstrCompareImpl> InstrBinOpImpl for InstrCompare<I> {
     #[inline(always)]
-    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, _heap: &'v Heap) -> crate::Result<Value<'v>> {
+    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, _heap: Heap<'v>) -> crate::Result<Value<'v>> {
         Ok(Value::new_bool(I::eval_compare(v0.compare(v1)?)))
     }
 }
@@ -849,7 +849,7 @@ pub(crate) type InstrType = InstrUnOp<InstrTypeImpl>;
 
 impl InstrUnOpImpl for InstrTypeImpl {
     #[inline(always)]
-    fn eval<'v>(v: Value<'v>, _heap: &'v Heap) -> crate::Result<Value<'v>> {
+    fn eval<'v>(v: Value<'v>, _heap: Heap<'v>) -> crate::Result<Value<'v>> {
         Ok(v.get_type_value().to_frozen_value().to_value())
     }
 }
@@ -899,7 +899,7 @@ pub(crate) type InstrLen = InstrUnOp<InstrLenImpl>;
 
 impl InstrUnOpImpl for InstrLenImpl {
     #[inline(always)]
-    fn eval<'v>(v: Value<'v>, heap: &'v Heap) -> crate::Result<Value<'v>> {
+    fn eval<'v>(v: Value<'v>, heap: Heap<'v>) -> crate::Result<Value<'v>> {
         Ok(heap.alloc(v.length()?))
     }
 }
@@ -998,7 +998,7 @@ impl InstrNoFlowImpl for InstrDictNPopImpl {
         (npops, target): &(BcSlotInRange, BcSlotOut),
     ) -> crate::Result<()> {
         let items = frame.get_bc_slot_range(*npops);
-        debug_assert!(items.len() % 2 == 0);
+        debug_assert!(items.len().is_multiple_of(2));
         let mut dict = SmallMap::with_capacity(items.len() / 2);
         for i in 0..items.len() / 2 {
             let k = items[i * 2];
@@ -1276,6 +1276,9 @@ impl BcInstr for InstrContinue {
             BcAddrOffset,
         ),
     ) -> InstrControl<'v, 'b> {
+        if let Err(e) = eval.report_forward_progress() {
+            return InstrControl::Err(e);
+        }
         let iter = frame.get_bc_slot(*iter);
         let loop_depth = *loop_depth;
         let i = frame.get_iter_index(loop_depth);
@@ -1545,6 +1548,7 @@ impl<A: BcCallArgs<Symbol>> InstrNoFlowImpl for InstrCallImpl<A> {
         _ip: BcPtrAddr,
         (this, args, span, target): &(BcSlotIn, A, FrozenRef<'static, FrameSpan>, BcSlotOut),
     ) -> crate::Result<()> {
+        eval.report_forward_progress()?;
         let f = frame.get_bc_slot(*this);
         let arguments = Arguments(args.pop_from_stack(frame));
         let r = f.invoke_with_loc(Some(*span), &arguments, eval)?;
@@ -1565,6 +1569,7 @@ impl<F: BcFrozenCallable, A: BcCallArgs<Symbol>> InstrNoFlowImpl
         _ip: BcPtrAddr,
         (fun, args, span, target): &(F, A, FrozenRef<'static, FrameSpan>, BcSlotOut),
     ) -> crate::Result<()> {
+        eval.report_forward_progress()?;
         let arguments = Arguments(args.pop_from_stack(frame));
         let r = fun.bc_invoke(*span, &arguments, eval)?;
         frame.set_bc_slot(*target, r);
@@ -1592,6 +1597,7 @@ impl<A: BcCallArgsForDef> InstrNoFlowImpl for InstrCallFrozenDefImpl<A> {
             BcSlotOut,
         ),
     ) -> crate::Result<()> {
+        eval.report_forward_progress()?;
         let arguments = args.pop_from_stack(frame);
         let r = eval.with_call_stack(fun.to_value(), Some(*span), |eval| {
             fun.as_ref()
@@ -1613,6 +1619,7 @@ fn call_method_common<'v>(
     span: FrozenRef<'static, FrameSpan>,
     target: BcSlotOut,
 ) -> crate::Result<()> {
+    eval.report_forward_progress()?;
     // TODO: wrong span: should be span of `object.method`, not of the whole expression
     let method = get_attr_hashed_raw(this, symbol, eval.heap())?;
     let r = method.invoke(this, span, arguments, eval)?;

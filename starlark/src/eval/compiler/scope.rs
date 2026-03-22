@@ -49,9 +49,9 @@ use starlark_syntax::syntax::uniplate::VisitMut;
 
 use crate::codemap::CodeMap;
 use crate::codemap::Span;
+use crate::environment::Module;
 use crate::environment::names::MutableNames;
 use crate::environment::slots::ModuleSlotId;
-use crate::environment::Module;
 use crate::errors::did_you_mean::did_you_mean;
 use crate::eval::compiler::def::CopySlotFromParent;
 use crate::eval::compiler::scope::payload::CstAssignIdent;
@@ -66,8 +66,8 @@ use crate::eval::compiler::scope::payload::CstTypeExpr;
 use crate::eval::compiler::scope::scope_resolver_globals::ScopeResolverGlobals;
 use crate::eval::runtime::slots::LocalSlotIdCapturedOrNot;
 use crate::syntax::Dialect;
-use crate::typing::error::InternalError;
 use crate::typing::Interface;
+use crate::typing::error::InternalError;
 use crate::values::FrozenHeap;
 use crate::values::FrozenRef;
 use crate::values::FrozenStringValue;
@@ -1125,7 +1125,7 @@ impl<'f> Binding<'f> {
 
     /// Initialize the slot during analysis.
     pub(crate) fn init_slot(&mut self, slot: Slot, codemap: &CodeMap) -> Result<(), InternalError> {
-        match mem::replace(&mut self.slot, Some(slot)) {
+        match self.slot.replace(slot) {
             Some(_) => Err(InternalError::msg(
                 "slot is already assigned",
                 self.span(),

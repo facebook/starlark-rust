@@ -23,12 +23,12 @@ use std::sync::Arc;
 use allocative::Allocative;
 use dupe::Dupe;
 
+use crate::typing::Ty;
+use crate::typing::TypingOracleCtx;
 use crate::typing::arc_ty::ArcTy;
 use crate::typing::error::InternalError;
 use crate::typing::starlark_value::TyStarlarkValue;
 use crate::typing::ty::TypeRenderConfig;
-use crate::typing::Ty;
-use crate::typing::TypingOracleCtx;
 use crate::values::typing::type_compiled::alloc::TypeMatcherAlloc;
 use crate::values::typing::type_compiled::matcher::TypeMatcherBoxAlloc;
 use crate::values::typing::type_compiled::matchers::IsTupleElems;
@@ -160,14 +160,14 @@ impl Display for TyTuple {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             TyTuple::Elems(elems) => match &**elems {
-                [x] => write!(f, "({},)", x),
+                [x] => write!(f, "({x},)"),
                 xs => display_container::fmt_container(f, "(", ")", xs),
             },
             TyTuple::Of(item) => {
                 if item.is_any() {
                     write!(f, "tuple")
                 } else {
-                    write!(f, "tuple[{}, ...]", item)
+                    write!(f, "tuple[{item}, ...]")
                 }
             }
         }

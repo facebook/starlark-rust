@@ -24,12 +24,12 @@ use std::slice;
 
 use dupe::Dupe;
 
+use crate::eval::Evaluator;
 use crate::eval::bc::for_loop::LoopDepth;
 use crate::eval::bc::stack_ptr::BcSlotIn;
 use crate::eval::bc::stack_ptr::BcSlotInRange;
 use crate::eval::bc::stack_ptr::BcSlotOut;
 use crate::eval::runtime::slots::LocalSlotIdCapturedOrNot;
-use crate::eval::Evaluator;
 use crate::values::Trace;
 use crate::values::Tracer;
 use crate::values::Value;
@@ -54,7 +54,7 @@ struct BcFrame<'v> {
     slots: [Option<Value<'v>>; 0],
 }
 
-const _: () = assert!(mem::size_of::<BcFrame>() % mem::size_of::<usize>() == 0);
+const _: () = assert!(mem::size_of::<BcFrame>().is_multiple_of(mem::size_of::<usize>()));
 const _: () = assert!(mem::align_of::<BcFrame>() == mem::align_of::<usize>());
 
 #[derive(Copy, Clone, Dupe)]

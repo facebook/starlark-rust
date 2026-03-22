@@ -26,7 +26,7 @@ fn convert_index_aux(
     default: i32,
     min: i32,
     max: i32,
-) -> anyhow::Result<i32> {
+) -> crate::Result<i32> {
     if let Some(v) = v1 {
         if v.is_none() {
             Ok(default)
@@ -51,7 +51,7 @@ fn convert_index_aux(
 /// Return an `i32` from self corresponding to the index recenterd between 0
 /// and len. Raise the correct errors if the value is not numeric or the
 /// index is out of bound.
-pub(crate) fn convert_index(v: Value, len: i32) -> anyhow::Result<i32> {
+pub(crate) fn convert_index(v: Value, len: i32) -> crate::Result<i32> {
     let x = i32::unpack_value_err(v)?;
     let i = if x < 0 {
         len.checked_add(x).ok_or(ValueError::IntegerOverflow)?
@@ -76,7 +76,7 @@ pub(crate) fn convert_slice_indices(
     start: Option<Value>,
     stop: Option<Value>,
     stride: Option<Value>,
-) -> anyhow::Result<(i32, i32, i32)> {
+) -> crate::Result<(i32, i32, i32)> {
     let stride = match stride {
         None => 1,
         Some(v) if v.is_none() => 1,
@@ -104,7 +104,7 @@ pub(crate) fn apply_slice<T: Copy>(
     start: Option<Value>,
     stop: Option<Value>,
     stride: Option<Value>,
-) -> anyhow::Result<Vec<T>> {
+) -> crate::Result<Vec<T>> {
     let (start, stop, stride) = convert_slice_indices(xs.len() as i32, start, stop, stride)?;
     if stride == 1 {
         if start >= stop {
@@ -148,42 +148,43 @@ pub(crate) fn apply_slice<T: Copy>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::values::types::int::inline_int::InlineInt;
     use crate::values::Heap;
+    use crate::values::types::int::inline_int::InlineInt;
 
     #[test]
     fn test_convert_index() {
-        let heap = Heap::new();
-        assert_eq!(Some(6), convert_index(Value::testing_new_int(6), 7).ok());
-        assert_eq!(Some(6), convert_index(Value::testing_new_int(-1), 7).ok());
-        assert_eq!(
-            Some((6, 7, 1)),
-            convert_slice_indices(7, Some(Value::testing_new_int(6)), None, None).ok()
-        );
-        assert_eq!(
-            Some((6, -1, -1)),
-            convert_slice_indices(
-                7,
-                Some(Value::testing_new_int(-1)),
-                None,
-                Some(Value::testing_new_int(-1))
-            )
-            .ok()
-        );
-        assert_eq!(
-            Some((6, 7, 1)),
-            convert_slice_indices(
-                7,
-                Some(Value::testing_new_int(-1)),
-                Some(Value::testing_new_int(10)),
-                None
-            )
-            .ok()
-        );
-        // Errors
-        assert!(convert_index(heap.alloc("a"), 7).is_err());
-        assert!(convert_index(Value::testing_new_int(8), 7).is_err()); // 8 > 7 = len
-        assert!(convert_index(Value::testing_new_int(-8), 7).is_err()); // -8 + 7 = -1 < 0
+        Heap::temp(|heap| {
+            assert_eq!(Some(6), convert_index(Value::testing_new_int(6), 7).ok());
+            assert_eq!(Some(6), convert_index(Value::testing_new_int(-1), 7).ok());
+            assert_eq!(
+                Some((6, 7, 1)),
+                convert_slice_indices(7, Some(Value::testing_new_int(6)), None, None).ok()
+            );
+            assert_eq!(
+                Some((6, -1, -1)),
+                convert_slice_indices(
+                    7,
+                    Some(Value::testing_new_int(-1)),
+                    None,
+                    Some(Value::testing_new_int(-1))
+                )
+                .ok()
+            );
+            assert_eq!(
+                Some((6, 7, 1)),
+                convert_slice_indices(
+                    7,
+                    Some(Value::testing_new_int(-1)),
+                    Some(Value::testing_new_int(10)),
+                    None
+                )
+                .ok()
+            );
+            // Errors
+            assert!(convert_index(heap.alloc("a"), 7).is_err());
+            assert!(convert_index(Value::testing_new_int(8), 7).is_err()); // 8 > 7 = len
+            assert!(convert_index(Value::testing_new_int(-8), 7).is_err()); // -8 + 7 = -1 < 0
+        });
     }
 
     #[test]

@@ -3,7 +3,7 @@ authors = ["Facebook"]
 categories = ["rust-patterns"]
 description = "A collection of well-tested utilities"
 documentation = "https://docs.rs/gazebo"
-edition = "2021"
+edition = "2024"
 license = { workspace = true }
 name = "gazebo"
 repository = "https://github.com/facebookincubator/gazebo"
@@ -13,5 +13,5 @@ version = "0.8.1"
 str_pattern_extensions = []
 
 [dependencies]
-dupe = { version = "0.9.0", path = "../dupe" }
+dupe = { version = "0.9.1", path = "../dupe" }
 gazebo_derive = { version = "0.8.0", path = "../gazebo_derive" }

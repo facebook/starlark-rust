@@ -31,8 +31,6 @@ use crate::environment::Methods;
 use crate::environment::MethodsBuilder;
 use crate::environment::MethodsStatic;
 use crate::eval::Evaluator;
-use crate::values::none::NoneOr;
-use crate::values::starlark_value;
 use crate::values::AllocValue;
 use crate::values::Heap;
 use crate::values::NoSerialize;
@@ -40,6 +38,8 @@ use crate::values::ProvidesStaticType;
 use crate::values::StarlarkValue;
 use crate::values::Trace;
 use crate::values::Value;
+use crate::values::none::NoneOr;
+use crate::values::starlark_value;
 
 #[derive(ProvidesStaticType, Trace, Allocative, Debug, NoSerialize, Clone)]
 /// A frame of the call-stack.
@@ -54,12 +54,12 @@ struct StackFrame {
 impl<'v> StarlarkValue<'v> for StackFrame {
     fn get_methods() -> Option<&'static Methods> {
         static RES: MethodsStatic = MethodsStatic::new();
-        RES.methods(stack_frame_methods)
+        RES.methods_for_type::<Self::Canonical>(stack_frame_methods)
     }
 }
 
 impl<'v> AllocValue<'v> for StackFrame {
-    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
+    fn alloc_value(self, heap: Heap<'v>) -> Value<'v> {
         heap.alloc_complex_no_freeze(self)
     }
 }
