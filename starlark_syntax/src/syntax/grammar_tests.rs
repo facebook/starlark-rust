@@ -22,6 +22,7 @@ use crate::slice_vec_ext::SliceExt;
 use crate::syntax::AstModule;
 use crate::syntax::Dialect;
 use crate::syntax::DialectTypes;
+use crate::syntax::ast::Expr;
 use crate::syntax::ast::Stmt;
 
 fn parse_fails_with_dialect(name: &str, dialect: &Dialect, programs: &[&str]) {
@@ -56,6 +57,68 @@ fn parse_fail(name: &str, program: &str) {
 
 fn parse_fails(name: &str, programs: &[&str]) {
     parse_fails_with_dialect(name, &Dialect::AllOptionsInternal, programs);
+}
+
+fn parse_err(program: &str) -> crate::Error {
+    AstModule::parse(
+        "assert.bzl",
+        program.to_owned(),
+        &Dialect::AllOptionsInternal,
+    )
+    .unwrap_err()
+}
+
+fn assert_parse_error_span_source(program: &str, expected_source: &str) {
+    let err = parse_err(program);
+    let span = err
+        .span()
+        .unwrap_or_else(|| panic!("Expected parse error with span for:\n{program}\nError: {err}"));
+    assert_eq!(
+        span.source_span(),
+        expected_source,
+        "Expected parse error to point at `{expected_source}` for:\n{program}\nError: {err}",
+    );
+}
+
+fn assert_parse_error_contains(program: &str, expected: &str) {
+    let err = parse_err(program);
+    let err_text = err.to_string();
+    assert!(
+        err_text.contains(expected),
+        "Expected parse error containing `{expected}` for:\n{program}\nActual error:\n{err_text}",
+    );
+}
+
+fn assert_assignment_rhs_is_slice(
+    program: &str,
+    expected_base: &str,
+    expected_start: Option<&str>,
+    expected_stop: Option<&str>,
+    expected_step: Option<&str>,
+) {
+    let ast = parse_ast(program);
+    let rhs = match &ast.statement.node {
+        Stmt::Assign(assign) => &assign.rhs.node,
+        _ => panic!("Expected assignment for:\n{program}"),
+    };
+    let (base, start, stop, step) = match rhs {
+        Expr::Slice(base, start, stop, step) => (base, start, stop, step),
+        _ => panic!("Expected slice RHS for:\n{program}"),
+    };
+
+    assert_eq!(base.node.to_string(), expected_base);
+    assert_eq!(
+        start.as_ref().map(|expr| expr.node.to_string()).as_deref(),
+        expected_start,
+    );
+    assert_eq!(
+        stop.as_ref().map(|expr| expr.node.to_string()).as_deref(),
+        expected_stop,
+    );
+    assert_eq!(
+        step.as_ref().map(|expr| expr.node.to_string()).as_deref(),
+        expected_step,
+    );
 }
 
 #[test]
@@ -474,6 +537,76 @@ fn test_error_reserved_keyword() {
     );
 }
 
+#[test]
+fn test_lexer_errors_propagate() {
+    assert_parse_error_contains("import os\n", "reserved keyword");
+    assert_parse_error_span_source("import os\n", "import");
+
+    assert_parse_error_contains("x = \"hello", "unfinished string literal");
+    assert_parse_error_span_source("x = \"hello", "\"hello");
+}
+
+#[test]
+fn test_parse_errors_point_at_offending_token() {
+    assert_parse_error_span_source("x = = 1\n", "=");
+    assert_parse_error_span_source("def foo(,):\n  pass\n", ",");
+    assert_parse_error_span_source("load(123)\n", "123");
+}
+
+#[test]
+fn test_chained_comparison_in_call_argument_is_rejected() {
+    assert_parse_error_span_source("f(x < y < z)\n", "<");
+    assert_parse_error_span_source("f(a in b in c)\n", "in");
+}
+
+#[test]
+fn test_not_and_not_in_precedence() {
+    assert_eq!(parse("x not in y"), "(x not in y)\n");
+    assert_eq!(parse("not x in y"), "(not (x in y))\n");
+}
+
+#[test]
+fn test_identifier_led_call_arguments_continue_parsing() {
+    assert_eq!(
+        parse("f(x.y, x[0], g(x), x if y else z, x not in y)"),
+        "f(x.y, x[0], g(x), (x if y else z), (x not in y))\n"
+    );
+}
+
+#[test]
+fn test_load_alias_forms() {
+    assert_eq!(
+        parse("load(\"m.bzl\", alias = \"real\", \"plain\",)"),
+        "load(\"m.bzl\", alias = \"real\", plain = \"plain\")\n"
+    );
+}
+
+#[test]
+fn test_slice_forms_cover_all_components() {
+    assert_assignment_rhs_is_slice("x = a[:2]", "a", None, Some("2"), None);
+    assert_assignment_rhs_is_slice("x = a[1:]", "a", Some("1"), None, None);
+    assert_assignment_rhs_is_slice("x = a[1:2:3]", "a", Some("1"), Some("2"), Some("3"));
+}
+
+#[test]
+fn test_dict_comprehension_parses() {
+    assert_eq!(
+        parse("x = {k: v for k in xs if pred(k)}"),
+        "x = {k: v for k in xs if pred(k)}\n"
+    );
+}
+
+#[test]
+fn test_if_elif_span_covers_full_chain() {
+    let program = "if True:\n  a\nelif False:\n  b\nelse:\n  c\n";
+    let ast = parse_ast(program);
+    assert_eq!(
+        ast.codemap
+            .source_span(ast.statement.span)
+            .trim_end_matches('\n'),
+        "if True:\n  a\nelif False:\n  b\nelse:\n  c",
+    );
+}
 pub fn parse(program: &str) -> String {
     parse_ast(program).statement.to_string()
 }
