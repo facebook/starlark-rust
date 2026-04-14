@@ -39,6 +39,7 @@ use crate::values::AllocStaticSimple;
 use crate::values::FrozenValueTyped;
 use crate::values::Heap;
 use crate::values::StarlarkValue;
+use crate::values::StaticValueRegistered;
 use crate::values::Value;
 use crate::values::types::list::value::display_list;
 
@@ -78,6 +79,10 @@ impl<'v> Debug for Array<'v> {
             .finish()
     }
 }
+
+// SAFETY: The empty array static (VALUE_EMPTY_ARRAY) is properly registered
+// for pagable serialization via inventory::submit!.
+unsafe impl StaticValueRegistered for Array<'static> {}
 
 /// `Array` is not `Sync`, so wrap it into this struct to store it in static variable.
 /// Empty `Array` is logically `Sync`.

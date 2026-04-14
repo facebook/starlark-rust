@@ -54,9 +54,11 @@ impl Display for StarlarkBool {
     }
 }
 
-// Define individual boolean values with registration
-static_starlark_value!(pub(crate) VALUE_FALSE: StarlarkBool = StarlarkBool(false));
-static_starlark_value!(pub(crate) VALUE_TRUE: StarlarkBool = StarlarkBool(true));
+// Define individual boolean values with registration (multiple values of same type)
+static_starlark_value!(StarlarkBool {
+    pub(crate) VALUE_FALSE = StarlarkBool(false);
+    pub(crate) VALUE_TRUE = StarlarkBool(true);
+});
 
 // Array of references for efficient boolean lookup by index
 pub(crate) static VALUE_FALSE_TRUE: [&AllocStaticSimple<StarlarkBool>; 2] =

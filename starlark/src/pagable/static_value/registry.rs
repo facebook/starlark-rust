@@ -34,6 +34,9 @@ use crate::values::FrozenValue;
 /// and a function to obtain the FrozenValue.
 pub struct StaticValueEntry {
     /// Source file where this static value was registered (from `file!()`).
+    /// May include a `::name` suffix to disambiguate multiple values
+    /// registered from the same macro invocation (e.g. `static_starlark_value!`
+    /// multi-value variant).
     pub file: &'static str,
     /// Source line where this static value was registered (from `line!()`).
     pub line: u32,

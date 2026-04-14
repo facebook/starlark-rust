@@ -51,6 +51,7 @@ use crate::values::FrozenValue;
 use crate::values::Heap;
 use crate::values::NoSerialize;
 use crate::values::StarlarkValue;
+use crate::values::StaticValueRegistered;
 use crate::values::StringValue;
 use crate::values::Trace;
 use crate::values::Value;
@@ -134,6 +135,13 @@ pub struct TypeCompiledImplAsStarlarkValue<T: 'static> {
 // via #[type_matcher] or register_type_matcher!, which ensures vtable registration.
 unsafe impl<T: crate::values::typing::type_compiled::matcher::TypeMatcherRegistered>
     crate::pagable::vtable_register::VtableRegistered for TypeCompiledImplAsStarlarkValue<T>
+{
+}
+
+// SAFETY: TypeCompiledImplAsStarlarkValue<T> is only statically allocated when T is
+// registered via static_type_compiled!, which ensures proper pagable registration.
+unsafe impl<T: TypeCompiledStaticRegistered> StaticValueRegistered
+    for TypeCompiledImplAsStarlarkValue<T>
 {
 }
 

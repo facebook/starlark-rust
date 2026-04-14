@@ -41,6 +41,7 @@ use crate::values::FrozenHeap;
 use crate::values::FrozenValue;
 use crate::values::Heap;
 use crate::values::StarlarkValue;
+use crate::values::StaticValueRegistered;
 use crate::values::Value;
 use crate::values::type_repr::StarlarkTypeRepr;
 use crate::values::typing::TypeType;
@@ -64,6 +65,10 @@ unsafe impl<T> AsTypeStaticRegistered for T {}
 
 #[derive(Debug, NoSerialize, Allocative, ProvidesStaticType)]
 struct StarlarkValueAsTypeStarlarkValue(fn() -> Ty, fn() -> DocItem);
+
+// SAFETY: This type is only used in static contexts via StarlarkValueAsType::new()
+// which creates a static value that is properly registered for pagable serialization.
+unsafe impl StaticValueRegistered for StarlarkValueAsTypeStarlarkValue {}
 
 #[starlark_value(type = "type")]
 impl<'v> StarlarkValue<'v> for StarlarkValueAsTypeStarlarkValue {

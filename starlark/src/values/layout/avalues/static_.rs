@@ -17,6 +17,7 @@
 
 use std::marker::PhantomData;
 
+use crate::pagable::StaticValueRegistered;
 use crate::values::FreezeResult;
 use crate::values::Freezer;
 use crate::values::FrozenValue;
@@ -77,7 +78,10 @@ pub struct AllocStaticSimple<T: StarlarkValue<'static>>(
 
 impl<T: StarlarkValue<'static>> AllocStaticSimple<T> {
     /// Allocate a value statically.
-    pub const fn alloc(value: T) -> Self {
+    pub const fn alloc(value: T) -> Self
+    where
+        T: StaticValueRegistered,
+    {
         AllocStaticSimple(AValueRepr::with_metadata(
             AValueVTable::new::<AValueBasic<T>>(),
             AValueImpl::<AValueBasic<T>>::new(value),
@@ -105,6 +109,7 @@ mod tests {
     use crate as starlark;
     use crate::values::AllocStaticSimple;
     use crate::values::StarlarkValue;
+    use crate::values::StaticValueRegistered;
 
     #[test]
     fn test_alloc_static_simple() {
@@ -117,6 +122,9 @@ mod tests {
         )]
         #[display("MySimpleValue")]
         struct MySimpleValue(u32);
+
+        // SAFETY: For testing purposes only.
+        unsafe impl StaticValueRegistered for MySimpleValue {}
 
         #[starlark_value(type = "MySimpleValue")]
         impl<'v> StarlarkValue<'v> for MySimpleValue {}
