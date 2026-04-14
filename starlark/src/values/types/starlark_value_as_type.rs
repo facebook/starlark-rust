@@ -160,7 +160,7 @@ impl<T: StarlarkTypeRepr> StarlarkValueAsType<T> {
     /// Use [`new_no_docs`](Self::new_no_docs) if `T` is not a `StarlarkValue`.
     pub const fn new() -> Self
     where
-        T: StarlarkValue<'static>,
+        T: StarlarkValue<'static> + AsTypeStaticRegistered,
     {
         StarlarkValueAsType(
             &const {
@@ -174,7 +174,10 @@ impl<T: StarlarkTypeRepr> StarlarkValueAsType<T> {
     }
 
     /// Constructor.
-    pub const fn new_no_docs() -> Self {
+    pub const fn new_no_docs() -> Self
+    where
+        T: AsTypeStaticRegistered,
+    {
         StarlarkValueAsType(
             &const {
                 AllocStaticSimple::alloc(StarlarkValueAsTypeStarlarkValue(
