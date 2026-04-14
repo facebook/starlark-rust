@@ -36,6 +36,8 @@ pub(crate) struct StarTypeEntry {
     pub(crate) rust_type: syn::Path,
     /// The name to expose in Starlark (e.g., `Int`).
     pub(crate) starlark_name: syn::Ident,
+    /// Whether to use `new_no_docs()` instead of `new()`.
+    pub(crate) no_docs: bool,
 }
 
 #[derive(Debug)]

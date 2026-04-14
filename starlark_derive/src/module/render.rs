@@ -59,8 +59,14 @@ fn render_starlark_type_declaration(entry: &StarTypeEntry) -> TokenStream {
     let starlark_name_str = ident_string(&entry.starlark_name);
     let static_name = starlark_type_static_name(&starlark_name_str);
     let rust_type = &entry.rust_type;
-    quote! {
-        starlark::declare_starlark_value_as_type!(#static_name, #rust_type);
+    if entry.no_docs {
+        quote! {
+            starlark::declare_starlark_value_as_type!(#static_name, #rust_type, no_docs);
+        }
+    } else {
+        quote! {
+            starlark::declare_starlark_value_as_type!(#static_name, #rust_type);
+        }
     }
 }
 

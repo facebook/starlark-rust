@@ -228,6 +228,7 @@ impl<T: StarlarkTypeRepr> AllocFrozenValue for StarlarkValueAsType<T> {
 /// Standalone (outside `#[starlark_module]`):
 /// ```ignore
 /// declare_starlark_value_as_type!(pub MY_INT, StarlarkInt);
+/// declare_starlark_value_as_type!(pub MY_PROVIDER, AbstractProvider, no_docs);
 /// ```
 ///
 /// The `#[starlark_module]` proc macro can also generate calls to this macro
@@ -235,12 +236,18 @@ impl<T: StarlarkTypeRepr> AllocFrozenValue for StarlarkValueAsType<T> {
 #[macro_export]
 macro_rules! declare_starlark_value_as_type {
     ($vis:vis $name:ident, $T:ty) => {
+        $crate::declare_starlark_value_as_type!($vis $name, $T, new);
+    };
+    ($vis:vis $name:ident, $T:ty, no_docs) => {
+        $crate::declare_starlark_value_as_type!($vis $name, $T, new_no_docs);
+    };
+    ($vis:vis $name:ident, $T:ty, $constructor:ident) => {
         // Register the AsTypeStaticRegistered marker trait for T
         // (cfg-gated via __register_starlark_value_as_type, no-op when pagable is disabled).
         $crate::__register_starlark_value_as_type!(impl_trait = $T);
 
         $vis static $name: $crate::__derive_refs::StarlarkValueAsType<$T> =
-            $crate::__derive_refs::StarlarkValueAsType::new();
+            $crate::__derive_refs::StarlarkValueAsType::$constructor();
 
         $crate::__derive_refs::inventory::submit! {
             $crate::__derive_refs::StaticValueEntry::new(

@@ -59,15 +59,26 @@ impl ModuleKind {
     }
 }
 
-/// Parse a single entry in `#[starlark_types(RustType as StarlarkName)]`.
+/// Parse a single entry in `#[starlark_types(RustType as StarlarkName)]`
+/// or `#[starlark_types(RustType as StarlarkName no_docs)]`.
 impl syn::parse::Parse for StarTypeEntry {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let rust_type: syn::Path = input.parse()?;
         input.parse::<syn::Token![as]>()?;
         let starlark_name: syn::Ident = input.parse()?;
+        let no_docs = if input.peek(syn::Ident) {
+            let kw: syn::Ident = input.parse()?;
+            if kw != "no_docs" {
+                return Err(syn::Error::new(kw.span(), "expected `no_docs`"));
+            }
+            true
+        } else {
+            false
+        };
         Ok(StarTypeEntry {
             rust_type,
             starlark_name,
+            no_docs,
         })
     }
 }
