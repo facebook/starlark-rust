@@ -46,6 +46,22 @@ use crate::values::type_repr::StarlarkTypeRepr;
 use crate::values::typing::TypeType;
 use crate::values::typing::ty::AbstractType;
 
+/// Marker trait indicating that `StarlarkValueAsType<T>` has been registered
+/// as a static value for pagable.
+///
+/// # Safety
+///
+/// This trait should only be implemented by the `#[starlark_module]` proc macro
+/// when it generates the static registration for a `StarlarkValueAsType` constant.
+/// Manual implementations may lead to missing registrations or duplicate impl trait.
+pub unsafe trait AsTypeStaticRegistered {}
+
+/// When pagable is disabled, this blanket impl ensures that
+/// `StarlarkValueAsType::new()` and `new_no_docs()` work without requiring
+/// explicit `AsTypeStaticRegistered` impls from downstream consumers.
+#[cfg(not(feature = "pagable"))]
+unsafe impl<T> AsTypeStaticRegistered for T {}
+
 #[derive(Debug, NoSerialize, Allocative, ProvidesStaticType)]
 struct StarlarkValueAsTypeStarlarkValue(fn() -> Ty, fn() -> DocItem);
 
@@ -88,6 +104,8 @@ impl Display for StarlarkValueAsTypeStarlarkValue {
 /// use starlark::values::StarlarkValue;
 /// use starlark::values::starlark_value;
 /// use starlark::values::starlark_value_as_type::StarlarkValueAsType;
+/// use starlark_derive::starlark_module;
+///
 /// #[derive(
 ///     Debug,
 ///     derive_more::Display,
@@ -217,7 +235,11 @@ impl<T: StarlarkTypeRepr> AllocFrozenValue for StarlarkValueAsType<T> {
 #[macro_export]
 macro_rules! declare_starlark_value_as_type {
     ($vis:vis $name:ident, $T:ty) => {
-         $vis static $name: $crate::__derive_refs::StarlarkValueAsType<$T> =
+        // Register the AsTypeStaticRegistered marker trait for T
+        // (cfg-gated via __register_starlark_value_as_type, no-op when pagable is disabled).
+        $crate::__register_starlark_value_as_type!(impl_trait = $T);
+
+        $vis static $name: $crate::__derive_refs::StarlarkValueAsType<$T> =
             $crate::__derive_refs::StarlarkValueAsType::new();
 
         $crate::__derive_refs::inventory::submit! {
