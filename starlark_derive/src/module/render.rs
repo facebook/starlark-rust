@@ -17,7 +17,10 @@
 
 mod fun;
 
+use std::collections::HashSet;
+
 use proc_macro2::TokenStream;
+use quote::ToTokens;
 use quote::format_ident;
 use quote::quote;
 
@@ -39,11 +42,19 @@ fn starlark_type_static_name(name: &str) -> syn::Ident {
 }
 
 pub(crate) fn render(x: StarModule) -> syn::Result<TokenStream> {
-    // Generate declare_starlark_value_as_type! calls for each #[starlark_types] entry
+    // Generate declare_starlark_value_as_type! calls for each #[starlark_types] entry.
+    // Deduplicate by rust_type: only the first occurrence of each Rust type
+    // gets the full declaration (which includes the AsTypeStaticRegistered trait impl).
+    // Subsequent occurrences with the same Rust type use `skip_type_registration`
+    // to avoid conflicting trait implementations.
+    let mut seen_rust_types = HashSet::new();
     let type_declarations: Vec<TokenStream> = x
         .starlark_types
         .iter()
-        .map(render_starlark_type_declaration)
+        .map(|entry| {
+            let is_first = seen_rust_types.insert(entry.rust_type.to_token_stream().to_string());
+            render_starlark_type_declaration(entry, is_first)
+        })
         .collect();
 
     let func = render_impl(x)?;
@@ -55,18 +66,27 @@ pub(crate) fn render(x: StarModule) -> syn::Result<TokenStream> {
 }
 
 /// Generate a `declare_starlark_value_as_type!` call for a `#[starlark_types]` entry.
-fn render_starlark_type_declaration(entry: &StarTypeEntry) -> TokenStream {
+///
+/// When `register_type` is true, the full macro is used (including the
+/// `AsTypeStaticRegistered` trait impl). When false, the `skip_type_registration`
+/// variant is used to avoid duplicate trait implementations for the same Rust type.
+fn render_starlark_type_declaration(entry: &StarTypeEntry, register_type: bool) -> TokenStream {
     let starlark_name_str = ident_string(&entry.starlark_name);
     let static_name = starlark_type_static_name(&starlark_name_str);
     let rust_type = &entry.rust_type;
-    if entry.no_docs {
-        quote! {
-            starlark::declare_starlark_value_as_type!(#static_name, #rust_type, no_docs);
-        }
-    } else {
-        quote! {
+    match (register_type, entry.no_docs) {
+        (true, false) => quote! {
             starlark::declare_starlark_value_as_type!(#static_name, #rust_type);
-        }
+        },
+        (true, true) => quote! {
+            starlark::declare_starlark_value_as_type!(#static_name, #rust_type, no_docs);
+        },
+        (false, false) => quote! {
+            starlark::declare_starlark_value_as_type!(#static_name, #rust_type, skip_type_registration);
+        },
+        (false, true) => quote! {
+            starlark::declare_starlark_value_as_type!(#static_name, #rust_type, skip_type_registration_no_docs);
+        },
     }
 }
 

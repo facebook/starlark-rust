@@ -241,11 +241,20 @@ macro_rules! declare_starlark_value_as_type {
     ($vis:vis $name:ident, $T:ty, no_docs) => {
         $crate::declare_starlark_value_as_type!($vis $name, $T, new_no_docs);
     };
+    ($vis:vis $name:ident, $T:ty, skip_type_registration) => {
+        $crate::declare_starlark_value_as_type!(@skip_type_registration $vis $name, $T, new);
+    };
+    ($vis:vis $name:ident, $T:ty, skip_type_registration_no_docs) => {
+        $crate::declare_starlark_value_as_type!(@skip_type_registration $vis $name, $T, new_no_docs);
+    };
     ($vis:vis $name:ident, $T:ty, $constructor:ident) => {
         // Register the AsTypeStaticRegistered marker trait for T
         // (cfg-gated via __register_starlark_value_as_type, no-op when pagable is disabled).
         $crate::__register_starlark_value_as_type!(impl_trait = $T);
 
+        $crate::declare_starlark_value_as_type!(@skip_type_registration $vis $name, $T, $constructor);
+    };
+    (@skip_type_registration $vis:vis $name:ident, $T:ty, $constructor:ident) => {
         $vis static $name: $crate::__derive_refs::StarlarkValueAsType<$T> =
             $crate::__derive_refs::StarlarkValueAsType::$constructor();
 
