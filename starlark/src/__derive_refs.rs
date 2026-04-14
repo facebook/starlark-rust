@@ -33,7 +33,8 @@ pub mod param_spec;
 pub mod parse_args;
 pub mod sig;
 
-// Re-export for const_frozen_string! and static_starlark_value! macro registry.
+// Re-export for const_frozen_string!, static_starlark_value!, and
+// declare_starlark_value_as_type! macro registry.
 pub use crate::pagable::StaticValueEntry;
 // Re-exports for vtable registration macro.
 pub use crate::pagable::vtable_register::VtableRegistered;
@@ -43,3 +44,5 @@ pub use crate::pagable::vtable_registry::DeserTypeId;
 pub use crate::pagable::vtable_registry::VTableRegistryEntry;
 pub use crate::values::layout::avalues::simple::AValueSimple;
 pub use crate::values::layout::vtable::AValueVTable;
+// Re-export for declare_starlark_value_as_type! and #[starlark_types] proc macro output.
+pub use crate::values::types::starlark_value_as_type::StarlarkValueAsType;

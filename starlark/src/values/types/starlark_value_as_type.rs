@@ -95,23 +95,32 @@ impl Display for StarlarkValueAsTypeStarlarkValue {
 ///     ProvidesStaticType,
 ///     NoSerialize
 /// )]
-/// struct Temperature;
+/// struct StarlarkTemperature;
 ///
 /// #[starlark_value(type = "temperature")]
-/// impl<'v> StarlarkValue<'v> for Temperature {}
+/// impl<'v> StarlarkValue<'v> for StarlarkTemperature {}
 ///
-/// fn my_type_globals(globals: &mut GlobalsBuilder) {
-///     // This can now be used like:
-///     // ```
-///     // def f(x: Temperature): pass
-///     // ```
-///     const Temperature: StarlarkValueAsType<Temperature> = StarlarkValueAsType::new();
-/// }
+/// // Use with #[starlark_module]:
+/// // #[starlark_module]
+/// // #[starlark_types(StarlarkTemperature as Temperature)]
+/// // fn my_type_globals(globals: &mut GlobalsBuilder) {}
+///
+/// // Or standalone:
+/// // starlark::declare_starlark_value_as_type!(TEMPERATURE, StarlarkTemperature);
 /// ```
 pub struct StarlarkValueAsType<T: StarlarkTypeRepr>(
     &'static AllocStaticSimple<StarlarkValueAsTypeStarlarkValue>,
     PhantomData<fn(&T)>,
 );
+
+// Manual Clone/Copy implementations
+impl<T: StarlarkTypeRepr> Clone for StarlarkValueAsType<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T: StarlarkTypeRepr> Copy for StarlarkValueAsType<T> {}
 
 impl<T: StarlarkTypeRepr> Debug for StarlarkValueAsType<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -163,6 +172,12 @@ impl<T: StarlarkTypeRepr> StarlarkValueAsType<T> {
             PhantomData,
         )
     }
+
+    /// Get the FrozenValue for this type.
+    /// Used for pagable serialization registration.
+    pub fn to_frozen_value(&self) -> FrozenValue {
+        self.0.to_frozen_value()
+    }
 }
 
 impl<T: StarlarkTypeRepr> StarlarkTypeRepr for StarlarkValueAsType<T> {
@@ -185,6 +200,36 @@ impl<T: StarlarkTypeRepr> AllocFrozenValue for StarlarkValueAsType<T> {
     }
 }
 
+/// Declare a static `StarlarkValueAsType<T>` with automatic pagable serialization registration.
+///
+/// This macro creates a module-level static and registers it via `inventory::submit!`
+/// using `file!()` and `line!()` for deterministic ID generation.
+///
+/// # Usage
+///
+/// Standalone (outside `#[starlark_module]`):
+/// ```ignore
+/// declare_starlark_value_as_type!(pub MY_INT, StarlarkInt);
+/// ```
+///
+/// The `#[starlark_module]` proc macro can also generate calls to this macro
+/// via the `#[starlark_types]` attribute.
+#[macro_export]
+macro_rules! declare_starlark_value_as_type {
+    ($vis:vis $name:ident, $T:ty) => {
+         $vis static $name: $crate::__derive_refs::StarlarkValueAsType<$T> =
+            $crate::__derive_refs::StarlarkValueAsType::new();
+
+        $crate::__derive_refs::inventory::submit! {
+            $crate::__derive_refs::StaticValueEntry::new(
+                file!(),
+                line!(),
+                || $name.to_frozen_value()
+            )
+        }
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use allocative::Allocative;
@@ -200,7 +245,6 @@ mod tests {
     use crate::values::Heap;
     use crate::values::StarlarkValue;
     use crate::values::Value;
-    use crate::values::types::starlark_value_as_type::StarlarkValueAsType;
     use crate::values::types::starlark_value_as_type::tests;
 
     #[derive(
@@ -210,23 +254,22 @@ mod tests {
         Allocative,
         ProvidesStaticType
     )]
-    struct CompilerArgs(String);
+    struct StarlarkCompilerArgs(String);
 
     #[starlark_value(type = "compiler_args")]
-    impl<'v> StarlarkValue<'v> for CompilerArgs {}
+    impl<'v> StarlarkValue<'v> for StarlarkCompilerArgs {}
 
-    impl<'v> AllocValue<'v> for CompilerArgs {
+    impl<'v> AllocValue<'v> for StarlarkCompilerArgs {
         fn alloc_value(self, heap: Heap<'v>) -> Value<'v> {
             heap.alloc_simple(self)
         }
     }
 
     #[starlark_module]
+    #[starlark_types(StarlarkCompilerArgs as CompilerArgs)]
     fn compiler_args_globals(globals: &mut GlobalsBuilder) {
-        const CompilerArgs: StarlarkValueAsType<CompilerArgs> = StarlarkValueAsType::new();
-
-        fn compiler_args(x: String) -> anyhow::Result<CompilerArgs> {
-            Ok(tests::CompilerArgs(x))
+        fn compiler_args(x: String) -> anyhow::Result<StarlarkCompilerArgs> {
+            Ok(tests::StarlarkCompilerArgs(x))
         }
     }
 
