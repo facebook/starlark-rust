@@ -50,7 +50,6 @@ use crate::values::Value;
 use crate::values::ValueOfUnchecked;
 use crate::values::layout::heap::heap_type::StarlarkTestHeapName;
 use crate::values::none::NoneType;
-use crate::values::types::starlark_value_as_type::StarlarkValueAsType;
 use crate::values::typing::StarlarkCallable;
 use crate::values::typing::StarlarkCallableParamSpec;
 use crate::values::typing::StarlarkIter;
@@ -101,9 +100,8 @@ impl StarlarkCallableParamSpec for NamedXy {
 }
 
 #[starlark_module]
+#[starlark_types(MyCustomType as MyCustomType)]
 fn register_typecheck_globals(globals: &mut GlobalsBuilder) {
-    const MyCustomType: StarlarkValueAsType<MyCustomType> = StarlarkValueAsType::new();
-
     fn accepts_iterable<'v>(
         #[starlark(require = pos)] xs: ValueOfUnchecked<'v, StarlarkIter<Value<'v>>>,
     ) -> anyhow::Result<NoneType> {

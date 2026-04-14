@@ -43,7 +43,6 @@ use crate::values::StarlarkValue;
 use crate::values::Value;
 use crate::values::list::UnpackList;
 use crate::values::none::NoneType;
-use crate::values::starlark_value_as_type::StarlarkValueAsType;
 use crate::values::tuple::UnpackTuple;
 
 fn docs_golden_test(test_file_name: &str, doc: DocItem) -> String {
@@ -119,10 +118,9 @@ impl<'v> StarlarkValue<'v> for Magic {}
 
 /// These are where the module docs go
 #[starlark_module]
+#[starlark_types(Obj as Obj)]
 fn module(builder: &mut GlobalsBuilder) {
     const MAGIC: i32 = 42;
-
-    const Obj: StarlarkValueAsType<Obj> = StarlarkValueAsType::new();
 
     /// Docs for func1
     ///

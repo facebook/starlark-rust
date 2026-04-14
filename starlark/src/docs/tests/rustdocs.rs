@@ -43,7 +43,6 @@ use crate::values::Value;
 use crate::values::ValueOfUnchecked;
 use crate::values::list::UnpackList;
 use crate::values::none::NoneType;
-use crate::values::starlark_value_as_type::StarlarkValueAsType;
 use crate::values::tuple::UnpackTuple;
 
 #[derive(
@@ -72,11 +71,9 @@ impl<'v> StarlarkValue<'v> for InputTypeRepr {}
 impl<'v> StarlarkValue<'v> for OutputTypeRepr {}
 
 #[starlark_module]
+#[starlark_types(InputTypeRepr as Input, OutputTypeRepr as Output)]
 #[allow(unused_variables)] // Since this is for a test
 fn globals(builder: &mut GlobalsBuilder) {
-    const Input: StarlarkValueAsType<InputTypeRepr> = StarlarkValueAsType::new();
-    const Output: StarlarkValueAsType<OutputTypeRepr> = StarlarkValueAsType::new();
-
     fn simple(
         arg_int: i32,
         arg_bool: bool,

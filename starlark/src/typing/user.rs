@@ -318,7 +318,6 @@ mod tests {
     use crate::values::Heap;
     use crate::values::StarlarkValue;
     use crate::values::Value;
-    use crate::values::starlark_value_as_type::StarlarkValueAsType;
     use crate::values::typing::TypeInstanceId;
 
     #[derive(
@@ -407,6 +406,7 @@ mod tests {
     }
 
     #[starlark_module]
+    #[starlark_types(AbstractPlant as Plant)]
     fn globals(globals: &mut GlobalsBuilder) {
         fn fruit(name: String) -> starlark::Result<FruitCallable> {
             let ty_fruit = Ty::custom(TyUser::new(
@@ -440,8 +440,6 @@ mod tests {
         fn mk_fruit() -> anyhow::Result<Fruit> {
             panic!("not needed in test")
         }
-
-        const Plant: StarlarkValueAsType<AbstractPlant> = StarlarkValueAsType::new();
     }
 
     #[test]
