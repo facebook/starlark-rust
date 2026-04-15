@@ -37,6 +37,7 @@ pub use starlark_derive::AllocValue;
 pub use starlark_derive::Freeze;
 pub use starlark_derive::NoSerialize;
 pub use starlark_derive::StarlarkAttrs;
+pub use starlark_derive::StarlarkPagable;
 pub use starlark_derive::Trace;
 pub use starlark_derive::UnpackValue;
 pub use starlark_derive::starlark_attrs;
