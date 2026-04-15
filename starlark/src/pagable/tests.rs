@@ -23,13 +23,10 @@ use pagable::PagableDeserialize;
 use pagable::PagableSerialize;
 use starlark_derive::NoSerialize;
 use starlark_derive::ProvidesStaticType;
+use starlark_derive::StarlarkPagable;
 use starlark_derive::starlark_value;
 
 use crate as starlark;
-use crate::pagable::StarlarkDeserialize;
-use crate::pagable::StarlarkDeserializeContext;
-use crate::pagable::StarlarkSerialize;
-use crate::pagable::StarlarkSerializeContext;
 use crate::starlark_simple_value;
 use crate::values::FrozenHeap;
 use crate::values::FrozenHeapRef;
@@ -48,7 +45,14 @@ impl TestHeapName {
 }
 
 /// A simple test type with primitive fields.
-#[derive(Debug, Display, Allocative, ProvidesStaticType, NoSerialize)]
+#[derive(
+    Debug,
+    Display,
+    Allocative,
+    ProvidesStaticType,
+    NoSerialize,
+    StarlarkPagable
+)]
 #[display("SimpleData({}, {})", self.flag, self.count)]
 struct SimpleData {
     flag: bool,
@@ -62,23 +66,6 @@ impl<'v> StarlarkValue<'v> for SimpleData {
     type Canonical = Self;
 }
 
-impl StarlarkSerialize for SimpleData {
-    fn starlark_serialize(&self, ctx: &mut dyn StarlarkSerializeContext) -> crate::Result<()> {
-        self.flag.pagable_serialize(ctx.pagable())?;
-        self.count.pagable_serialize(ctx.pagable())?;
-        Ok(())
-    }
-}
-
-impl StarlarkDeserialize for SimpleData {
-    fn starlark_deserialize(ctx: &mut dyn StarlarkDeserializeContext<'_>) -> crate::Result<Self> {
-        let flag = bool::pagable_deserialize(ctx.pagable())?;
-        let count = usize::pagable_deserialize(ctx.pagable())?;
-        Ok(SimpleData { flag, count })
-    }
-}
-
-/// Helper: serialize a FrozenHeapRef via pagable, then deserialize it back.
 fn round_trip_heap_ref(heap_ref: &FrozenHeapRef) -> crate::Result<FrozenHeapRef> {
     let mut ser = pagable::testing::TestingSerializer::new();
     heap_ref
@@ -92,7 +79,14 @@ fn round_trip_heap_ref(heap_ref: &FrozenHeapRef) -> crate::Result<FrozenHeapRef>
 }
 
 /// A test type with rust heap-allocated fields (Vec, Box, String).
-#[derive(Debug, Display, Allocative, ProvidesStaticType, NoSerialize)]
+#[derive(
+    Debug,
+    Display,
+    Allocative,
+    ProvidesStaticType,
+    NoSerialize,
+    StarlarkPagable
+)]
 #[display("HeapData({:?}, {:?}, {:?})", self.items, self.label, self.boxed)]
 struct HeapData {
     items: Vec<u32>,
@@ -105,28 +99,6 @@ starlark_simple_value!(HeapData);
 #[starlark_value(type = "HeapData", skip_pagable)]
 impl<'v> StarlarkValue<'v> for HeapData {
     type Canonical = Self;
-}
-
-impl StarlarkSerialize for HeapData {
-    fn starlark_serialize(&self, ctx: &mut dyn StarlarkSerializeContext) -> crate::Result<()> {
-        self.items.pagable_serialize(ctx.pagable())?;
-        self.label.pagable_serialize(ctx.pagable())?;
-        self.boxed.pagable_serialize(ctx.pagable())?;
-        Ok(())
-    }
-}
-
-impl StarlarkDeserialize for HeapData {
-    fn starlark_deserialize(ctx: &mut dyn StarlarkDeserializeContext<'_>) -> crate::Result<Self> {
-        let items = Vec::<u32>::pagable_deserialize(ctx.pagable())?;
-        let label = String::pagable_deserialize(ctx.pagable())?;
-        let boxed = Box::<i64>::pagable_deserialize(ctx.pagable())?;
-        Ok(HeapData {
-            items,
-            label,
-            boxed,
-        })
-    }
 }
 
 #[test]
@@ -181,7 +153,14 @@ fn test_heap_allocated_value_round_trip() -> crate::Result<()> {
 }
 
 /// A test type with a FrozenValue field that references another value in the same heap.
-#[derive(Debug, Display, Allocative, ProvidesStaticType, NoSerialize)]
+#[derive(
+    Debug,
+    Display,
+    Allocative,
+    ProvidesStaticType,
+    NoSerialize,
+    StarlarkPagable
+)]
 #[display("RefData({})", self.label)]
 struct RefData {
     label: usize,
@@ -193,22 +172,6 @@ starlark_simple_value!(RefData);
 #[starlark_value(type = "RefData", skip_pagable)]
 impl<'v> StarlarkValue<'v> for RefData {
     type Canonical = Self;
-}
-
-impl StarlarkSerialize for RefData {
-    fn starlark_serialize(&self, ctx: &mut dyn StarlarkSerializeContext) -> crate::Result<()> {
-        self.label.pagable_serialize(ctx.pagable())?;
-        self.target.starlark_serialize(ctx)?;
-        Ok(())
-    }
-}
-
-impl StarlarkDeserialize for RefData {
-    fn starlark_deserialize(ctx: &mut dyn StarlarkDeserializeContext<'_>) -> crate::Result<Self> {
-        let label = usize::pagable_deserialize(ctx.pagable())?;
-        let target = FrozenValue::starlark_deserialize(ctx)?;
-        Ok(RefData { label, target })
-    }
 }
 
 #[test]
@@ -259,7 +222,14 @@ fn test_frozen_value_ref_round_trip() -> crate::Result<()> {
 }
 
 /// A test type with Drop (due to Vec) that holds a FrozenValue reference.
-#[derive(Debug, Display, Allocative, ProvidesStaticType, NoSerialize)]
+#[derive(
+    Debug,
+    Display,
+    Allocative,
+    ProvidesStaticType,
+    NoSerialize,
+    StarlarkPagable
+)]
 #[display("DropRefData({:?})", self.items)]
 struct DropRefData {
     items: Vec<u32>,
@@ -271,22 +241,6 @@ starlark_simple_value!(DropRefData);
 #[starlark_value(type = "DropRefData", skip_pagable)]
 impl<'v> StarlarkValue<'v> for DropRefData {
     type Canonical = Self;
-}
-
-impl StarlarkSerialize for DropRefData {
-    fn starlark_serialize(&self, ctx: &mut dyn StarlarkSerializeContext) -> crate::Result<()> {
-        self.items.pagable_serialize(ctx.pagable())?;
-        self.target.starlark_serialize(ctx)?;
-        Ok(())
-    }
-}
-
-impl StarlarkDeserialize for DropRefData {
-    fn starlark_deserialize(ctx: &mut dyn StarlarkDeserializeContext<'_>) -> crate::Result<Self> {
-        let items = Vec::<u32>::pagable_deserialize(ctx.pagable())?;
-        let target = FrozenValue::starlark_deserialize(ctx)?;
-        Ok(DropRefData { items, target })
-    }
 }
 
 #[test]

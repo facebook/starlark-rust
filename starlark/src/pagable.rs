@@ -60,6 +60,8 @@ pub(crate) mod starlark_deserialize_context;
 pub(crate) mod starlark_serialize;
 pub(crate) mod starlark_serialize_context;
 
+mod starlark_pagable_impls;
+
 // Re-export public types
 pub use starlark_deserialize::StarlarkDeserialize;
 pub use starlark_deserialize::StarlarkDeserializeContext;

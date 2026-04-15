@@ -30,6 +30,7 @@ mod coerce;
 mod freeze;
 mod module;
 mod serde;
+mod starlark_pagable;
 mod starlark_type_repr;
 mod starlark_value;
 mod trace;
@@ -220,6 +221,35 @@ pub fn derive_provides_static_type(input: proc_macro::TokenStream) -> proc_macro
 #[proc_macro_derive(Coerce)]
 pub fn derive_coerce(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     coerce::derive_coerce(input)
+}
+
+/// Derive both `StarlarkSerialize` and `StarlarkDeserialize` traits.
+///
+/// By default, each field is serialized/deserialized via the starlark context.
+/// Fields annotated with `#[starlark_pagable(pagable)]` use the pagable bridge instead.
+#[proc_macro_derive(StarlarkPagable, attributes(starlark_pagable))]
+pub fn derive_starlark_pagable(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    starlark_pagable::derive_starlark_pagable(input)
+}
+
+/// Derive the `StarlarkSerialize` trait.
+///
+/// By default, each field is serialized via `StarlarkSerialize::starlark_serialize`.
+/// Fields annotated with `#[starlark_pagable(pagable)]` use
+/// `PagableSerialize::pagable_serialize(ctx.pagable())` instead.
+#[proc_macro_derive(StarlarkSerialize, attributes(starlark_pagable))]
+pub fn derive_starlark_serialize(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    starlark_pagable::derive_starlark_serialize(input)
+}
+
+/// Derive the `StarlarkDeserialize` trait.
+///
+/// By default, each field is deserialized via `StarlarkDeserialize::starlark_deserialize`.
+/// Fields annotated with `#[starlark_pagable(pagable)]` use
+/// `PagableDeserialize::pagable_deserialize(ctx.pagable())` instead.
+#[proc_macro_derive(StarlarkDeserialize, attributes(starlark_pagable))]
+pub fn derive_starlark_deserialize(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    starlark_pagable::derive_starlark_deserialize(input)
 }
 
 /// Attribute macro for `impl TypeMatcher for X` blocks.
