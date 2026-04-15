@@ -68,6 +68,8 @@ pub(crate) struct ValueDeserSlot {
     vtable: &'static AValueVTable,
     /// Raw pointer to the pre-allocated header in the arena.
     raw_ptr: StarlarkValueRawPtr,
+    /// Pointer to the AValueHeader in the arena (for vtable patching).
+    header_ptr: *mut AValueHeader,
     /// Whether this value has been deserialized.
     initialized: bool,
 }
@@ -78,10 +80,12 @@ impl ValueDeserSlot {
         arc_offset: u32,
         vtable: &'static AValueVTable,
         raw_ptr: StarlarkValueRawPtr,
+        header_ptr: *mut AValueHeader,
     ) -> Self {
         Self {
             stream_offset,
             arc_offset,
+            header_ptr,
             vtable,
             raw_ptr,
             initialized: false,
@@ -97,6 +101,18 @@ pub(crate) struct DeserializeRecipe {
     pub(crate) vtable: &'static AValueVTable,
     /// Raw pointer to the pre-allocated header in the arena.
     pub(crate) raw_ptr: StarlarkValueRawPtr,
+    /// Pointer to the AValueHeader in the arena (for vtable patching after deserialization).
+    pub(crate) header_ptr: *mut AValueHeader,
+}
+
+impl DeserializeRecipe {
+    /// Write the real vtable to the header, replacing the sentinel.
+    /// Must be called after `starlark_deserialize` completes.
+    pub(crate) unsafe fn write_vtable_to_header(&self) {
+        unsafe {
+            std::ptr::write(self.header_ptr, AValueHeader(self.vtable));
+        }
+    }
 }
 
 /// Tracks deserialization state for all values in a heap.
@@ -160,6 +176,7 @@ impl HeapDeserializationState {
             },
             vtable: slot.vtable,
             raw_ptr: slot.raw_ptr,
+            header_ptr: slot.header_ptr,
         })
     }
 
@@ -318,6 +335,11 @@ impl<'de> StarlarkDeserializeContext<'de> for StarlarkDeserializerImpl<'_, 'de> 
         // (from the offset table). saved_pos is restored after deserialization.
         unsafe { self.pagable.seek(target.abs_pos) };
         (target.vtable.starlark_deserialize)(target.raw_ptr, self)?;
+        // Replace the sentinel vtable with the real one now that
+        // deserialization is complete. The sentinel must stay in place
+        // until this point so that any access to the value before it
+        // is fully deserialized will panic.
+        unsafe { target.write_vtable_to_header() };
         unsafe { self.pagable.seek(saved_pos) };
 
         Ok(())

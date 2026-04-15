@@ -175,7 +175,57 @@ impl<'v, T: StarlarkValue<'v>> GetDeserTypeId<'v, T> {
     const DESER_TYPE_ID: DeserTypeId = DeserTypeId::of::<T>();
 }
 
+/// Marker type for uninitialized deserialized values.
+/// All methods panic with a descriptive message.
+#[derive(Allocative)]
+struct UninitializedValue;
+
+impl Display for UninitializedValue {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "<uninitialized>")
+    }
+}
+
+impl Debug for UninitializedValue {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "<uninitialized>")
+    }
+}
+
 impl AValueVTable {
+    /// Sentinel vtable for values that have been allocated but not yet deserialized.
+    /// Every method panics with "accessing uninitialized deserialized value".
+    pub(crate) fn uninitialized_sentinel() -> &'static AValueVTable {
+        const UNINIT_ALLOCATIVE_KEY: allocative::Key = allocative::Key::new("UninitializedValue");
+        const UNINIT_TYPE_ID: ConstTypeId = ConstTypeId::of::<UninitializedValue>();
+        const UNINIT_STARLARK_TYPE_ID: StarlarkTypeId =
+            StarlarkTypeId::from_type_id(UNINIT_TYPE_ID);
+        const UNINIT_DESER_TYPE_ID: DeserTypeId = DeserTypeId::of::<UninitializedValue>();
+
+        const PANIC_MSG: &str = "accessing a frozen value that has not been deserialized yet";
+
+        &AValueVTable {
+            drop_in_place: |_| {},
+            is_str: false,
+            memory_size: |_| panic!("{}", PANIC_MSG),
+            static_type_of_value: UNINIT_TYPE_ID,
+            starlark_type_id: UNINIT_STARLARK_TYPE_ID,
+            heap_freeze: |_, _| panic!("{}", PANIC_MSG),
+            heap_copy: |_, _| panic!("{}", PANIC_MSG),
+            starlark_serialize: |_, _| panic!("{}", PANIC_MSG),
+            starlark_deserialize: |_, _| panic!("{}", PANIC_MSG),
+            type_name: "UninitializedValue",
+            type_as_allocative_key: UNINIT_ALLOCATIVE_KEY,
+            deser_type_id: UNINIT_DESER_TYPE_ID,
+            display: |_| panic!("{}", PANIC_MSG),
+            debug: |_| panic!("{}", PANIC_MSG),
+            erased_serde_serialize: |_| panic!("{}", PANIC_MSG),
+            allocative: |_| panic!("{}", PANIC_MSG),
+            total_memory_for_profile: |_| panic!("{}", PANIC_MSG),
+            starlark_value: StarlarkValueVTable::UNINITIALIZED_SENTINEL,
+        }
+    }
+
     pub(crate) fn new_black_hole() -> &'static AValueVTable {
         const BLACKHOLE_ALLOCATIVE_KEY: allocative::Key = allocative::Key::new("BlackHole");
         const BLACKHOLE_TYPE_ID: ConstTypeId = ConstTypeId::of::<BlackHole>();

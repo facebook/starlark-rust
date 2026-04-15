@@ -44,6 +44,7 @@ struct VTableEntry {
     field: syn::Field,
     init: syn::FieldValue,
     init_for_black_hole: syn::FieldValue,
+    init_for_uninitialized: syn::FieldValue,
 }
 
 /// Description of vtable fn parameter.
@@ -210,10 +211,16 @@ impl Gen {
                 panic!("BlackHole")
             }
         };
+        let init_for_uninitialized = syn::parse_quote_spanned! {method.sig.span()=>
+            #fn_name: |#(#field_params_names),*| {
+                panic!("accessing a frozen value that has not been deserialized yet")
+            }
+        };
         Ok(VTableEntry {
             field,
             init,
             init_for_black_hole,
+            init_for_uninitialized,
         })
     }
 
@@ -261,6 +268,7 @@ impl Gen {
         let mut fields: Vec<syn::Field> = Vec::new();
         let mut inits: Vec<syn::FieldValue> = Vec::new();
         let mut init_black_holes: Vec<syn::FieldValue> = Vec::new();
+        let mut init_uninitializeds: Vec<syn::FieldValue> = Vec::new();
         let mut starlark_value = self.starlark_value.clone();
         let mut extra_items: Vec<syn::TraitItem> = Vec::new();
         for item in &mut starlark_value.items {
@@ -271,10 +279,12 @@ impl Gen {
                             field,
                             init,
                             init_for_black_hole,
+                            init_for_uninitialized,
                         } = entry;
                         fields.push(field);
                         inits.push(init);
                         init_black_holes.push(init_for_black_hole);
+                        init_uninitializeds.push(init_for_uninitialized);
                     }
 
                     // Generate `HAS_foo: bool` vtable entry for each `foo` function.
@@ -294,6 +304,9 @@ impl Gen {
                         #has_name: T::#has_name
                     });
                     init_black_holes.push(syn::parse_quote_spanned! { m.sig.span() =>
+                        #has_name: false
+                    });
+                    init_uninitializeds.push(syn::parse_quote_spanned! { m.sig.span() =>
                         #has_name: false
                     });
                 }
@@ -321,6 +334,10 @@ impl Gen {
             impl StarlarkValueVTable {
                 pub(crate) const BLACK_HOLE: StarlarkValueVTable = StarlarkValueVTable {
                     #(#init_black_holes),*
+                };
+
+                pub(crate) const UNINITIALIZED_SENTINEL: StarlarkValueVTable = StarlarkValueVTable {
+                    #(#init_uninitializeds),*
                 };
             }
 

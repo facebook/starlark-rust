@@ -95,6 +95,7 @@ use crate::values::layout::heap::repr::AValueRepr;
 use crate::values::layout::heap::send::HeapSyncable;
 use crate::values::layout::value::FrozenValue;
 use crate::values::layout::value::Value;
+use crate::values::layout::vtable::AValueVTable;
 use crate::values::layout::vtable::StarlarkValueRawPtr;
 use crate::values::string::intern::interner::FrozenStringValueInterner;
 use crate::values::string::intern::interner::StringValueInterner;
@@ -620,7 +621,14 @@ impl FrozenFrozenHeap {
             let cursor = cursor.expect("cursor must exist for bump with values");
             unsafe {
                 let header_ptr = cursor.next(*alloc_size);
-                ptr::write(header_ptr, AValueHeader(vtable));
+                // Write sentinel vtable — any access before deserialization
+                // will panic with "accessing uninitialized deserialized value".
+                // The real vtable is stored in the slot and written after
+                // starlark_deserialize completes.
+                ptr::write(
+                    header_ptr,
+                    AValueHeader(AValueVTable::uninitialized_sentinel()),
+                );
                 let raw_ptr = StarlarkValueRawPtr::new_header(&*header_ptr);
                 let header_addr = header_ptr as *const _ as usize;
                 ptr_to_index.insert(header_addr, i);
@@ -629,6 +637,7 @@ impl FrozenFrozenHeap {
                     arc_offset,
                     vtable,
                     raw_ptr,
+                    header_ptr,
                 ));
             }
         }
@@ -663,6 +672,11 @@ impl FrozenFrozenHeap {
                 // serialization — it points to the start of this value's data.
                 unsafe { ctx.pagable().seek(target.abs_pos) };
                 (target.vtable.starlark_deserialize)(target.raw_ptr, ctx)?;
+                // Replace the sentinel vtable with the real one now that
+                // deserialization is complete. The sentinel must stay in place
+                // until this point so that any access to the value before it
+                // is fully deserialized will panic.
+                unsafe { target.write_vtable_to_header() };
             }
         }
         let end = ctx.current_heap_deser_state().end_position();
