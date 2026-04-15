@@ -467,6 +467,29 @@ impl<'v, T: StarlarkValue<'v>> AllocFrozenValue for FrozenValueTyped<'v, T> {
     }
 }
 
+impl<'v, T: StarlarkValue<'v>> crate::pagable::StarlarkSerialize for FrozenValueTyped<'v, T> {
+    fn starlark_serialize(
+        &self,
+        ctx: &mut dyn crate::pagable::starlark_serialize::StarlarkSerializeContext,
+    ) -> crate::Result<()> {
+        self.0.starlark_serialize(ctx)
+    }
+}
+
+impl<'v, T: StarlarkValue<'v>> crate::pagable::StarlarkDeserialize for FrozenValueTyped<'v, T> {
+    fn starlark_deserialize(
+        ctx: &mut dyn crate::pagable::starlark_deserialize::StarlarkDeserializeContext<'_>,
+    ) -> crate::Result<Self> {
+        let fv = FrozenValue::starlark_deserialize(ctx)?;
+        FrozenValueTyped::new(fv).ok_or_else(|| {
+            crate::Error::new_other(anyhow::anyhow!(
+                "FrozenValueTyped: deserialized value is not of expected type `{}`",
+                T::TYPE,
+            ))
+        })
+    }
+}
+
 impl AllocFrozenStringValue for FrozenStringValue {
     fn alloc_frozen_string_value(self, _heap: &FrozenHeap) -> FrozenStringValue {
         self

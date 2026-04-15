@@ -676,3 +676,37 @@ fn test_heap_ref_dedup_round_trip() -> crate::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_frozen_value_typed_round_trip() -> crate::Result<()> {
+    use crate::values::FrozenValueTyped;
+
+    // Create a heap with a SimpleData, then wrap it as FrozenValueTyped.
+    let heap = FrozenHeap::new();
+    let fv = heap.alloc_simple(SimpleData {
+        flag: true,
+        count: 77,
+    });
+    let typed = FrozenValueTyped::<SimpleData>::new(fv).unwrap();
+
+    // Create a RefData that holds the typed value as a plain FrozenValue.
+    // This exercises FrozenValueTyped's StarlarkSerialize (which delegates to FrozenValue).
+    heap.alloc_simple(RefData {
+        label: 3,
+        target: typed.to_frozen_value(),
+    });
+    let heap_ref = heap.into_ref_named(TestHeapName::heap_name("test_fvt"));
+
+    let restored = round_trip_heap_ref(&heap_ref)?;
+
+    let undrop_headers = restored.collect_undrop_headers_ordered();
+    assert_eq!(undrop_headers.len(), 2);
+
+    // Verify the target FrozenValue can be downcast back to SimpleData via FrozenValueTyped.
+    let ref_data: &RefData = undrop_headers[1].unpack().downcast_ref().unwrap();
+    let restored_typed = FrozenValueTyped::<SimpleData>::new(ref_data.target).unwrap();
+    assert_eq!(restored_typed.flag, true);
+    assert_eq!(restored_typed.count, 77);
+
+    Ok(())
+}
