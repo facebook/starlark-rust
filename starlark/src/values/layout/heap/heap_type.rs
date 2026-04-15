@@ -20,6 +20,7 @@ use std::cell::Cell;
 use std::cell::RefCell;
 use std::cell::RefMut;
 use std::cmp;
+use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Debug;
 use std::fmt::Formatter;
@@ -75,6 +76,7 @@ use crate::values::layout::avalue::AValue;
 use crate::values::layout::avalue::AValueImpl;
 use crate::values::layout::heap::allocator::alloc::allocator::ChunkAllocator;
 use crate::values::layout::heap::arena::Arena;
+use crate::values::layout::heap::arena::ArenaOffset;
 use crate::values::layout::heap::arena::ArenaRawCursor;
 use crate::values::layout::heap::arena::ArenaVisitor;
 use crate::values::layout::heap::arena::Reservation;
@@ -356,6 +358,7 @@ pub(crate) struct PartiallyDeserializedHeap {
     non_drop_base: usize,
     drop_total_bytes: u32,
     non_drop_total_bytes: u32,
+    refs: Vec<FrozenHeapRef>,
 }
 
 impl PartiallyDeserializedHeap {
@@ -371,6 +374,9 @@ impl PartiallyDeserializedHeap {
 impl FrozenFrozenHeap {
     /// Serialization format:
     /// ```text
+    /// [refs_count: usize]
+    /// for each ref:
+    ///     [pagable serialized arc]
     /// [drop_total_bytes: u32]
     /// [non_drop_total_bytes: u32]
     /// (drop bump):
@@ -391,7 +397,7 @@ impl FrozenFrozenHeap {
             .name
             .as_ref()
             .expect("The name of the FrozenFrozenHeap should exist in starlark pagable serialize");
-        let heap_id = HeapRefId::from_heap_name(&heap_name);
+        let heap_id = HeapRefId::from_heap_name(heap_name);
         // TODO(nero): right now FrozenHeapName hasn't been implemented for Pagable. so just serialize HeapRefId;
         heap_id.pagable_serialize(serializer)?;
 
@@ -422,10 +428,10 @@ impl FrozenFrozenHeap {
             Ok(())
         }
 
-        assert!(
-            self.refs.is_empty(),
-            "Serialization of heaps with refs is not yet supported"
-        );
+        self.refs.len().pagable_serialize(serializer)?;
+        for heap_ref in self.refs.iter() {
+            heap_ref.pagable_serialize(serializer)?;
+        }
 
         let drop_headers = self.arena.collect_drop_headers_ordered();
         let non_drop_headers = self.arena.collect_undrop_headers_ordered();
@@ -435,8 +441,18 @@ impl FrozenFrozenHeap {
         bump_total_bytes(&drop_headers).pagable_serialize(serializer)?;
         bump_total_bytes(&non_drop_headers).pagable_serialize(serializer)?;
 
-        let mut ctx = StarlarkSerializerImpl::new(serializer);
-        ctx.setup_current_heap(heap_id, self.arena.build_ptr_to_offset_map());
+        // Get or create shared state. Ensure this heap and all its transitive
+        // dependencies have offset maps registered before we serialize arena
+        // values (which may contain cross-heap FrozenValue pointers).
+        let state = StarlarkSerializerImpl::get_or_create_state(serializer);
+        state
+            .lock()
+            .expect("ser state lock poisoned")
+            .ensure_offset_maps_registered_inner(heap_id, &self.refs, || {
+                self.arena.build_ptr_to_offset_map()
+            });
+        // Create local StarlarkSerializerImpl with shared state.
+        let mut ctx = StarlarkSerializerImpl::new(serializer, state, heap_id);
 
         serialize_bump(&drop_headers, &mut ctx)?;
         serialize_bump(&non_drop_headers, &mut ctx)?;
@@ -451,10 +467,15 @@ impl FrozenFrozenHeap {
 
         let partial = Self::deserialize_phase1(deserializer)?;
 
-        let mut ctx = StarlarkDeserializerImpl::new(deserializer.as_dyn());
+        // Get or create shared state.
+        let state = StarlarkDeserializerImpl::get_or_create_state(deserializer.as_dyn());
+        let mut ctx = StarlarkDeserializerImpl::new(deserializer.as_dyn(), state.dupe(), heap_id);
 
-        // Register bases on the context with the deserialized heap_id.
-        ctx.setup_current_heap_bases(heap_id, partial.drop_base(), partial.non_drop_base());
+        // Register bases in shared state.
+        state
+            .lock()
+            .expect("deser state lock poisoned")
+            .register_bases(heap_id, partial.drop_base(), partial.non_drop_base());
 
         let heap = Self::deserialize_phase2(partial, &mut ctx)?;
 
@@ -464,6 +485,14 @@ impl FrozenFrozenHeap {
     fn deserialize_phase1<'de, D: PagableDeserializer<'de> + ?Sized>(
         deserializer: &mut D,
     ) -> crate::Result<PartiallyDeserializedHeap> {
+        // Deserialize refs first (before arena values) so referenced heaps'
+        // bases are registered in the context.
+        let refs_count = usize::pagable_deserialize(deserializer)?;
+        let mut refs = Vec::with_capacity(refs_count);
+        for _ in 0..refs_count {
+            refs.push(FrozenHeapRef::pagable_deserialize(deserializer)?);
+        }
+
         let drop_total_bytes = u32::pagable_deserialize(deserializer)?;
         let non_drop_total_bytes = u32::pagable_deserialize(deserializer)?;
 
@@ -483,6 +512,7 @@ impl FrozenFrozenHeap {
             non_drop_base,
             drop_total_bytes,
             non_drop_total_bytes,
+            refs,
         })
     }
 
@@ -551,7 +581,7 @@ impl FrozenFrozenHeap {
 
         Ok(FrozenFrozenHeap {
             arena: partial.arena,
-            refs: Box::new([]),
+            refs: partial.refs.into_boxed_slice(),
             name: None,
         })
     }
@@ -694,6 +724,23 @@ impl FrozenHeapRef {
     /// Get the frozen heaps that this frozen heap depends on.
     pub fn refs(&self) -> impl Iterator<Item = &FrozenHeapRef> {
         self.0.as_ref().map(|h| h.refs.iter()).into_iter().flatten()
+    }
+
+    /// Get the frozen heaps that this frozen heap depends on, as a slice.
+    pub(crate) fn refs_slice(&self) -> &[FrozenHeapRef] {
+        match &self.0 {
+            Some(inner) => &inner.refs,
+            None => &[],
+        }
+    }
+
+    /// Build a map from raw header pointer address to `ArenaOffset`
+    /// for all values in this heap's arena.
+    pub(crate) fn build_ptr_to_offset_map(&self) -> HashMap<usize, ArenaOffset> {
+        match &self.0 {
+            Some(inner) => inner.arena.build_ptr_to_offset_map(),
+            None => HashMap::new(),
+        }
     }
 
     /// Collect live value headers from the non-drop bump in allocation order.

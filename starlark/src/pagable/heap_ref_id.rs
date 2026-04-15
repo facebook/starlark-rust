@@ -61,7 +61,7 @@ use crate::values::FrozenHeapName;
     PagableSerialize,
     PagableDeserialize
 )]
-pub(crate) struct HeapRefId(u64);
+pub struct HeapRefId(u64);
 
 impl HeapRefId {
     pub(crate) fn from_heap_name(name: &FrozenHeapName) -> Self {

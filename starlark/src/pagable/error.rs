@@ -51,6 +51,13 @@ pub enum PagableError {
     /// Heap bases not registered for current heap.
     #[error("Heap bases not registered for current heap")]
     HeapBasesNotRegistered,
+
+    /// Heap bases not registered for a referenced (cross-heap) heap.
+    #[error("Heap bases not registered for referenced heap {heap_id:?}")]
+    CrossHeapBasesNotRegistered {
+        /// The HeapRefId of the referenced heap whose bases were not found.
+        heap_id: crate::pagable::heap_ref_id::HeapRefId,
+    },
 }
 
 impl From<PagableError> for crate::Error {

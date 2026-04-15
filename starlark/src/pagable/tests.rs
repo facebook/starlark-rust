@@ -579,3 +579,57 @@ fn test_frozen_value_inline_int_round_trip() -> crate::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_cross_heap_frozen_value_round_trip() -> crate::Result<()> {
+    // Create a "dependency" heap with a SimpleData value.
+    let dep_heap = FrozenHeap::new();
+    let dep_fv = dep_heap.alloc_simple(SimpleData {
+        flag: true,
+        count: 77,
+    });
+    let dep_heap_ref = dep_heap.into_ref_named(TestHeapName::heap_name("dep"));
+
+    // Create a "main" heap that references the dep heap.
+    let main_heap = FrozenHeap::new();
+    main_heap.add_reference(&dep_heap_ref);
+
+    main_heap.alloc_simple(RefData {
+        label: 99,
+        target: dep_fv,
+    });
+    let main_heap_ref = main_heap.into_ref_named(TestHeapName::heap_name("main"));
+
+    // Round-trip the main heap (which has a ref to dep heap).
+    let restored = round_trip_heap_ref(&main_heap_ref)?;
+
+    // The main heap should have 1 value (RefData) in undrop.
+    let undrop_headers = restored.collect_undrop_headers_ordered();
+    assert_eq!(undrop_headers.len(), 1);
+
+    let ref_data: &RefData = undrop_headers[0].unpack().downcast_ref().unwrap();
+    assert_eq!(ref_data.label, 99);
+
+    // The FrozenValue should resolve to a SimpleData with the dep heap's data.
+    let resolved: &SimpleData = ref_data
+        .target
+        .downcast_frozen_ref::<SimpleData>()
+        .expect("FrozenValue should point to SimpleData in dep heap")
+        .value;
+    assert_eq!(resolved.flag, true);
+    assert_eq!(resolved.count, 77);
+
+    // The main heap should have 1 ref (the dep heap).
+    let refs: Vec<_> = restored.refs().collect();
+    assert_eq!(refs.len(), 1);
+
+    // Pointer identity: the FrozenValue should point into the restored dep heap's first value.
+    let restored_dep_headers = refs[0].collect_undrop_headers_ordered();
+    assert_eq!(restored_dep_headers.len(), 1);
+    assert_eq!(
+        ref_data.target.ptr_value().ptr_value_untagged(),
+        restored_dep_headers[0] as *const _ as usize
+    );
+
+    Ok(())
+}
