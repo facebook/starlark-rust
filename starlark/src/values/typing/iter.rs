@@ -20,6 +20,7 @@ use std::marker::PhantomData;
 use allocative::Allocative;
 use starlark_derive::NoSerialize;
 use starlark_derive::ProvidesStaticType;
+use starlark_derive::StarlarkPagable;
 use starlark_derive::starlark_value;
 
 use crate as starlark;
@@ -49,12 +50,13 @@ impl<T: StarlarkTypeRepr> StarlarkTypeRepr for StarlarkIter<T> {
     derive_more::Display,
     Allocative,
     ProvidesStaticType,
-    NoSerialize
+    NoSerialize,
+    StarlarkPagable
 )]
 #[display("{}", Self::TYPE)]
 pub(crate) struct TypingIterable;
 
-#[starlark_value(type = "typing.Iterable")]
+#[starlark_value(type = "typing.Iterable", skip_pagable)]
 impl<'v> StarlarkValue<'v> for TypingIterable {
     fn eval_type(&self) -> Option<Ty> {
         Some(Ty::iter(Ty::any()))

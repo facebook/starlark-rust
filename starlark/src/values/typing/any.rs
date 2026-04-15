@@ -18,6 +18,7 @@
 use allocative::Allocative;
 use starlark_derive::NoSerialize;
 use starlark_derive::ProvidesStaticType;
+use starlark_derive::StarlarkPagable;
 
 use crate as starlark;
 use crate::static_starlark_value;
@@ -33,12 +34,13 @@ use crate::values::starlark_value;
     derive_more::Display,
     Allocative,
     ProvidesStaticType,
-    NoSerialize
+    NoSerialize,
+    StarlarkPagable
 )]
 #[display("{}", Self::TYPE)]
 pub(crate) struct TypingAny;
 
-#[starlark_value(type = "typing.Any")]
+#[starlark_value(type = "typing.Any", skip_pagable)]
 impl<'v> StarlarkValue<'v> for TypingAny {
     fn eval_type(&self) -> Option<Ty> {
         Some(Ty::any())

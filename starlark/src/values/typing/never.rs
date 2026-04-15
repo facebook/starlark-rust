@@ -35,6 +35,7 @@
 use allocative::Allocative;
 use starlark_derive::NoSerialize;
 use starlark_derive::ProvidesStaticType;
+use starlark_derive::StarlarkPagable;
 
 use crate as starlark;
 use crate::static_starlark_value;
@@ -52,12 +53,13 @@ use crate::values::type_repr::StarlarkTypeRepr;
     derive_more::Display,
     Allocative,
     ProvidesStaticType,
-    NoSerialize
+    NoSerialize,
+    StarlarkPagable
 )]
 #[display("{}", Self::TYPE)]
 pub(crate) struct TypingNever;
 
-#[starlark_value(type = "typing.Never")]
+#[starlark_value(type = "typing.Never", skip_pagable)]
 impl<'v> StarlarkValue<'v> for TypingNever {
     fn eval_type(&self) -> Option<Ty> {
         Some(Ty::never())

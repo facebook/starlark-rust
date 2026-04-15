@@ -25,6 +25,7 @@ use std::cell::Cell;
 use allocative::Allocative;
 use derive_more::Display;
 use starlark_derive::NoSerialize;
+use starlark_derive::StarlarkPagable;
 use starlark_derive::Trace;
 use starlark_derive::starlark_value;
 
@@ -44,7 +45,14 @@ use crate::values::ValueLike;
 #[allocative(skip)]
 pub(crate) struct ValueCaptured<'v>(Cell<Option<Value<'v>>>);
 
-#[derive(Debug, ProvidesStaticType, Display, NoSerialize, Allocative)]
+#[derive(
+    Debug,
+    ProvidesStaticType,
+    Display,
+    NoSerialize,
+    Allocative,
+    StarlarkPagable
+)]
 #[display("{:?}", self)] // Type is not user visible
 #[repr(transparent)]
 pub(crate) struct FrozenValueCaptured(Option<FrozenValue>);
@@ -52,7 +60,7 @@ pub(crate) struct FrozenValueCaptured(Option<FrozenValue>);
 #[starlark_value(type = "value_captured")]
 impl<'v> StarlarkValue<'v> for ValueCaptured<'v> {}
 
-#[starlark_value(type = "value_captured")]
+#[starlark_value(type = "value_captured", skip_pagable)]
 impl<'v> StarlarkValue<'v> for FrozenValueCaptured {
     type Canonical = ValueCaptured<'v>;
 }

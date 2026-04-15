@@ -28,6 +28,7 @@ use allocative::Allocative;
 use dupe::Dupe;
 use starlark_derive::NoSerialize;
 use starlark_derive::ProvidesStaticType;
+use starlark_derive::StarlarkPagable;
 use starlark_derive::starlark_value;
 
 use crate as starlark;
@@ -61,12 +62,13 @@ use crate::values::typing::callable::param::StarlarkCallableParamSpec;
     derive_more::Display,
     Allocative,
     ProvidesStaticType,
-    NoSerialize
+    NoSerialize,
+    StarlarkPagable
 )]
 #[display("{}", Self::TYPE)]
 pub(crate) struct TypingCallable;
 
-#[starlark_value(type = "typing.Callable")]
+#[starlark_value(type = "typing.Callable", skip_pagable)]
 impl<'v> StarlarkValue<'v> for TypingCallable {
     fn eval_type(&self) -> Option<Ty> {
         Some(StarlarkCallable::<StarlarkCallableParamAny, FrozenValue>::starlark_type_repr())
