@@ -974,3 +974,27 @@ fn test_small_map_frozen_value_key_forward_ref() -> crate::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_range_round_trip() -> crate::Result<()> {
+    use std::num::NonZeroI32;
+
+    use crate::values::types::range::Range;
+
+    // Create a heap with a Range value.
+    let heap = FrozenHeap::new();
+    heap.alloc_simple(Range::new(1, 10, NonZeroI32::new(2).unwrap()));
+    let heap_ref = heap.into_ref_named(TestHeapName::heap_name("test_range"));
+
+    let restored = round_trip_heap_ref(&heap_ref)?;
+
+    // Range is Copy (no Drop), so it's in the undrop bump.
+    let undrop_headers = restored.collect_undrop_headers_ordered();
+    assert_eq!(undrop_headers.len(), 1);
+
+    let range: &Range = undrop_headers[0].unpack().downcast_ref().unwrap();
+    // Verify by Display output: range(1, 10, 2)
+    assert_eq!(format!("{}", range), "range(1, 10, 2)");
+
+    Ok(())
+}

@@ -21,6 +21,8 @@
 //! This allows these types to be used directly in `#[derive(StarlarkPagable)]`
 //! without needing `#[starlark_pagable(pagable)]`.
 
+use std::num::NonZeroI32;
+
 use pagable::PagableDeserialize;
 use pagable::PagableSerialize;
 use starlark_map::Hashed;
@@ -191,5 +193,20 @@ impl SmallMapKeyDeserialize for FrozenStringValue {
     ) -> crate::Result<Hashed<Self>> {
         let fsv = FrozenStringValue::starlark_deserialize(ctx)?;
         Ok(fsv.get_hashed())
+    }
+}
+
+impl StarlarkSerialize for NonZeroI32 {
+    fn starlark_serialize(&self, ctx: &mut dyn StarlarkSerializeContext) -> crate::Result<()> {
+        self.get().pagable_serialize(ctx.pagable())?;
+        Ok(())
+    }
+}
+
+impl StarlarkDeserialize for NonZeroI32 {
+    fn starlark_deserialize(ctx: &mut dyn StarlarkDeserializeContext<'_>) -> crate::Result<Self> {
+        let v = i32::pagable_deserialize(ctx.pagable())?;
+        NonZeroI32::new(v)
+            .ok_or_else(|| crate::Error::new_other(anyhow::anyhow!("expected non-zero i32, got 0")))
     }
 }

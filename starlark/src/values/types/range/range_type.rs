@@ -22,6 +22,7 @@ use std::num::NonZeroI32;
 use allocative::Allocative;
 use dupe::Dupe;
 use starlark_derive::NoSerialize;
+use starlark_derive::StarlarkPagable;
 use starlark_derive::starlark_value;
 
 use crate as starlark;
@@ -37,7 +38,16 @@ use crate::values::index::convert_index;
 use crate::values::index::convert_slice_indices;
 
 /// Representation of `range()` type.
-#[derive(Clone, Copy, Dupe, Debug, ProvidesStaticType, NoSerialize, Allocative)]
+#[derive(
+    Clone,
+    Copy,
+    Dupe,
+    Debug,
+    ProvidesStaticType,
+    NoSerialize,
+    Allocative,
+    StarlarkPagable
+)]
 pub struct Range {
     start: i32,
     stop: i32,
@@ -102,7 +112,7 @@ impl Range {
     }
 }
 
-#[starlark_value(type = Range::TYPE)]
+#[starlark_value(type = Range::TYPE, skip_pagable)]
 impl<'v> StarlarkValue<'v> for Range {
     fn to_bool(&self) -> bool {
         (self.start < self.stop && self.step.get() > 0)
