@@ -12,6 +12,7 @@ use postcard::ser_flavors::Flavor;
 
 use crate::PagableSerializer;
 use crate::arc_erase::ArcEraseDyn;
+use crate::traits::PagableCursor;
 use crate::traits::SessionContext;
 
 /// Serializer used during the paging process to serialize arcs and their nested dependencies.
@@ -20,7 +21,7 @@ use crate::traits::SessionContext;
 /// enabling recursive serialization where nested arcs are tracked separately for
 /// content-addressable storage.
 pub struct SerializerForPaging<'a> {
-    serde: postcard::Serializer<postcard::ser_flavors::StdVec>,
+    serde: postcard::Serializer<crate::flavors::PagableVecFlavor>,
     arcs: Vec<Box<dyn ArcEraseDyn>>,
     session_context: &'a mut SessionContext,
 }
@@ -29,7 +30,7 @@ impl<'a> SerializerForPaging<'a> {
     pub(crate) fn new(session_context: &'a mut SessionContext) -> Self {
         Self {
             serde: postcard::Serializer {
-                output: postcard::ser_flavors::StdVec::new(),
+                output: crate::flavors::PagableVecFlavor::new(),
             },
             arcs: Vec::new(),
             session_context,
@@ -45,13 +46,20 @@ impl<'a> SerializerForPaging<'a> {
 }
 
 impl PagableSerializer for SerializerForPaging<'_> {
-    fn serde(&mut self) -> &mut postcard::Serializer<postcard::ser_flavors::StdVec> {
+    fn serde(&mut self) -> &mut postcard::Serializer<crate::flavors::PagableVecFlavor> {
         &mut self.serde
     }
 
     fn serialize_arc(&mut self, arc: &dyn ArcEraseDyn) -> crate::Result<()> {
         self.arcs.push(arc.clone_dyn());
         Ok(())
+    }
+
+    fn position(&mut self) -> PagableCursor {
+        PagableCursor {
+            byte_pos: self.serde.output.position(),
+            arc_index: self.arcs.len(),
+        }
     }
 
     fn session_context(&mut self) -> &mut SessionContext {

@@ -31,6 +31,7 @@ pub use typetag::PagableTagged;
 
 pub mod arc_erase;
 pub mod context;
+pub mod flavors;
 mod impls;
 mod pagable_arc;
 pub mod storage;
@@ -44,6 +45,7 @@ pub use storage::data::DataKey;
 pub use storage::data::OptionalDataKey;
 pub use traits::Pagable;
 pub use traits::PagableBoxDeserialize;
+pub use traits::PagableCursor;
 pub use traits::PagableDeserialize;
 pub use traits::PagableDeserializeOwned;
 pub use traits::PagableDeserializer;

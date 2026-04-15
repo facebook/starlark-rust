@@ -17,6 +17,7 @@ use crate::PagableSerializer;
 use crate::arc_erase::ArcEraseDyn;
 use crate::storage::data::DataKey;
 use crate::storage::handle::PagableStorageHandle;
+use crate::traits::PagableCursor;
 use crate::traits::SessionContext;
 
 /// Concrete implementation of [`PagableSerializer`] backed by postcard.
@@ -24,7 +25,7 @@ use crate::traits::SessionContext;
 /// Serializes data using the postcard binary format while tracking nested Arc
 /// references separately for deduplication and lazy loading support.
 pub struct PagableSerializerImpl {
-    pub(crate) inner: postcard::Serializer<postcard::ser_flavors::StdVec>,
+    pub(crate) inner: postcard::Serializer<crate::flavors::PagableVecFlavor>,
     arcs: Vec<Box<dyn ArcEraseDyn>>,
     session_context: SessionContext,
 }
@@ -43,7 +44,7 @@ impl PagableSerializerImpl {
     pub fn testing_new() -> Self {
         Self {
             inner: postcard::Serializer {
-                output: postcard::ser_flavors::StdVec::new(),
+                output: crate::flavors::PagableVecFlavor::new(),
             },
             arcs: Vec::new(),
             session_context: SessionContext::new(),
@@ -59,7 +60,7 @@ impl PagableSerializerImpl {
 }
 
 impl PagableSerializer for PagableSerializerImpl {
-    fn serde(&mut self) -> &mut postcard::Serializer<postcard::ser_flavors::StdVec> {
+    fn serde(&mut self) -> &mut postcard::Serializer<crate::flavors::PagableVecFlavor> {
         &mut self.inner
     }
 
@@ -67,6 +68,13 @@ impl PagableSerializer for PagableSerializerImpl {
         let arc = arc.clone_dyn();
         self.arcs.push(arc as _);
         Ok(())
+    }
+
+    fn position(&mut self) -> PagableCursor {
+        PagableCursor {
+            byte_pos: self.inner.output.position(),
+            arc_index: self.arcs.len(),
+        }
     }
 
     fn session_context(&mut self) -> &mut SessionContext {
@@ -80,8 +88,13 @@ impl PagableSerializer for PagableSerializerImpl {
 /// references through the storage backend. Supports both cached arc retrieval
 /// (fast path) and lazy deserialization from raw data.
 pub struct PagableDeserializerImpl<'de, 's> {
-    inner: postcard::Deserializer<'de, postcard::de_flavors::Slice<'de>>,
-    arcs: std::slice::Iter<'de, DataKey>,
+    // Position of the deserializer in the data buffer
+    pos: crate::flavors::SharedPosition,
+    // Index of the next arc to be deserialized
+    arc_index: usize,
+
+    inner: postcard::Deserializer<'de, crate::flavors::PagableSlice<'de>>,
+    arcs: &'de [DataKey],
     storage: &'s PagableStorageHandle,
 }
 
@@ -91,9 +104,14 @@ impl<'de, 's> PagableDeserializerImpl<'de, 's> {
         arcs: &'de [DataKey],
         storage: &'s PagableStorageHandle,
     ) -> Self {
+        let pos = crate::flavors::SharedPosition::new();
         Self {
-            inner: postcard::Deserializer::from_bytes(data),
-            arcs: arcs.iter(),
+            pos: pos.clone(),
+            inner: postcard::Deserializer::from_flavor(crate::flavors::PagableSlice::new(
+                data, pos,
+            )),
+            arcs,
+            arc_index: 0,
             storage,
         }
     }
@@ -114,8 +132,9 @@ impl<'de, 's> PagableDeserializer<'de> for PagableDeserializerImpl<'de, 's> {
         // Read the DataKey from the arcs list
         let key = self
             .arcs
-            .next()
+            .get(self.arc_index)
             .ok_or_else(|| anyhow::anyhow!("No more arc keys available during deserialization"))?;
+        self.arc_index += 1;
 
         // Request the arc from storage
         match self
@@ -140,6 +159,18 @@ impl<'de, 's> PagableDeserializer<'de> for PagableDeserializerImpl<'de, 's> {
                 Ok(arc)
             }
         }
+    }
+
+    fn position(&self) -> PagableCursor {
+        PagableCursor {
+            byte_pos: self.pos.get(),
+            arc_index: self.arc_index,
+        }
+    }
+
+    unsafe fn seek(&mut self, cursor: PagableCursor) {
+        self.pos.set(cursor.byte_pos);
+        self.arc_index = cursor.arc_index;
     }
 
     fn storage(&self) -> PagableStorageHandle {
