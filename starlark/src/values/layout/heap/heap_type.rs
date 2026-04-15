@@ -38,6 +38,7 @@ use bumpalo::Bump;
 use dupe::Dupe;
 use dupe::IterDupedExt;
 use pagable::PagableBoxDeserialize;
+use pagable::PagableCursor;
 use pagable::PagableDeserialize;
 use pagable::PagableDeserializer;
 use pagable::PagableSerialize;
@@ -54,7 +55,9 @@ use crate::pagable::DeserTypeId;
 use crate::pagable::heap_ref_id::HeapRefId;
 use crate::pagable::lookup_vtable;
 use crate::pagable::starlark_deserialize::StarlarkDeserializeContext;
+use crate::pagable::starlark_deserialize_context::HeapDeserializationState;
 use crate::pagable::starlark_deserialize_context::StarlarkDeserializerImpl;
+use crate::pagable::starlark_deserialize_context::ValueDeserSlot;
 use crate::pagable::starlark_serialize::StarlarkSerializeContext;
 use crate::pagable::starlark_serialize_context::StarlarkSerializerImpl;
 use crate::values::AllocFrozenValue;
@@ -77,8 +80,8 @@ use crate::values::layout::avalue::AValueImpl;
 use crate::values::layout::heap::allocator::alloc::allocator::ChunkAllocator;
 use crate::values::layout::heap::arena::Arena;
 use crate::values::layout::heap::arena::ArenaOffset;
-use crate::values::layout::heap::arena::ArenaRawCursor;
 use crate::values::layout::heap::arena::ArenaVisitor;
+use crate::values::layout::heap::arena::BumpKind;
 use crate::values::layout::heap::arena::Reservation;
 use crate::values::layout::heap::call_enter_exit::CallEnter;
 use crate::values::layout::heap::call_enter_exit::CallExit;
@@ -352,13 +355,11 @@ unsafe impl Send for FrozenFrozenHeap {}
 /// context can set them before phase 2.
 pub(crate) struct PartiallyDeserializedHeap {
     arena: Arena<ChunkAllocator>,
-    drop_cursor: Option<ArenaRawCursor>,
-    non_drop_cursor: Option<ArenaRawCursor>,
     drop_base: usize,
     non_drop_base: usize,
-    drop_total_bytes: u32,
-    non_drop_total_bytes: u32,
     refs: Vec<FrozenHeapRef>,
+    /// Value tracking info (headers already written, ready for deserialization).
+    deser_state: HeapDeserializationState,
 }
 
 impl PartiallyDeserializedHeap {
@@ -368,6 +369,18 @@ impl PartiallyDeserializedHeap {
 
     pub(crate) fn non_drop_base(&self) -> usize {
         self.non_drop_base
+    }
+
+    /// Take the deserialization state and raw heap components.
+    /// The caller constructs `FrozenFrozenHeap` after phase 2 completes.
+    pub(crate) fn take_deser_state_and_finish(
+        self,
+    ) -> (
+        HeapDeserializationState,
+        Arena<ChunkAllocator>,
+        Vec<FrozenHeapRef>,
+    ) {
+        (self.deser_state, self.arena, self.refs)
     }
 }
 
@@ -379,18 +392,22 @@ impl FrozenFrozenHeap {
     ///     [pagable serialized arc]
     /// [drop_total_bytes: u32]
     /// [non_drop_total_bytes: u32]
-    /// (drop bump):
-    ///   [count: usize]
-    ///   for each value (count times):
-    ///     [deser_type_id: str]
-    ///     [alloc_size: u32]
-    ///     [value_data...]
-    /// (non-drop bump):
-    ///   [count: usize]
-    ///   for each value (count times):
-    ///     [deser_type_id: str]
-    ///     [alloc_size: u32]
-    ///     [value_data...]
+    /// [total_value_count: u32]
+    /// // Offset table — fixed-size, 8 raw LE bytes per entry.
+    /// // (value_count + 1) entries: one per value + one sentinel end entry.
+    /// // Written as placeholder, then patched via write_at after value data.
+    /// for i in 0..=value_count:
+    ///   [stream_offset: u32 LE]    // relative to base_pos
+    ///   [arc_offset: u32 LE]       // relative to base arc_index
+    /// // Metadata — postcard encoded, variable size.
+    /// for each value:
+    ///   [arena_offset: ArenaOffset]
+    ///   [deser_type_id: DeserTypeId]
+    ///   [alloc_size: u32]
+    /// // base_pos starts here — offsets are relative to this point.
+    /// // Value data — postcard encoded, sequential.
+    /// for each value:
+    ///   [value_data...]
     /// ```
     fn serialize_inner(&self, serializer: &mut dyn PagableSerializer) -> crate::Result<()> {
         let heap_name = self
@@ -408,26 +425,6 @@ impl FrozenFrozenHeap {
                 .sum()
         }
 
-        fn serialize_bump(
-            headers: &[&AValueHeader],
-            ctx: &mut dyn StarlarkSerializeContext,
-        ) -> crate::Result<()> {
-            headers.len().pagable_serialize(ctx.pagable())?;
-            for header in headers {
-                let avalue = header.unpack();
-                avalue
-                    .vtable()
-                    .deser_type_id
-                    .pagable_serialize(ctx.pagable())?;
-                avalue
-                    .memory_size()
-                    .bytes()
-                    .pagable_serialize(ctx.pagable())?;
-                avalue.starlark_serialize(ctx)?;
-            }
-            Ok(())
-        }
-
         self.refs.len().pagable_serialize(serializer)?;
         for heap_ref in self.refs.iter() {
             heap_ref.pagable_serialize(serializer)?;
@@ -441,6 +438,45 @@ impl FrozenFrozenHeap {
         bump_total_bytes(&drop_headers).pagable_serialize(serializer)?;
         bump_total_bytes(&non_drop_headers).pagable_serialize(serializer)?;
 
+        // Collect all values: drop bump first, then non-drop bump.
+        let total_count = drop_headers.len() + non_drop_headers.len();
+        (total_count as u32).pagable_serialize(serializer)?;
+
+        // Write offset table placeholder: (value_count + 1) entries × 8 bytes each.
+        // The extra entry is the end sentinel (total stream bytes + total arcs).
+        let table_pos = serializer.position();
+        let table_entry_count = total_count + 1;
+        let table_byte_size = table_entry_count * 8;
+        for _ in 0..table_byte_size {
+            0u8.pagable_serialize(serializer)?;
+        }
+
+        // Write metadata for each value (postcard encoded).
+        let all_bumps: [(BumpKind, &[&AValueHeader]); 2] = [
+            (BumpKind::Drop, &drop_headers),
+            (BumpKind::NonDrop, &non_drop_headers),
+        ];
+        for (bump_kind, headers) in &all_bumps {
+            let mut bump_offset: u32 = 0;
+            for header in *headers {
+                let avalue = header.unpack();
+                let alloc_size = avalue.memory_size().bytes();
+                ArenaOffset {
+                    bump: *bump_kind,
+                    offset: bump_offset,
+                }
+                .pagable_serialize(serializer)?;
+                avalue
+                    .vtable()
+                    .deser_type_id
+                    .pagable_serialize(serializer)?;
+                alloc_size.pagable_serialize(serializer)?;
+                bump_offset += alloc_size;
+            }
+        }
+
+        // Record base_pos — all offsets are relative to here.
+        let base_pos = serializer.position();
         // Get or create shared state. Ensure this heap and all its transitive
         // dependencies have offset maps registered before we serialize arena
         // values (which may contain cross-heap FrozenValue pointers).
@@ -454,8 +490,35 @@ impl FrozenFrozenHeap {
         // Create local StarlarkSerializerImpl with shared state.
         let mut ctx = StarlarkSerializerImpl::new(serializer, state, heap_id);
 
-        serialize_bump(&drop_headers, &mut ctx)?;
-        serialize_bump(&non_drop_headers, &mut ctx)?;
+        // Serialize value data, recording start cursor per value.
+        let mut entry_cursors: Vec<(u32, u32)> = Vec::with_capacity(table_entry_count);
+        for (_bump_kind, headers) in &all_bumps {
+            for header in *headers {
+                let start = ctx.pagable().position();
+                entry_cursors.push((
+                    (start.byte_pos - base_pos.byte_pos) as u32,
+                    (start.arc_index - base_pos.arc_index) as u32,
+                ));
+                header.unpack().starlark_serialize(&mut ctx)?;
+            }
+        }
+        // End sentinel: position after all value data.
+        let end = ctx.pagable().position();
+        entry_cursors.push((
+            (end.byte_pos - base_pos.byte_pos) as u32,
+            (end.arc_index - base_pos.arc_index) as u32,
+        ));
+
+        // Patch the offset table with actual values.
+        let mut table_bytes = vec![0u8; table_byte_size];
+        for (i, (stream_offset, arc_offset)) in entry_cursors.iter().enumerate() {
+            let off = i * 8;
+            table_bytes[off..off + 4].copy_from_slice(&stream_offset.to_le_bytes());
+            table_bytes[off + 4..off + 8].copy_from_slice(&arc_offset.to_le_bytes());
+        }
+        // SAFETY: table_pos.byte_pos points to the placeholder written earlier,
+        // and table_bytes has the correct size.
+        unsafe { ctx.pagable().write_at(table_pos.byte_pos, &table_bytes) };
 
         Ok(())
     }
@@ -466,18 +529,27 @@ impl FrozenFrozenHeap {
         let heap_id = HeapRefId::pagable_deserialize(deserializer)?;
 
         let partial = Self::deserialize_phase1(deserializer)?;
+        let drop_base = partial.drop_base();
+        let non_drop_base = partial.non_drop_base();
+
+        let (deser_state, arena, refs) = partial.take_deser_state_and_finish();
 
         // Get or create shared state.
         let state = StarlarkDeserializerImpl::get_or_create_state(deserializer.as_dyn());
-        let mut ctx = StarlarkDeserializerImpl::new(deserializer.as_dyn(), state.dupe(), heap_id);
+        let mut ctx = StarlarkDeserializerImpl::new(
+            deserializer.as_dyn(),
+            state.dupe(),
+            heap_id,
+            deser_state,
+        );
 
         // Register bases in shared state.
         state
             .lock()
             .expect("deser state lock poisoned")
-            .register_bases(heap_id, partial.drop_base(), partial.non_drop_base());
+            .register_bases(heap_id, drop_base, non_drop_base);
 
-        let heap = Self::deserialize_phase2(partial, &mut ctx)?;
+        let heap = Self::deserialize_phase2(arena, refs, &mut ctx)?;
 
         Ok(heap)
     }
@@ -496,92 +568,110 @@ impl FrozenFrozenHeap {
         let drop_total_bytes = u32::pagable_deserialize(deserializer)?;
         let non_drop_total_bytes = u32::pagable_deserialize(deserializer)?;
 
+        // Read total value count.
+        let total_count = u32::pagable_deserialize(deserializer)? as usize;
+        // Read offset table: (value_count + 1) entries × 8 raw bytes each.
+        // Last entry is the end sentinel.
+        let table_entry_count = total_count + 1;
+        let mut offset_table = Vec::with_capacity(table_entry_count);
+        for _ in 0..table_entry_count {
+            let mut buf = [0u8; 8];
+            for b in &mut buf {
+                *b = u8::pagable_deserialize(deserializer)?;
+            }
+            let stream_offset = u32::from_le_bytes([buf[0], buf[1], buf[2], buf[3]]);
+            let arc_offset = u32::from_le_bytes([buf[4], buf[5], buf[6], buf[7]]);
+            offset_table.push((stream_offset, arc_offset));
+        }
+
+        // Read metadata for each value.
+        let mut value_meta = Vec::with_capacity(total_count);
+        for _ in 0..total_count {
+            let arena_offset = ArenaOffset::pagable_deserialize(deserializer)?;
+            let deser_type_id = DeserTypeId::pagable_deserialize(deserializer)?;
+            let vtable = lookup_vtable(deser_type_id)?;
+            let alloc_size = u32::pagable_deserialize(deserializer)?;
+            value_meta.push((arena_offset, vtable, alloc_size));
+        }
+        // Record base_pos — all stream_offsets are relative to here.
+        let base_pos = deserializer.position();
+
         let arena = Arena::default();
 
-        let drop_cursor = arena.alloc_raw_drop_cursor(drop_total_bytes);
+        let mut drop_cursor = arena.alloc_raw_drop_cursor(drop_total_bytes);
         let drop_base = drop_cursor.as_ref().map_or(0, |c| c.base());
 
-        let non_drop_cursor = arena.alloc_raw_non_drop_cursor(non_drop_total_bytes);
+        let mut non_drop_cursor = arena.alloc_raw_non_drop_cursor(non_drop_total_bytes);
         let non_drop_base = non_drop_cursor.as_ref().map_or(0, |c| c.base());
+
+        // Write AValueHeaders to arena and build value info.
+        let mut ptr_to_index = HashMap::new();
+        let mut slots = Vec::with_capacity(total_count);
+        // Use only the first total_count entries (skip the end sentinel).
+        for (i, ((arena_offset, vtable, alloc_size), &(stream_offset, arc_offset))) in value_meta
+            .iter()
+            .zip(offset_table[..total_count].iter())
+            .enumerate()
+        {
+            let cursor = match arena_offset.bump {
+                BumpKind::Drop => drop_cursor.as_mut(),
+                BumpKind::NonDrop => non_drop_cursor.as_mut(),
+            };
+            let cursor = cursor.expect("cursor must exist for bump with values");
+            unsafe {
+                let header_ptr = cursor.next(*alloc_size);
+                ptr::write(header_ptr, AValueHeader(vtable));
+                let raw_ptr = StarlarkValueRawPtr::new_header(&*header_ptr);
+                let header_addr = header_ptr as *const _ as usize;
+                ptr_to_index.insert(header_addr, i);
+                slots.push(ValueDeserSlot::new(
+                    stream_offset,
+                    arc_offset,
+                    vtable,
+                    raw_ptr,
+                ));
+            }
+        }
+
+        // The last offset table entry is the end sentinel.
+        let &(end_stream_offset, end_arc_offset) = offset_table.last().unwrap();
+        let end_pos = PagableCursor {
+            byte_pos: base_pos.byte_pos + end_stream_offset as usize,
+            arc_index: base_pos.arc_index + end_arc_offset as usize,
+        };
+        let deser_state = HeapDeserializationState::new(slots, ptr_to_index, base_pos, end_pos);
 
         Ok(PartiallyDeserializedHeap {
             arena,
-            drop_cursor,
-            non_drop_cursor,
             drop_base,
             non_drop_base,
-            drop_total_bytes,
-            non_drop_total_bytes,
             refs,
+            deser_state,
         })
     }
 
     fn deserialize_phase2(
-        mut partial: PartiallyDeserializedHeap,
-        ctx: &mut dyn StarlarkDeserializeContext<'_>,
+        arena: Arena<ChunkAllocator>,
+        refs: Vec<FrozenHeapRef>,
+        ctx: &mut StarlarkDeserializerImpl<'_, '_>,
     ) -> crate::Result<FrozenFrozenHeap> {
-        fn deserialize_bump(
-            cursor: &mut ArenaRawCursor,
-            count: usize,
-            ctx: &mut dyn StarlarkDeserializeContext<'_>,
-        ) -> crate::Result<u32> {
-            let mut consumed_bytes: u32 = 0;
-            for _ in 0..count {
-                let deser_type_id = DeserTypeId::pagable_deserialize(ctx.pagable())?;
-                let vtable = lookup_vtable(deser_type_id)?;
-                let alloc_size = u32::pagable_deserialize(ctx.pagable())?;
-                consumed_bytes += alloc_size;
-                unsafe {
-                    let header_ptr = cursor.next(alloc_size);
-                    ptr::write(header_ptr, AValueHeader(vtable));
-                    let raw_ptr = StarlarkValueRawPtr::new_header(&*header_ptr);
-                    (vtable.starlark_deserialize)(raw_ptr, ctx)?;
-                }
+        let count = ctx.current_heap_deser_state().value_count();
+        for i in 0..count {
+            let target = ctx.current_heap_deser_state_mut().try_claim(i);
+            if let Some(target) = target {
+                // SAFETY: abs_pos is computed from the offset table written during
+                // serialization — it points to the start of this value's data.
+                unsafe { ctx.pagable().seek(target.abs_pos) };
+                (target.vtable.starlark_deserialize)(target.raw_ptr, ctx)?;
             }
-            Ok(consumed_bytes)
         }
-
-        fn validate_arena_size(
-            expected_bytes: u32,
-            actual_bytes: u32,
-            count: usize,
-        ) -> crate::Result<()> {
-            if actual_bytes != expected_bytes {
-                return Err(crate::pagable::error::PagableError::InconsistentArenaSize {
-                    count,
-                    expected_bytes,
-                    actual_bytes,
-                }
-                .into());
-            }
-            Ok(())
-        }
-
-        // Deserialize drop bump values.
-        let drop_count = usize::pagable_deserialize(ctx.pagable())?;
-        let drop_consumed = if let Some(ref mut cursor) = partial.drop_cursor {
-            deserialize_bump(cursor, drop_count, ctx)?
-        } else {
-            0
-        };
-        validate_arena_size(partial.drop_total_bytes, drop_consumed, drop_count)?;
-
-        // Read non-drop count and deserialize non-drop bump values.
-        let non_drop_count = usize::pagable_deserialize(ctx.pagable())?;
-        let non_drop_consumed = if let Some(ref mut cursor) = partial.non_drop_cursor {
-            deserialize_bump(cursor, non_drop_count, ctx)?
-        } else {
-            0
-        };
-        validate_arena_size(
-            partial.non_drop_total_bytes,
-            non_drop_consumed,
-            non_drop_count,
-        )?;
+        let end = ctx.current_heap_deser_state().end_position();
+        // SAFETY: end_position is past the last value's data in this heap.
+        unsafe { ctx.pagable().seek(end) };
 
         Ok(FrozenFrozenHeap {
-            arena: partial.arena,
-            refs: partial.refs.into_boxed_slice(),
+            arena,
+            refs: refs.into_boxed_slice(),
             name: None,
         })
     }

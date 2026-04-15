@@ -44,4 +44,11 @@ pub trait StarlarkDeserializeContext<'de> {
 
     /// Deserialize a `FrozenValue`
     fn deserialize_frozen_value(&mut self) -> crate::Result<FrozenValue>;
+
+    /// Ensure a same-heap `FrozenValue`'s target is fully initialized.
+    ///
+    /// If the target value has not yet been deserialized, this seeks to its
+    /// position in the stream and deserializes it immediately. For cross-heap
+    /// pointers, inline ints, or already-initialized values, this is a no-op.
+    fn ensure_initialized(&mut self, fv: FrozenValue) -> crate::Result<()>;
 }
