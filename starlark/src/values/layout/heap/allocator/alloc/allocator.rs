@@ -201,7 +201,7 @@ impl ArenaAllocator for ChunkAllocator {
 
 #[cfg(test)]
 mod tests {
-    use rand::Rng;
+    use rand::RngExt as _;
     use rand::SeedableRng;
     use rand::rngs::SmallRng;
 

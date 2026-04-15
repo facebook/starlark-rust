@@ -22,7 +22,7 @@ use std::fmt;
 
 use derive_more::Display;
 use dupe::Dupe;
-use rand::Rng;
+use rand::RngExt as _;
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
 use starlark_derive::starlark_module;
