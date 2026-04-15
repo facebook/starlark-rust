@@ -24,6 +24,7 @@ use std::array;
 use allocative::Allocative;
 use once_cell::sync::Lazy;
 use starlark_derive::NoSerialize;
+use starlark_derive::StarlarkPagable;
 use starlark_derive::starlark_value;
 
 use crate as starlark;
@@ -44,7 +45,8 @@ use crate::values::layout::heap::heap_type::FrozenHeapName;
     Debug,
     ProvidesStaticType,
     NoSerialize,
-    Allocative
+    Allocative,
+    StarlarkPagable
 )]
 #[display("{:?}", self)]
 pub(crate) struct LocalAsValue {
@@ -52,7 +54,7 @@ pub(crate) struct LocalAsValue {
     pub(crate) local: LocalSlotId,
 }
 
-#[starlark_value(type = "LocalAsValue")]
+#[starlark_value(type = "LocalAsValue", skip_pagable)]
 impl<'v> StarlarkValue<'v> for LocalAsValue {}
 
 starlark_simple_value!(LocalAsValue);

@@ -17,6 +17,7 @@
 
 use allocative::Allocative;
 use dupe::Dupe;
+use starlark_derive::StarlarkPagable;
 use starlark_derive::Trace;
 use starlark_derive::VisitSpanMut;
 
@@ -35,7 +36,8 @@ use crate::values::Freeze;
     Trace,
     Freeze,
     VisitSpanMut,
-    Allocative
+    Allocative,
+    StarlarkPagable
 )]
 pub(crate) struct LocalSlotId(pub(crate) u32);
 
