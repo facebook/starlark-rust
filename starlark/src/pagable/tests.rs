@@ -633,3 +633,92 @@ fn test_cross_heap_frozen_value_round_trip() -> crate::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_heap_ref_dedup_round_trip() -> crate::Result<()> {
+    // Diamond dependency: heap_a refs [heap_b, heap_c], both heap_b and heap_c ref heap_d. (A → [B, C] → D)
+    // After round-trip, the deserialized heap_b and heap_c should share the same heap_d ref.
+
+    // heap_d: shared dependency.
+    let heap_d = FrozenHeap::new();
+    let d_fv = heap_d.alloc_simple(SimpleData {
+        flag: true,
+        count: 1,
+    });
+    let heap_d_ref = heap_d.into_ref_named(TestHeapName::heap_name("d"));
+
+    // heap_b: depends on heap_d, has a value referencing heap_d.
+    let heap_b = FrozenHeap::new();
+    heap_b.add_reference(&heap_d_ref);
+    heap_b.alloc_simple(RefData {
+        label: 2,
+        target: d_fv,
+    });
+    let heap_b_ref = heap_b.into_ref_named(TestHeapName::heap_name("b"));
+
+    // heap_c: also depends on heap_d, has a value referencing heap_d.
+    let heap_c = FrozenHeap::new();
+    heap_c.add_reference(&heap_d_ref);
+    heap_c.alloc_simple(RefData {
+        label: 3,
+        target: d_fv,
+    });
+    let heap_c_ref = heap_c.into_ref_named(TestHeapName::heap_name("c"));
+
+    // heap_a: depends on both heap_b and heap_c.
+    let heap_a = FrozenHeap::new();
+    heap_a.add_reference(&heap_b_ref);
+    heap_a.add_reference(&heap_c_ref);
+    heap_a.alloc_simple(SimpleData {
+        flag: false,
+        count: 4,
+    });
+    let heap_a_ref = heap_a.into_ref_named(TestHeapName::heap_name("a"));
+
+    let restored = round_trip_heap_ref(&heap_a_ref)?;
+
+    // heap_a has 2 refs: heap_b and heap_c.
+    let a_refs: Vec<_> = restored.refs().collect();
+    assert_eq!(a_refs.len(), 2);
+
+    let restored_b = &a_refs[0];
+    let restored_c = &a_refs[1];
+
+    // Both heap_b and heap_c should have 1 ref each (heap_d).
+    let b_refs: Vec<_> = restored_b.refs().collect();
+    let c_refs: Vec<_> = restored_c.refs().collect();
+    assert_eq!(b_refs.len(), 1);
+    assert_eq!(c_refs.len(), 1);
+
+    // The key dedup check: heap_b's ref to heap_d and heap_c's ref to heap_d
+    // should be the same FrozenHeapRef (pointer-equal via Arc).
+    assert_eq!(b_refs[0], c_refs[0]);
+
+    // Verify the shared heap_d's value is correct.
+    let d_headers = b_refs[0].collect_undrop_headers_ordered();
+    assert_eq!(d_headers.len(), 1);
+    let d_data: &SimpleData = d_headers[0].unpack().downcast_ref().unwrap();
+    assert_eq!(d_data.flag, true);
+    assert_eq!(d_data.count, 1);
+
+    // Verify heap_b's and heap_c's values point into the shared heap_d.
+    let b_headers = restored_b.collect_undrop_headers_ordered();
+    assert_eq!(b_headers.len(), 1);
+    let b_data: &RefData = b_headers[0].unpack().downcast_ref().unwrap();
+    assert_eq!(b_data.label, 2);
+    assert_eq!(
+        b_data.target.ptr_value().ptr_value_untagged(),
+        d_headers[0] as *const _ as usize
+    );
+
+    let c_headers = restored_c.collect_undrop_headers_ordered();
+    assert_eq!(c_headers.len(), 1);
+    let c_data: &RefData = c_headers[0].unpack().downcast_ref().unwrap();
+    assert_eq!(c_data.label, 3);
+    assert_eq!(
+        c_data.target.ptr_value().ptr_value_untagged(),
+        d_headers[0] as *const _ as usize
+    );
+
+    Ok(())
+}
