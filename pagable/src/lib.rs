@@ -51,6 +51,7 @@ pub use traits::PagableEagerDeserialize;
 pub use traits::PagableEagerSerialize;
 pub use traits::PagableSerialize;
 pub use traits::PagableSerializer;
+pub use traits::SessionContext;
 
 pub type Result<O> = anyhow::Result<O>;
 pub type Error = anyhow::Error;

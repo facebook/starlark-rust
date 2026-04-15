@@ -17,10 +17,47 @@
 //! - [`PagableDeserializeOwned`] - trait for types that can be deserialized from any lifetime
 //! - [`PagableSerializer`] / [`PagableDeserializer`] - traits for serializer/deserializer implementations
 
+use std::any::Any;
 use std::any::TypeId;
+use std::collections::HashMap;
+use std::sync::Mutex;
 
 use crate::arc_erase::ArcEraseDyn;
 use crate::storage::handle::PagableStorageHandle;
+
+// ============================================================================
+// SessionContext — typed map for passing session-scoped state through serializers
+// ============================================================================
+
+/// A typed map that allows different layers to store and retrieve their own
+/// context data without coupling. Uses `TypeId` as key, so each type can
+/// store exactly one value.
+#[derive(Default)]
+pub struct SessionContext {
+    map: HashMap<TypeId, Box<dyn Any + Send + Sync>>,
+}
+
+impl SessionContext {
+    /// Create a new empty context.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Get a reference to the stored value of type `T`.
+    pub fn get<T: Any + Send + Sync>(&self) -> Option<&T> {
+        self.map.get(&TypeId::of::<T>())?.downcast_ref()
+    }
+
+    /// Get a mutable reference to the stored value of type `T`.
+    pub fn get_mut<T: Any + Send + Sync>(&mut self) -> Option<&mut T> {
+        self.map.get_mut(&TypeId::of::<T>())?.downcast_mut()
+    }
+
+    /// Store a value of type `T`, replacing any previous value of the same type.
+    pub fn set<T: Any + Send + Sync>(&mut self, value: T) {
+        self.map.insert(TypeId::of::<T>(), Box::new(value));
+    }
+}
 
 // ============================================================================
 // Combined Pagable trait
@@ -132,6 +169,9 @@ pub trait PagableSerializer {
     /// Implementations should track Arc identity so that the same Arc serialized
     /// multiple times results in shared references after deserialization.
     fn serialize_arc(&mut self, arc: &dyn ArcEraseDyn) -> crate::Result<()>;
+
+    /// Access the session context for storing/retrieving layer-specific state.
+    fn session_context(&mut self) -> &mut SessionContext;
 }
 
 static_assertions::assert_obj_safe!(PagableSerializer);
@@ -175,6 +215,9 @@ pub trait PagableDeserializer<'de> {
     /// This is useful when you need to pass the deserializer to code that
     /// works with `dyn PagableDeserializer` rather than generic types.
     fn as_dyn(&mut self) -> &mut dyn PagableDeserializer<'de>;
+
+    /// Access the session context for storing/retrieving layer-specific state.
+    fn session_context(&self) -> &Mutex<SessionContext>;
 }
 
 static_assertions::assert_obj_safe!(PagableDeserializer<'_>);
@@ -200,6 +243,10 @@ impl<'de, D: PagableDeserializer<'de> + ?Sized> PagableDeserializer<'de> for &mu
 
     fn as_dyn(&mut self) -> &mut dyn PagableDeserializer<'de> {
         self
+    }
+
+    fn session_context(&self) -> &Mutex<SessionContext> {
+        <D as PagableDeserializer<'de>>::session_context(self)
     }
 }
 

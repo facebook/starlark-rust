@@ -17,6 +17,7 @@ use crate::PagableSerializer;
 use crate::arc_erase::ArcEraseDyn;
 use crate::storage::data::DataKey;
 use crate::storage::handle::PagableStorageHandle;
+use crate::traits::SessionContext;
 
 /// Concrete implementation of [`PagableSerializer`] backed by postcard.
 ///
@@ -25,6 +26,7 @@ use crate::storage::handle::PagableStorageHandle;
 pub struct PagableSerializerImpl {
     pub(crate) inner: postcard::Serializer<postcard::ser_flavors::StdVec>,
     arcs: Vec<Box<dyn ArcEraseDyn>>,
+    session_context: SessionContext,
 }
 
 /// Result of serialization containing the raw bytes and nested arc references.
@@ -44,6 +46,7 @@ impl PagableSerializerImpl {
                 output: postcard::ser_flavors::StdVec::new(),
             },
             arcs: Vec::new(),
+            session_context: SessionContext::new(),
         }
     }
 
@@ -64,6 +67,10 @@ impl PagableSerializer for PagableSerializerImpl {
         let arc = arc.clone_dyn();
         self.arcs.push(arc as _);
         Ok(())
+    }
+
+    fn session_context(&mut self) -> &mut SessionContext {
+        &mut self.session_context
     }
 }
 
@@ -141,5 +148,9 @@ impl<'de, 's> PagableDeserializer<'de> for PagableDeserializerImpl<'de, 's> {
 
     fn as_dyn(&mut self) -> &mut dyn PagableDeserializer<'de> {
         self
+    }
+
+    fn session_context(&self) -> &std::sync::Mutex<SessionContext> {
+        self.storage.backing_storage().session_context()
     }
 }

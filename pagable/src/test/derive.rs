@@ -176,7 +176,8 @@ mod inner {
 
         #[tokio::test]
         async fn test_pagable_arc_refcounts() -> anyhow::Result<()> {
-            let storage = PagableStorageHandle::new(std::sync::Arc::new(EmptyPagableStorage));
+            let storage =
+                PagableStorageHandle::new(std::sync::Arc::new(EmptyPagableStorage::new()));
 
             let arc1 = PinnedPagableArc::new("hello world".to_owned(), storage.clone() as _);
             let weak1 = PinnedPagableArc::into_pagable(arc1.clone());

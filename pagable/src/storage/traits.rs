@@ -9,12 +9,14 @@
  */
 
 use std::any::TypeId;
+use std::sync::Mutex;
 
 use either::Either;
 
 use crate::arc_erase::ArcEraseDyn;
 use crate::storage::data::DataKey;
 use crate::storage::data::PagableData;
+use crate::traits::SessionContext;
 
 /// Trait for storage backends that can persist and retrieve paged-out data.
 ///
@@ -62,6 +64,10 @@ pub trait PagableStorage: Send + Sync + 'static {
     ///
     /// Called when a pagable arc becomes fully unpinned and eligible for eviction.
     fn schedule_for_paging(&self, arc: Box<dyn ArcEraseDyn>);
+
+    /// Access the session context for storing/retrieving layer-specific state
+    /// during serialization and deserialization.
+    fn session_context(&self) -> &Mutex<SessionContext>;
 }
 
 static_assertions::assert_obj_safe!(PagableStorage);

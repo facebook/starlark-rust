@@ -12,24 +12,27 @@ use postcard::ser_flavors::Flavor;
 
 use crate::PagableSerializer;
 use crate::arc_erase::ArcEraseDyn;
+use crate::traits::SessionContext;
 
 /// Serializer used during the paging process to serialize arcs and their nested dependencies.
 ///
 /// This serializer collects both the serialized data and references to nested arcs,
 /// enabling recursive serialization where nested arcs are tracked separately for
 /// content-addressable storage.
-pub struct SerializerForPaging {
+pub struct SerializerForPaging<'a> {
     serde: postcard::Serializer<postcard::ser_flavors::StdVec>,
     arcs: Vec<Box<dyn ArcEraseDyn>>,
+    session_context: &'a mut SessionContext,
 }
 
-impl SerializerForPaging {
-    pub(crate) fn new() -> Self {
+impl<'a> SerializerForPaging<'a> {
+    pub(crate) fn new(session_context: &'a mut SessionContext) -> Self {
         Self {
             serde: postcard::Serializer {
                 output: postcard::ser_flavors::StdVec::new(),
             },
             arcs: Vec::new(),
+            session_context,
         }
     }
 
@@ -41,7 +44,7 @@ impl SerializerForPaging {
     }
 }
 
-impl PagableSerializer for SerializerForPaging {
+impl PagableSerializer for SerializerForPaging<'_> {
     fn serde(&mut self) -> &mut postcard::Serializer<postcard::ser_flavors::StdVec> {
         &mut self.serde
     }
@@ -49,5 +52,9 @@ impl PagableSerializer for SerializerForPaging {
     fn serialize_arc(&mut self, arc: &dyn ArcEraseDyn) -> crate::Result<()> {
         self.arcs.push(arc.clone_dyn());
         Ok(())
+    }
+
+    fn session_context(&mut self) -> &mut SessionContext {
+        self.session_context
     }
 }

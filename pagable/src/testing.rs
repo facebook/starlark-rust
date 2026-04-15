@@ -35,6 +35,7 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::sync::Mutex;
 
 use postcard::de_flavors::Slice;
 use postcard::ser_flavors::Flavor;
@@ -48,6 +49,7 @@ use crate::storage::handle::PagableStorageHandle;
 use crate::storage::traits::PagableStorage;
 use crate::traits::PagableDeserializer;
 use crate::traits::PagableSerializer;
+use crate::traits::SessionContext;
 
 /// A simple in-memory serializer for testing pagable types.
 ///
@@ -59,6 +61,7 @@ use crate::traits::PagableSerializer;
 pub struct TestingSerializer {
     serde: postcard::Serializer<postcard::ser_flavors::StdVec>,
     seen_arcs: HashSet<usize>,
+    session_context: SessionContext,
 }
 
 impl TestingSerializer {
@@ -69,6 +72,7 @@ impl TestingSerializer {
                 output: postcard::ser_flavors::StdVec::new(),
             },
             seen_arcs: HashSet::new(),
+            session_context: SessionContext::new(),
         }
     }
 
@@ -104,6 +108,10 @@ impl PagableSerializer for TestingSerializer {
         // If already seen, nothing more to write - identity is enough
         Ok(())
     }
+
+    fn session_context(&mut self) -> &mut SessionContext {
+        &mut self.session_context
+    }
 }
 
 /// A simple in-memory deserializer for testing pagable types.
@@ -121,13 +129,13 @@ pub struct TestingDeserializer<'de> {
 impl<'de> TestingDeserializer<'de> {
     /// Create a new testing deserializer.
     ///
-    /// The `bytes` and `stashed_ptrs` should come from a previous call to
+    /// The `bytes` should come from a previous call to
     /// [`TestingSerializer::finish`].
     pub fn new(bytes: &'de [u8]) -> Self {
         Self {
             serde: postcard::Deserializer::from_bytes(bytes),
             seen_arcs: HashMap::new(),
-            storage: PagableStorageHandle::new(std::sync::Arc::new(EmptyPagableStorage)),
+            storage: PagableStorageHandle::new(std::sync::Arc::new(EmptyPagableStorage::new())),
         }
     }
 }
@@ -165,9 +173,23 @@ impl<'de> PagableDeserializer<'de> for TestingDeserializer<'de> {
     fn as_dyn(&mut self) -> &mut dyn crate::traits::PagableDeserializer<'de> {
         self
     }
+
+    fn session_context(&self) -> &Mutex<SessionContext> {
+        self.storage.backing_storage().session_context()
+    }
 }
 
-pub(crate) struct EmptyPagableStorage;
+pub(crate) struct EmptyPagableStorage {
+    session_context: Mutex<SessionContext>,
+}
+
+impl EmptyPagableStorage {
+    pub(crate) fn new() -> Self {
+        Self {
+            session_context: Mutex::new(SessionContext::new()),
+        }
+    }
+}
 
 #[async_trait::async_trait]
 impl PagableStorage for EmptyPagableStorage {
@@ -198,5 +220,9 @@ impl PagableStorage for EmptyPagableStorage {
 
     fn schedule_for_paging(&self, _arc: Box<dyn ArcEraseDyn>) {
         // no-op
+    }
+
+    fn session_context(&self) -> &Mutex<SessionContext> {
+        &self.session_context
     }
 }

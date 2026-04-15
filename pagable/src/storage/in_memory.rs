@@ -10,6 +10,7 @@
 
 use std::any::TypeId;
 use std::collections::HashMap;
+use std::sync::Mutex;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
@@ -22,6 +23,7 @@ use crate::storage::data::DataKey;
 use crate::storage::data::PagableData;
 use crate::storage::support::SerializerForPaging;
 use crate::storage::traits::PagableStorage;
+use crate::traits::SessionContext;
 
 /// In-memory storage backend for testing and development.
 ///
@@ -36,6 +38,7 @@ use crate::storage::traits::PagableStorage;
 pub struct InMemoryPagableStorage {
     pending: InMemoryPagableStoragePendingPageOut,
     handle: std::sync::Arc<InMemoryPagableStorageHandle>,
+    session_context: SessionContext,
 }
 
 /// Internal state for tracking pending paging operations.
@@ -112,6 +115,7 @@ impl InMemoryPagableStorageCache {
 struct InMemoryPagableStorageHandle {
     sender: std::sync::mpsc::Sender<Box<dyn ArcEraseDyn>>,
     cache: InMemoryPagableStorageCache,
+    session_context: Mutex<SessionContext>,
 }
 
 impl InMemoryPagableStorage {
@@ -123,16 +127,24 @@ impl InMemoryPagableStorage {
             handle: std::sync::Arc::new(InMemoryPagableStorageHandle {
                 sender,
                 cache: InMemoryPagableStorageCache::new(),
+                session_context: Mutex::new(SessionContext::new()),
             }),
             pending: InMemoryPagableStoragePendingPageOut {
                 pending_messages: receiver,
                 pending: Vec::new(),
             },
+            session_context: SessionContext::new(),
         }
     }
 
     pub fn handle(&self) -> std::sync::Arc<dyn PagableStorage> {
         self.handle.dupe()
+    }
+
+    /// Access the session context for storing/retrieving layer-specific state.
+    /// This context is passed to `SerializerForPaging` during `page_out_pending`.
+    pub fn session_context(&mut self) -> &mut SessionContext {
+        &mut self.session_context
     }
 
     /// Returns the number of arcs queued for paging but not yet serialized.
@@ -184,7 +196,8 @@ impl InMemoryPagableStorage {
                                 continue;
                             }
 
-                            let mut serializer = SerializerForPaging::new();
+                            let mut serializer =
+                                SerializerForPaging::new(&mut self.session_context);
                             v.serialize(&mut serializer).unwrap();
                             let (data, arcs) = serializer.finish();
 
@@ -276,5 +289,9 @@ impl PagableStorage for InMemoryPagableStorageHandle {
         // we just discard the arc. This is acceptable because it means the storage
         // is being shut down and paging is no longer needed.
         drop(self.sender.send(arc));
+    }
+
+    fn session_context(&self) -> &Mutex<SessionContext> {
+        &self.session_context
     }
 }
