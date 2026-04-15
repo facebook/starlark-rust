@@ -22,6 +22,7 @@ use std::hash::Hasher;
 
 use allocative::Allocative;
 use starlark_derive::ProvidesStaticType;
+use starlark_derive::StarlarkPagable;
 use starlark_derive::starlark_value;
 use starlark_map::StarlarkHashValue;
 use starlark_map::StarlarkHasher;
@@ -40,7 +41,7 @@ use crate::values::ValueError;
 pub const BOOL_TYPE: &str = "bool";
 
 /// `bool` value.
-#[derive(ProvidesStaticType, Debug, Serialize, Allocative)]
+#[derive(ProvidesStaticType, Debug, Serialize, Allocative, StarlarkPagable)]
 #[serde(transparent)]
 pub struct StarlarkBool(pub(crate) bool);
 
@@ -65,7 +66,7 @@ pub(crate) static VALUE_FALSE_TRUE: [&AllocStaticSimple<StarlarkBool>; 2] =
     [&VALUE_FALSE, &VALUE_TRUE];
 
 /// Define the bool type
-#[starlark_value(type = BOOL_TYPE)]
+#[starlark_value(type = BOOL_TYPE, skip_pagable)]
 impl<'v> StarlarkValue<'v> for StarlarkBool {
     fn is_special(_: Private) -> bool
     where

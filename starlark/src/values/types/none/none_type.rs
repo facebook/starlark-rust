@@ -23,6 +23,7 @@ use derive_more::Display;
 use dupe::Dupe;
 use serde::Serialize;
 use serde::Serializer;
+use starlark_derive::StarlarkPagable;
 use starlark_derive::starlark_value;
 
 use crate as starlark;
@@ -42,7 +43,15 @@ use crate::values::UnpackValue;
 use crate::values::Value;
 
 /// Define the None type, use [`NoneType`] in Rust.
-#[derive(Debug, Clone, Dupe, ProvidesStaticType, Display, Allocative)]
+#[derive(
+    Debug,
+    Clone,
+    Dupe,
+    ProvidesStaticType,
+    Display,
+    Allocative,
+    StarlarkPagable
+)]
 #[display("None")]
 pub struct NoneType;
 
@@ -52,7 +61,7 @@ impl NoneType {
 }
 
 /// Define the NoneType type
-#[starlark_value(type = NoneType::TYPE)]
+#[starlark_value(type = NoneType::TYPE, skip_pagable)]
 impl<'v> StarlarkValue<'v> for NoneType {
     fn is_special(_: Private) -> bool
     where

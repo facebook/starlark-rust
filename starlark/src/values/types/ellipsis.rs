@@ -18,6 +18,7 @@
 use allocative::Allocative;
 use starlark_derive::NoSerialize;
 use starlark_derive::ProvidesStaticType;
+use starlark_derive::StarlarkPagable;
 use starlark_derive::starlark_value;
 
 use crate as starlark;
@@ -32,14 +33,15 @@ use crate::values::StarlarkValue;
     NoSerialize,
     Debug,
     derive_more::Display,
-    ProvidesStaticType
+    ProvidesStaticType,
+    StarlarkPagable
 )]
 #[display("Ellipsis")]
 pub(crate) struct Ellipsis;
 
 static_starlark_value!(pub(crate) VALUE_ELLIPSIS: Ellipsis = Ellipsis);
 
-#[starlark_value(type = "ellipsis")]
+#[starlark_value(type = "ellipsis", skip_pagable)]
 impl<'v> StarlarkValue<'v> for Ellipsis {}
 
 impl Ellipsis {

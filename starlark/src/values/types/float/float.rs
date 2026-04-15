@@ -25,6 +25,7 @@ use std::hash::Hasher;
 use allocative::Allocative;
 use dupe::Dupe;
 use serde::Serialize;
+use starlark_derive::StarlarkPagable;
 use starlark_derive::starlark_value;
 use starlark_map::StarlarkHashValue;
 
@@ -160,7 +161,16 @@ pub(crate) fn write_compact<W: fmt::Write>(
 }
 
 /// Runtime representation of Starlark `float` type.
-#[derive(Clone, Dupe, Copy, Debug, ProvidesStaticType, Serialize, Allocative)]
+#[derive(
+    Clone,
+    Dupe,
+    Copy,
+    Debug,
+    ProvidesStaticType,
+    Serialize,
+    Allocative,
+    StarlarkPagable
+)]
 #[serde(transparent)]
 pub struct StarlarkFloat(pub f64);
 
@@ -250,7 +260,7 @@ impl Display for StarlarkFloat {
     }
 }
 
-#[starlark_value(type = StarlarkFloat::TYPE)]
+#[starlark_value(type = StarlarkFloat::TYPE, skip_pagable)]
 impl<'v> StarlarkValue<'v> for StarlarkFloat {
     fn equals(&self, other: Value) -> crate::Result<bool> {
         Ok(Some(NumRef::Float(StarlarkFloat(self.0))) == other.unpack_num())
