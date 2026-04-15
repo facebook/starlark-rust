@@ -710,3 +710,267 @@ fn test_frozen_value_typed_round_trip() -> crate::Result<()> {
 
     Ok(())
 }
+
+/// A test type with SmallMap<String, FrozenValue> — has Drop (SmallMap), goes in drop bump.
+#[derive(
+    Debug,
+    Display,
+    Allocative,
+    ProvidesStaticType,
+    NoSerialize,
+    StarlarkPagable
+)]
+#[display("SmallMapData")]
+struct SmallMapData {
+    entries: starlark_map::small_map::SmallMap<String, FrozenValue>,
+}
+
+starlark_simple_value!(SmallMapData);
+
+#[starlark_value(type = "SmallMapData", skip_pagable)]
+impl<'v> StarlarkValue<'v> for SmallMapData {
+    type Canonical = Self;
+}
+
+/// A test type with SmallMap<FrozenValue, FrozenValue>.
+#[derive(
+    Debug,
+    Display,
+    Allocative,
+    ProvidesStaticType,
+    NoSerialize,
+    StarlarkPagable
+)]
+#[display("SmallMapFvData")]
+struct SmallMapFvData {
+    entries: starlark_map::small_map::SmallMap<FrozenValue, FrozenValue>,
+}
+
+starlark_simple_value!(SmallMapFvData);
+
+#[starlark_value(type = "SmallMapFvData", skip_pagable)]
+impl<'v> StarlarkValue<'v> for SmallMapFvData {
+    type Canonical = Self;
+}
+
+#[test]
+fn test_small_map_string_key_round_trip() -> crate::Result<()> {
+    use starlark_map::small_map::SmallMap;
+
+    // SmallMap<String, FrozenValue> with values pointing to SimpleData (undrop bump).
+    // SmallMapData is in drop bump.
+    let heap = FrozenHeap::new();
+    let v1 = heap.alloc_simple(SimpleData {
+        flag: true,
+        count: 10,
+    });
+    let v2 = heap.alloc_simple(SimpleData {
+        flag: false,
+        count: 20,
+    });
+
+    let mut entries = SmallMap::new();
+    entries.insert("beta".to_owned(), v2);
+    entries.insert("alpha".to_owned(), v1);
+
+    heap.alloc_simple(SmallMapData { entries });
+    let heap_ref = heap.into_ref_named(TestHeapName::heap_name("test_sm_string"));
+
+    let restored = round_trip_heap_ref(&heap_ref)?;
+
+    let drop_headers = restored.collect_drop_headers_ordered();
+    assert_eq!(drop_headers.len(), 1);
+    let map_data: &SmallMapData = drop_headers[0].unpack().downcast_ref().unwrap();
+
+    // Verify key order preserved.
+    let keys: Vec<&str> = map_data.entries.iter().map(|(k, _)| k.as_str()).collect();
+    assert_eq!(keys, vec!["beta", "alpha"]);
+
+    // Verify values resolve correctly.
+    let v1_restored: &SimpleData = map_data
+        .entries
+        .get("alpha")
+        .unwrap()
+        .downcast_frozen_ref::<SimpleData>()
+        .unwrap()
+        .value;
+    assert_eq!(v1_restored.count, 10);
+
+    let v2_restored: &SimpleData = map_data
+        .entries
+        .get("beta")
+        .unwrap()
+        .downcast_frozen_ref::<SimpleData>()
+        .unwrap()
+        .value;
+    assert_eq!(v2_restored.count, 20);
+
+    Ok(())
+}
+
+#[test]
+fn test_small_map_frozen_value_key_backward_ref() -> crate::Result<()> {
+    use starlark_map::small_map::SmallMap;
+
+    use crate::values::ValueLike;
+
+    // Backward reference: SmallMapFvData (drop bump) has FrozenValue keys
+    // pointing to frozen strings (undrop bump) and values pointing to HeapData
+    // (also drop bump). HeapData is allocated BEFORE SmallMapFvData, so during
+    // deserialization it's already initialized when SmallMap is deserialized.
+    // `ensure_initialized` sees it's already done and returns immediately.
+    let heap = FrozenHeap::new();
+
+    // Keys: frozen strings in undrop bump (hashable).
+    let k1 = heap.alloc_str("key_one").to_frozen_value();
+    let k2 = heap.alloc_str("key_two").to_frozen_value();
+
+    // Values: HeapData in drop bump.
+    let v1 = heap.alloc_simple(HeapData {
+        items: vec![100],
+        label: "val_one".to_owned(),
+        boxed: Box::new(1),
+    });
+    let v2 = heap.alloc_simple(HeapData {
+        items: vec![200],
+        label: "val_two".to_owned(),
+        boxed: Box::new(2),
+    });
+
+    let mut entries = SmallMap::new();
+    entries.insert_hashed(k1.get_hashed()?, v1);
+    entries.insert_hashed(k2.get_hashed()?, v2);
+
+    heap.alloc_simple(SmallMapFvData { entries });
+    let heap_ref = heap.into_ref_named(TestHeapName::heap_name("test_sm_fv_key"));
+
+    let restored = round_trip_heap_ref(&heap_ref)?;
+
+    // Drop bump: HeapData v1, HeapData v2, SmallMapFvData.
+    let drop_headers = restored.collect_drop_headers_ordered();
+    assert_eq!(drop_headers.len(), 3);
+
+    let map_data: &SmallMapFvData = drop_headers[2].unpack().downcast_ref().unwrap();
+    assert_eq!(map_data.entries.len(), 2);
+
+    // Verify key order: k1 first, k2 second.
+    let key_strs: Vec<&str> = map_data
+        .entries
+        .iter()
+        .map(|(k, _)| k.unpack_str().unwrap())
+        .collect();
+    assert_eq!(key_strs, vec!["key_one", "key_two"]);
+
+    // Verify values.
+    let val_labels: Vec<&str> = map_data
+        .entries
+        .iter()
+        .map(|(_, v)| {
+            v.downcast_frozen_ref::<HeapData>()
+                .unwrap()
+                .value
+                .label
+                .as_str()
+        })
+        .collect();
+    assert_eq!(val_labels, vec!["val_one", "val_two"]);
+
+    // Verify key lookup by hash works.
+    // If ensure_initialized was missing, hashes would be computed on uninitialized
+    // data and lookups would fail.
+    for (k, _) in map_data.entries.iter() {
+        let hashed = k.get_hashed()?;
+        assert!(
+            map_data.entries.get_hashed(hashed.as_ref()).is_some(),
+            "lookup by key {:?} should succeed",
+            k.unpack_str()
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_small_map_frozen_value_key_forward_ref() -> crate::Result<()> {
+    use starlark_map::small_map::SmallMap;
+
+    use crate::values::ValueLike;
+
+    // Forward reference test: SmallMap is in drop bump (deserialized first),
+    // its FrozenValue keys point to frozen strings in undrop bump (deserialized later).
+    // During SmallMap deserialization, the string targets are NOT yet initialized.
+    // `ensure_initialized` must seek forward to initialize them before `get_hashed()`.
+    //
+    // Serialization order: drop bump values first, then undrop bump values.
+    // So SmallMap's data comes BEFORE the strings in the stream.
+    let heap = FrozenHeap::new();
+
+    // Allocate strings in undrop bump.
+    let k1 = heap.alloc_str("hello").to_frozen_value();
+    let k2 = heap.alloc_str("world").to_frozen_value();
+
+    // Values: inline ints (no heap allocation needed).
+    let v1 = FrozenValue::testing_new_int(111);
+    let v2 = FrozenValue::testing_new_int(222);
+
+    // SmallMap<FrozenValue, FrozenValue> goes in drop bump.
+    let mut entries = SmallMap::new();
+    entries.insert_hashed(k1.get_hashed()?, v1);
+    entries.insert_hashed(k2.get_hashed()?, v2);
+    heap.alloc_simple(SmallMapFvData { entries });
+
+    let heap_ref = heap.into_ref_named(TestHeapName::heap_name("test_forward_ref"));
+
+    let restored = round_trip_heap_ref(&heap_ref)?;
+
+    // Drop bump: SmallMapFvData.
+    let drop_headers = restored.collect_drop_headers_ordered();
+    assert_eq!(drop_headers.len(), 1);
+
+    // Undrop bump: 2 frozen strings.
+    let undrop_headers = restored.collect_undrop_headers_ordered();
+    assert_eq!(undrop_headers.len(), 2);
+
+    let map_data: &SmallMapFvData = drop_headers[0].unpack().downcast_ref().unwrap();
+    assert_eq!(map_data.entries.len(), 2);
+
+    // Verify keys are correctly deserialized strings (were forward references).
+    let key_strs: Vec<&str> = map_data
+        .entries
+        .iter()
+        .map(|(k, _)| k.unpack_str().unwrap())
+        .collect();
+    assert_eq!(key_strs, vec!["hello", "world"]);
+
+    // Verify values are inline ints.
+    let values: Vec<i32> = map_data
+        .entries
+        .iter()
+        .map(|(_, v)| v.unpack_i32().unwrap())
+        .collect();
+    assert_eq!(values, vec![111, 222]);
+
+    // Verify key lookup by hash works. This catches corrupted hashes from
+    // missing ensure_initialized — the stored hash would have been computed on
+    // uninitialized string data, while get_hashed() now computes from initialized
+    // data, causing a mismatch.
+    for (k, _) in map_data.entries.iter() {
+        let hashed = k.get_hashed()?;
+        assert!(
+            map_data.entries.get_hashed(hashed.as_ref()).is_some(),
+            "lookup by key {:?} should succeed",
+            k.unpack_str()
+        );
+    }
+
+    // Verify key pointers point to the restored strings in undrop bump.
+    let key_ptrs: Vec<usize> = map_data
+        .entries
+        .iter()
+        .map(|(k, _)| k.ptr_value().ptr_value_untagged())
+        .collect();
+    assert_eq!(key_ptrs[0], undrop_headers[0] as *const _ as usize);
+    assert_eq!(key_ptrs[1], undrop_headers[1] as *const _ as usize);
+
+    Ok(())
+}

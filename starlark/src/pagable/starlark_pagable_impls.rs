@@ -23,11 +23,16 @@
 
 use pagable::PagableDeserialize;
 use pagable::PagableSerialize;
+use starlark_map::Hashed;
+use starlark_map::small_map::SmallMap;
 
 use crate::pagable::starlark_deserialize::StarlarkDeserialize;
 use crate::pagable::starlark_deserialize::StarlarkDeserializeContext;
 use crate::pagable::starlark_serialize::StarlarkSerialize;
 use crate::pagable::starlark_serialize::StarlarkSerializeContext;
+use crate::values::FrozenStringValue;
+use crate::values::FrozenValue;
+use crate::values::ValueLike;
 
 /// Implement `StarlarkSerialize` and `StarlarkDeserialize` for a type
 /// by delegating to its `PagableSerialize`/`PagableDeserialize` impls.
@@ -110,5 +115,81 @@ impl<T: StarlarkDeserialize> StarlarkDeserialize for Option<T> {
         } else {
             Ok(None)
         }
+    }
+}
+
+// ============================================================================
+// SmallMap
+// ============================================================================
+
+impl<K: StarlarkSerialize, V: StarlarkSerialize> StarlarkSerialize for SmallMap<K, V> {
+    fn starlark_serialize(&self, ctx: &mut dyn StarlarkSerializeContext) -> crate::Result<()> {
+        self.len().pagable_serialize(ctx.pagable())?;
+        for (k, v) in self.iter() {
+            k.starlark_serialize(ctx)?;
+            v.starlark_serialize(ctx)?;
+        }
+        Ok(())
+    }
+}
+
+impl<K: SmallMapKeyDeserialize, V: StarlarkDeserialize> StarlarkDeserialize for SmallMap<K, V> {
+    fn starlark_deserialize(ctx: &mut dyn StarlarkDeserializeContext<'_>) -> crate::Result<Self> {
+        let len = usize::pagable_deserialize(ctx.pagable())?;
+        let mut map = SmallMap::with_capacity(len);
+        for _ in 0..len {
+            let hashed_k = K::starlark_deserialize_hashed(ctx)?;
+            let v = V::starlark_deserialize(ctx)?;
+            map.insert_hashed(hashed_k, v);
+        }
+        Ok(map)
+    }
+}
+
+/// Trait for types that can be deserialized as SmallMap keys.
+/// Bridges the gap between types with `Hash` (use `Hashed::new`) and
+/// starlark value types (use `get_hashed()`).
+pub(crate) trait SmallMapKeyDeserialize: StarlarkDeserialize + Eq + Sized {
+    fn starlark_deserialize_hashed(
+        ctx: &mut dyn StarlarkDeserializeContext<'_>,
+    ) -> crate::Result<Hashed<Self>>;
+}
+
+/// Impl for types with `Hash` — hash is computed via the standard `Hash` trait.
+macro_rules! impl_small_map_key_hash {
+    ($($ty:ty),* $(,)?) => {
+        $(
+            impl SmallMapKeyDeserialize for $ty {
+                fn starlark_deserialize_hashed(
+                    ctx: &mut dyn StarlarkDeserializeContext<'_>,
+                ) -> crate::Result<Hashed<Self>> {
+                    let k = Self::starlark_deserialize(ctx)?;
+                    Ok(Hashed::new(k))
+                }
+            }
+        )*
+    };
+}
+
+impl_small_map_key_hash!(String, bool, u8, u16, u32, u64, usize, i8, i16, i32, i64);
+
+/// FrozenValue: no `Hash` trait, use `get_hashed()` from `ValueLike`.
+/// The value is already ensure_initialized by `deserialize_frozen_value`.
+impl SmallMapKeyDeserialize for FrozenValue {
+    fn starlark_deserialize_hashed(
+        ctx: &mut dyn StarlarkDeserializeContext<'_>,
+    ) -> crate::Result<Hashed<Self>> {
+        let fv = FrozenValue::starlark_deserialize(ctx)?;
+        fv.get_hashed()
+    }
+}
+
+/// FrozenStringValue: string hash is infallible.
+impl SmallMapKeyDeserialize for FrozenStringValue {
+    fn starlark_deserialize_hashed(
+        ctx: &mut dyn StarlarkDeserializeContext<'_>,
+    ) -> crate::Result<Hashed<Self>> {
+        let fsv = FrozenStringValue::starlark_deserialize(ctx)?;
+        Ok(fsv.get_hashed())
     }
 }

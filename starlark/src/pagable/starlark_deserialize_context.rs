@@ -276,7 +276,10 @@ impl<'de> StarlarkDeserializeContext<'de> for StarlarkDeserializerImpl<'_, 'de> 
                     .ok_or(PagableError::HeapBasesNotRegistered)?;
                 let ptr = bases.resolve(&offset);
                 let header = unsafe { &*(ptr as *const AValueHeader) };
-                Ok(FrozenValue::new_ptr(header, is_str))
+                let fv = FrozenValue::new_ptr(header, is_str);
+                drop(state);
+                self.ensure_initialized(fv)?;
+                Ok(fv)
             }
             SerializedFrozenValue::CrossHeapPtr {
                 heap_id,
