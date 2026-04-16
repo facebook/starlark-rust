@@ -67,6 +67,8 @@ pub(crate) enum BindExpr<'a> {
     SetIndex(BindingId, &'a CstExpr, Box<BindExpr<'a>>),
     ListAppend(BindingId, &'a CstExpr),
     ListExtend(BindingId, &'a CstExpr),
+    /// Apply decorators ([`&[CstExpr]`], in source order) to a function of "base" type [`Ty`].
+    DecoratorApply(&'a [CstExpr], Ty),
 }
 
 impl<'a> BindExpr<'a> {
@@ -79,6 +81,15 @@ impl<'a> BindExpr<'a> {
             BindExpr::SetIndex(_, x, _) => x.span,
             BindExpr::ListAppend(_, x) => x.span,
             BindExpr::ListExtend(_, x) => x.span,
+            BindExpr::DecoratorApply(decorators, _) => {
+                assert!(
+                    decorators.is_empty(),
+                    "Bug in the starlark crate: BindExpr::DecoratorApply used with no decorators."
+                );
+                let first = &decorators[0];
+                let last = &decorators[decorators.len() - 1];
+                first.span.merge(last.span)
+            }
         }
     }
 }
@@ -213,6 +224,7 @@ impl<'a, 'b> BindingsCollect<'a, 'b> {
         codemap: &CodeMap,
     ) -> Result<(), InternalError> {
         let DefP {
+            decorators,
             name,
             params,
             return_type,
@@ -279,10 +291,20 @@ impl<'a, 'b> BindingsCollect<'a, 'b> {
         let params2 = ParamSpec::new_parts(pos_only, pos_or_named, args, named_only, kwargs)
             .map_err(|e| InternalError::from_error(e, def.signature_span(), codemap))?;
         let ret_ty = Self::resolve_ty_opt(return_type.as_deref(), typecheck_mode, codemap)?;
-        self.bindings.types.insert(
-            name.resolved_binding_id(codemap)?,
-            Ty::function(params2, ret_ty.clone()),
-        );
+        let base_fn_ty = Ty::function(params2, ret_ty.clone());
+        let binding_id = name.resolved_binding_id(codemap)?;
+        if decorators.is_empty() {
+            // No decorators: register the base function type directly (type is fully known
+            // from annotations).
+            self.bindings.types.insert(binding_id, base_fn_ty);
+        } else {
+            // Decorators present: the final type needs to be inferred from decorator calls.
+            self.bindings
+                .expressions
+                .entry(binding_id)
+                .or_default()
+                .push(BindExpr::DecoratorApply(decorators.as_slice(), base_fn_ty));
+        }
         def.visit_children_err(|x| self.visit(x, &ret_ty, typecheck_mode, codemap))?;
         Ok(())
     }

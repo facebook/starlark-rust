@@ -146,12 +146,14 @@ impl<A: AstPayload> StmtP<A> {
             }
             StmtP::For(fr) => StmtP::For(fr.into_map_payload(f)),
             StmtP::Def(DefP {
+                decorators,
                 name,
                 params,
                 return_type,
                 body,
                 payload,
             }) => StmtP::Def(DefP {
+                decorators: decorators.into_map(|d| d.into_map_payload(f)),
                 name: name.into_map_payload(f),
                 params: params.into_map(|p| p.into_map_payload(f)),
                 return_type: return_type.map(|ret| Box::new(ret.into_map_payload(f))),

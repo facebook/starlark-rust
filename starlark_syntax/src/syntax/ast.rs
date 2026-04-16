@@ -348,6 +348,7 @@ pub enum Visibility {
 
 #[derive(Debug, Clone)]
 pub struct DefP<P: AstPayload> {
+    pub decorators: Vec<AstExprP<P>>, // in source order
     pub name: AstAssignIdentP<P>,
     pub params: Vec<AstParameterP<P>>,
     pub return_type: Option<Box<AstTypeExprP<P>>>,
@@ -757,12 +758,16 @@ impl Stmt {
                 body.node.fmt_with_tab(f, tab + "  ")
             }
             Stmt::Def(DefP {
+                decorators,
                 name,
                 params,
                 return_type,
                 body,
                 payload: _,
             }) => {
+                for decorator in decorators {
+                    writeln!(f, "{}@{}", tab, decorator.node)?;
+                }
                 write!(f, "{}def {}(", tab, name.node)?;
                 comma_separated_fmt(f, params, |x, f| write!(f, "{}", x.node), false)?;
                 f.write_str(")")?;

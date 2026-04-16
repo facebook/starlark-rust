@@ -278,10 +278,14 @@ fn stmt(x: &AstStmt, res: &mut Vec<Bind>) {
         Stmt::Def(DefP {
             name,
             params,
+            decorators,
             return_type,
             body,
             payload: _,
         }) => {
+            for decorator in decorators {
+                expr(decorator, res);
+            }
             opt_type_expr(return_type.as_ref().map(|x| &**x), res);
             let mut inner = Vec::new();
             parameters(params, res, &mut inner);
@@ -383,6 +387,69 @@ mod tests {
             .collect::<anyhow::Result<Vec<Vec<_>>>>()?;
 
         assert_eq!(expected, found_bindings);
+
+        Ok(())
+    }
+
+    #[test]
+    fn decorator_bindings_are_correct() -> starlark::Result<()> {
+        let contents = "@my_decorator\ndef foo(): pass";
+        let module = AstModule::parse(
+            "foo.star",
+            contents.to_owned(),
+            &Dialect::AllOptionsInternal,
+        )?;
+        let scope = scope(&module);
+
+        let has_decorator_get = scope.inner.iter().any(|b| match b {
+            Bind::Get(id) => id.node.ident == "my_decorator",
+            _ => false,
+        });
+        assert!(has_decorator_get, "decorator should appear as Bind::Get");
+
+        let has_fn_set = scope.inner.iter().any(|b| match b {
+            Bind::Set(Assigner::Assign, id) => id.ident == "foo",
+            _ => false,
+        });
+        assert!(has_fn_set, "function name should appear as Bind::Set");
+
+        assert!(
+            scope.free.contains_key("my_decorator"),
+            "decorator should be a free variable"
+        );
+        assert!(
+            scope.bound.contains_key("foo"),
+            "function name should be bound"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn dotted_decorator_bindings_are_correct() -> starlark::Result<()> {
+        let contents = "@obj.decorator\ndef foo(): pass";
+        let module = AstModule::parse(
+            "foo.star",
+            contents.to_owned(),
+            &Dialect::AllOptionsInternal,
+        )?;
+        let scope = scope(&module);
+
+        let has_dotted_get = scope.inner.iter().any(|b| match b {
+            Bind::GetDotted(gd) => {
+                gd.variable.node.ident == "obj"
+                    && gd.attributes.len() == 1
+                    && gd.attributes[0].node == "decorator"
+            }
+            _ => false,
+        });
+        assert!(
+            has_dotted_get,
+            "dotted decorator should appear as Bind::GetDotted"
+        );
+
+        assert!(scope.free.contains_key("obj"), "'obj' should be free");
+        assert!(scope.bound.contains_key("foo"), "'foo' should be bound");
 
         Ok(())
     }

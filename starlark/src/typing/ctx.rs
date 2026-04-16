@@ -229,6 +229,21 @@ impl TypingContext<'_> {
                     Ok(Ty::never())
                 }
             }
+            BindExpr::DecoratorApply(decorators, base_fn_ty) => {
+                let mut ty = base_fn_ty.clone();
+                for decorator in decorators.iter().rev() {
+                    let span = decorator.span;
+                    let decorator_ty = self.expression_type(decorator)?;
+                    let args = TyCallArgs {
+                        pos: vec![Spanned { node: ty, span }],
+                        named: vec![],
+                        args: None,
+                        kwargs: None,
+                    };
+                    ty = self.validate_call(&decorator_ty, &args, span)?;
+                }
+                Ok(ty)
+            }
         }
     }
 

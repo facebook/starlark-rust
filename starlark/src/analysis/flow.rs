@@ -147,6 +147,7 @@ fn check_stmt(codemap: &CodeMap, x: &AstStmt, res: &mut Vec<LintT<FlowIssue>>) {
         Stmt::Def(DefP {
             name,
             params: _,
+            decorators: _,
             return_type,
             body,
             payload: _,

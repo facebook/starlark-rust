@@ -491,6 +491,7 @@ impl<'f> ModuleScopeBuilder<'f> {
             return_type: _,
             body,
             payload: scope_id,
+            decorators: _,
         }) = &mut code.node
         {
             // Here we traverse the AST twice: once for this def scope,
@@ -558,13 +559,20 @@ impl<'f> ModuleScopeBuilder<'f> {
                 return_type,
                 body,
                 payload: scope_id,
-            }) => self.resolve_idents_in_def(
-                *scope_id,
-                params,
-                return_type.as_mut().map(|r| &mut **r),
-                Some(body),
-                None,
-            ),
+                decorators,
+            }) => {
+                // Decorators are evaluated in the enclosing scope before entering the def.
+                for decorator in decorators {
+                    self.resolve_idents_in_expr(decorator);
+                }
+                self.resolve_idents_in_def(
+                    *scope_id,
+                    params,
+                    return_type.as_mut().map(|r| &mut **r),
+                    Some(body),
+                    None,
+                )
+            }
             StmtP::Assign(AssignP { lhs, ty, rhs }) => {
                 self.resolve_idents_in_assign(lhs);
                 if let Some(ty) = ty {

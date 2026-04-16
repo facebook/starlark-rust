@@ -207,3 +207,56 @@ fn existing_module_with_names() {
     module.add_name(frozen_heap.alloc_str_intern("y"));
     test_with_module("x = y", "0:m=0+ 1:m=1 | x:0 y:1", &module);
 }
+
+#[test]
+fn decorator_resolved_in_enclosing_scope() {
+    // The `dec` rhs expression must:
+    //   - resolve to the module-level binding
+    //   - not be marked as captured
+    t(
+        "\
+dec = lambda x: x
+
+@dec
+def foo(): pass",
+        "0:m=0 1:m=1 2:l=0 | dec:0 x:2 foo:1 dec:0",
+    );
+}
+
+#[test]
+fn decorator_in_nested_def_resolved_in_outer_scope() {
+    // The `dec` RHS expression must:
+    //   - resolve to the module level binding
+    //   - be marked as captured
+    t(
+        "\
+dec = lambda x: x
+
+def outer():
+    @dec
+    def inner(): pass",
+        "0:m=0& 1:m=1 2:l=0 3:l=0 | dec:0 x:2 outer:1 inner:3 dec:0",
+    );
+}
+
+#[test]
+fn decorator_shadowing() {
+    // The top-level `dec` must:
+    //   - resolve to the module level binding
+    //   - NOT be marked as captured
+    // The `dec` RHS expression must:
+    //   - resolve to the function-level binding
+    //   - NOT be marked as captured
+    t(
+        r#"
+dec = "asdf"
+
+def outer():
+    dec = lambda x: x
+
+    @dec
+    def inner(): pass
+"#,
+        "0:m=0 1:m=1 2:l=0 3:l=1 4:l=0 | dec:0 outer:1 dec:2 x:4 inner:3 dec:2",
+    );
+}

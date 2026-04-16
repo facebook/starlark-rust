@@ -32,6 +32,7 @@ use starlark_syntax::syntax::ast::AssignOp;
 use starlark_syntax::syntax::ast::AssignP;
 use starlark_syntax::syntax::ast::AssignTargetP;
 use starlark_syntax::syntax::ast::DefP;
+use starlark_syntax::syntax::ast::ExprP;
 use starlark_syntax::syntax::ast::ForP;
 use starlark_syntax::syntax::ast::StmtP;
 use thiserror::Error;
@@ -42,6 +43,8 @@ use crate::codemap::Spanned;
 use crate::environment::FrozenModuleData;
 use crate::environment::slots::ModuleSlotId;
 use crate::eval::compiler::Compiler;
+use crate::eval::compiler::args::ArgsCompiledValue;
+use crate::eval::compiler::call::CallCompiled;
 use crate::eval::compiler::error::CompilerInternalError;
 use crate::eval::compiler::expr::Builtin1;
 use crate::eval::compiler::expr::ExprCompiled;
@@ -53,6 +56,7 @@ use crate::eval::compiler::scope::Captured;
 use crate::eval::compiler::scope::Slot;
 use crate::eval::compiler::scope::payload::CstAssignTarget;
 use crate::eval::compiler::scope::payload::CstExpr;
+use crate::eval::compiler::scope::payload::CstPayload;
 use crate::eval::compiler::scope::payload::CstStmt;
 use crate::eval::compiler::small_vec_1::SmallVec1;
 use crate::eval::compiler::span::IrSpanned;
@@ -737,13 +741,14 @@ impl Compiler<'_, '_, '_, '_> {
                 let signature_span = def.signature_span();
                 let signature_span = FrozenFileSpan::new(self.codemap, signature_span);
                 let DefP {
+                    decorators,
                     name,
                     params,
                     return_type,
                     body,
                     payload: scope_id,
                 } = def;
-                let rhs = IrSpanned {
+                let function = IrSpanned {
                     node: self.function(
                         &name.ident,
                         signature_span,
@@ -754,6 +759,7 @@ impl Compiler<'_, '_, '_, '_> {
                     )?,
                     span,
                 };
+                let rhs = self.decorate(function, decorators, span)?;
                 let lhs = self.assign_target(&Spanned {
                     span: name.span,
                     node: AssignTargetP::Identifier(name.clone()),
@@ -821,5 +827,29 @@ impl Compiler<'_, '_, '_, '_> {
                 node: StmtCompiled::Continue,
             })),
         }
+    }
+
+    fn decorate(
+        &mut self,
+        function: IrSpanned<ExprCompiled>,
+        decorators: &[Spanned<ExprP<CstPayload>>],
+        span: FrameSpan,
+    ) -> Result<IrSpanned<ExprCompiled>, CompilerInternalError> {
+        let mut decorated = function;
+
+        // Apply decorators in reverse source order so `@a @b def f` becomes `a(b(f))`.
+        for decorator in decorators.iter().rev() {
+            let decorator_expr = self.expr(decorator)?;
+            let args = ArgsCompiledValue {
+                pos_named: vec![decorated],
+                names: vec![],
+                args: None,
+                kwargs: None,
+            };
+            let call = CallCompiled::call(span, decorator_expr, args, &mut self.opt_ctx());
+            decorated = IrSpanned { span, node: call };
+        }
+
+        Ok(decorated)
     }
 }

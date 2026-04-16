@@ -226,7 +226,7 @@ impl<'a, I: Iterator<Item = Lexeme>> ParserRd<'a, I> {
 
     fn parse_stmt(&mut self) -> Result<AstStmt, EvalException> {
         match self.peek() {
-            Some(Token::Def) => self.parse_def_stmt(),
+            Some(Token::Def) | Some(Token::At) => self.parse_def_stmt(),
             Some(Token::If) => self.parse_if_stmt(),
             Some(Token::For) => self.parse_for_stmt(),
             _ => self.parse_simple_stmt(),
@@ -235,7 +235,8 @@ impl<'a, I: Iterator<Item = Lexeme>> ParserRd<'a, I> {
 
     fn parse_def_stmt(&mut self) -> Result<AstStmt, EvalException> {
         let l = self.pos();
-        self.consume(&Token::Def);
+        let decorators = self.parse_decorators()?;
+        self.expect(&Token::Def)?;
         let name = self.parse_assign_ident()?;
         self.expect(&Token::OpeningRound)?;
         let params = self.parse_comma_separated_def_params()?;
@@ -252,6 +253,7 @@ impl<'a, I: Iterator<Item = Lexeme>> ParserRd<'a, I> {
             name,
             params,
             return_type,
+            decorators,
             body: Box::new(body),
             payload: (),
         })
@@ -1170,6 +1172,17 @@ impl<'a, I: Iterator<Item = Lexeme>> ParserRd<'a, I> {
                 payload: (),
             },
         })
+    }
+
+    fn parse_decorators(&mut self) -> Result<Vec<Spanned<ExprP<AstNoPayload>>>, EvalException> {
+        let mut decorators = Vec::new();
+        while matches!(self.peek(), Some(Token::At)) {
+            self.consume(&Token::At);
+            let decorator = self.parse_expr(0)?;
+            decorators.push(decorator);
+            self.expect(&Token::Newline)?;
+        }
+        Ok(decorators)
     }
 
     fn parse_string_literal(&mut self) -> Result<AstString, EvalException> {

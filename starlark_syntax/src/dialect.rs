@@ -37,6 +37,9 @@ pub struct Dialect {
     /// Are `def` statements permitted.
     /// Enabled by default.
     pub enable_def: bool,
+    /// Are function decorators expressions (as per [PEP 614](https://peps.python.org/pep-0614/)) permitted.
+    /// Disabled by default.
+    pub enable_decorators: bool,
     /// Are `lambda` expressions permitted.
     /// Enabled by default.
     pub enable_lambda: bool,
@@ -85,6 +88,7 @@ impl Dialect {
     /// This is also returned by [`Dialect::default()`](Dialect::default).
     pub const Standard: Self = Self {
         enable_def: true,
+        enable_decorators: false,
         enable_lambda: true,
         enable_load: true,
         enable_keyword_only_arguments: false,
@@ -100,6 +104,7 @@ impl Dialect {
     #[doc(hidden)]
     pub const Extended: Self = Self {
         enable_def: true,
+        enable_decorators: true,
         enable_lambda: true,
         enable_load: true,
         enable_keyword_only_arguments: true,
@@ -115,6 +120,7 @@ impl Dialect {
     #[doc(hidden)]
     pub const AllOptionsInternal: Self = Self {
         enable_def: true,
+        enable_decorators: true,
         enable_lambda: true,
         enable_load: true,
         enable_keyword_only_arguments: true,

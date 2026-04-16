@@ -1,0 +1,20 @@
+# @generated
+# To regenerate, run:
+# ```
+# STARLARK_RUST_REGENERATE_GOLDEN_TESTS=1 cargo test -p starlark --lib
+# ```
+
+Program:
+@my_dec
+def toto():
+  pass
+
+Error:
+error: `def` is not allowed in this dialect
+ --> decorator_def_disabled:1:1
+  |
+1 | / @my_dec
+2 | | def toto():
+3 | |   pass
+  | |______^
+  |

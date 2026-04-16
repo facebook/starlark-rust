@@ -506,6 +506,10 @@ impl<'a> State<'a> {
                 });
             }
             Stmt::Def(x) => {
+                // Decorator expressions are evaluated in the enclosing scope.
+                for decorator in &x.decorators {
+                    self.expr(decorator);
+                }
                 for p in &x.params {
                     p.node.visit_expr(|e| self.expr(e));
                 }
@@ -812,5 +816,81 @@ def _bar():
         );
         let res = lint(&m, Some(&HashSet::new()));
         assert_eq!(res.len(), 0);
+    }
+
+    /// Decorator expressions are evaluated in the enclosing scope and must be included in
+    /// name/reference analysis, so unused/undefined warnings fire.
+    #[test]
+    fn test_decorator_names_in_enclosing_scope() {
+        let m = module(
+            r#"
+my_decorator = lambda f: f
+@my_decorator
+def foo(): pass
+"#,
+        );
+        let res = lint(&m, Some(&HashSet::new()));
+
+        // my_decorator is used by the decorator, so no unused-assign warning.
+        assert_eq!(res.len(), 0);
+    }
+
+    #[test]
+    fn test_decorator_undefined_name_warned() {
+        let globals = HashSet::new();
+        let m = module(
+            r#"
+@undefined_decorator
+def foo(): pass
+"#,
+        );
+        let res = lint(&m, Some(&globals));
+        let undefined_names: Vec<_> = res
+            .iter()
+            .filter_map(|lint| match &lint.problem {
+                NameWarning::UsingUndefined(name) => Some(name.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            undefined_names.contains(&"undefined_decorator"),
+            "expected undefined_decorator warning, got {:?}",
+            undefined_names
+        );
+    }
+
+    /// Decorator names must be tracked; unused private (e.g. underscore-prefixed) ones at module
+    /// level should warn, while used decorator names must not.
+    #[test]
+    fn test_stacked_decorator_names_tracked() {
+        let globals = HashSet::new();
+        let m = module(
+            r#"
+_used_dec = lambda f: f
+_unused_dec = lambda f: f
+@_used_dec
+def foo(): pass
+"#,
+        );
+        let res = lint(&m, Some(&globals));
+        let unused_names: Vec<_> = res
+            .iter()
+            .filter_map(|lint| match &lint.problem {
+                NameWarning::UnusedAssign(name) => Some(name.as_str()),
+                _ => None,
+            })
+            .collect();
+        // _unused_dec is assigned but never referenced.
+        assert!(
+            unused_names.contains(&"_unused_dec"),
+            "expected _unused_dec warning, got {:?}",
+            unused_names
+        );
+        // _used_dec is referenced by the decorator, so no warning for it.
+        assert!(
+            !unused_names.contains(&"_used_dec"),
+            "unexpected _used_dec warning, got {:?}",
+            unused_names
+        );
     }
 }

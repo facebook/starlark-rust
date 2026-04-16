@@ -1,0 +1,36 @@
+# @generated
+# To regenerate, run:
+# ```
+# STARLARK_RUST_REGENERATE_GOLDEN_TESTS=1 cargo test -p starlark --lib
+# ```
+
+Code:
+def make_decorator(label: str) -> typing.Callable[[typing.Callable], str]:
+    def decorator(f):
+        f()
+        return label
+    return decorator
+
+@make_decorator("hello")
+def fn(x: int) -> int:
+    return x
+
+No errors.
+
+Types:
+fn: str
+
+Compiler typechecker (eval):
+Compiler typechecker and eval results mismatch.
+
+Traceback (most recent call last):
+  * filename:8, in <module>
+      @make_decorator("hello")
+  * filename:4, in decorator
+      f()
+error: Missing parameter `x` for call to `filename.fn`
+ --> filename:4:9
+  |
+4 |         f()
+  |         ^^^
+  |

@@ -54,6 +54,7 @@ This project features:
   values aren't.
 - [Garbage collected](docs/gc.md) values allocated on [a heap](docs/heaps.md).
 - Optional runtime-checked [types](docs/types.md).
+- Optional [decorators](docs/decorators.md).
 - A linter, to detect code issues in Starlark.
 - IDE integration in the form of
   [LSP](https://microsoft.github.io/language-server-protocol/).

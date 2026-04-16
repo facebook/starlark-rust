@@ -1355,6 +1355,8 @@ pub enum Token {
     #[token("return")]
     Return,
     // Symbols
+    #[token("@")]
+    At,
     #[token(",")]
     Comma,
     #[token(";")]
@@ -1496,6 +1498,7 @@ impl Display for Token {
             Token::Elif => write!(f, "keyword 'elif'"),
             Token::Return => write!(f, "keyword 'return'"),
             Token::Lambda => write!(f, "keyword 'lambda'"),
+            Token::At => write!(f, "symbol '@'"),
             Token::Comma => write!(f, "symbol ','"),
             Token::Semicolon => write!(f, "symbol ';'"),
             Token::Colon => write!(f, "symbol ':'"),

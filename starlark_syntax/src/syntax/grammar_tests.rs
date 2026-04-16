@@ -233,6 +233,111 @@ fn test_top_level_def() {
 }
 
 #[test]
+fn test_top_level_def_decorated() {
+    fn roundtrip(code: &str) {
+        assert_eq!(parse(code), code);
+    }
+
+    // Single decorator in multiple forms
+    for decoration in [
+        "@x",
+        "@(x, y)",
+        "@x[y]",
+        "@w[x].y.z",
+        "@x(y)()(z)",
+        "@[w, x, y][z]",
+        "@x.y",
+        "@x(y)",
+        "@(lambda x: x)",
+    ] {
+        roundtrip(format!("{decoration}\ndef fn():\n  pass\n").as_str())
+    }
+
+    // Stacked decorators preserve order
+    roundtrip("@a\n@b\n@c\ndef foo():\n  pass\n");
+    // Decorator combined with type hints
+    roundtrip("@my_dec\ndef foo(x: int, y: str) -> bool:\n  return True\n");
+    // Decorated def is rejected when `def` is disabled in the dialect.
+    parse_fail_with_dialect(
+        "decorator_def_disabled",
+        &Dialect {
+            enable_def: false,
+            ..Dialect::AllOptionsInternal
+        },
+        "@my_dec\ndef toto():\n  pass",
+    );
+    // `lambda` used as a decorator expression is rejected when lambdas are disabled.
+    parse_fail_with_dialect(
+        "decorator_lambda_disabled",
+        &Dialect {
+            enable_lambda: false,
+            ..Dialect::AllOptionsInternal
+        },
+        "@(lambda x: x)\ndef foo():\n  pass",
+    );
+    // Decorated def is rejected when `enable_decorators` is false.
+    parse_fail_with_dialect(
+        "decorator_disabled",
+        &Dialect {
+            enable_decorators: false,
+            ..Dialect::AllOptionsInternal
+        },
+        "@my_dec\ndef foo():\n  pass",
+    );
+    // Stacked decorators: error points at the first decorator.
+    // FIXME: Should that be the case?
+    parse_fail_with_dialect(
+        "decorator_disabled_stacked",
+        &Dialect {
+            enable_decorators: false,
+            ..Dialect::AllOptionsInternal
+        },
+        "@dec_a\n@dec_b\n@dec_c\ndef foo():\n  pass",
+    );
+}
+
+#[test]
+fn test_decorator_span_in_ast() {
+    // Verify that a decorated def AST node has the decorator list populated
+    // and that spans are non-empty.
+    let ast = parse_ast("@my_dec\ndef foo():\n  pass\n");
+    match &ast.statement.node {
+        Stmt::Def(def) => {
+            assert_eq!(def.decorators.len(), 1, "expected 1 decorator");
+            // The decorator span must start at the `m` of `my_dec` (offset 1).
+            assert_eq!(
+                ast.codemap.source_span(def.decorators[0].span),
+                "my_dec",
+                "decorator span source mismatch"
+            );
+        }
+        other => panic!("expected Def statement, got {other:?}"),
+    }
+}
+
+#[test]
+fn test_stacked_decorator_order_in_ast() {
+    use crate::syntax::ast::Stmt;
+    let ast = parse_ast("@first\n@second\ndef foo():\n  pass\n");
+    match &ast.statement.node {
+        Stmt::Def(def) => {
+            assert_eq!(def.decorators.len(), 2, "expected 2 decorators");
+            assert_eq!(
+                ast.codemap.source_span(def.decorators[0].span),
+                "first",
+                "first decorator span mismatch"
+            );
+            assert_eq!(
+                ast.codemap.source_span(def.decorators[1].span),
+                "second",
+                "second decorator span mismatch"
+            );
+        }
+        other => panic!("expected Def statement, got {other:?}"),
+    }
+}
+
+#[test]
 fn test_top_level_statements() {
     let no_top_leve_stmt = Dialect {
         enable_top_level_stmt: false,
@@ -791,6 +896,21 @@ fn test_error_tuple_trailing_comma() {
             "a, b = 1, 2,",
         ],
     );
+}
+
+#[test]
+fn test_decorator_parse_error_points_at_offending_token() {
+    // A bare `@` with no expression (just newline) produces a parse error whose
+    // span points at the newline, which is the first unexpected token after `@`.
+    assert_parse_error_span_source("@\ndef foo():\n  pass\n", "\n");
+
+    // When trying to put multiple decorators on the same line, the error message
+    // should point at the (second) `@`.
+    assert_parse_error_span_source("@a @b\ndef foo():\n    pass\n", "@");
+
+    // A decorator with no following `def` produces an error pointing at the
+    // unexpected next statement.
+    assert_parse_error_span_source("@my_dec\nx = 1\n", "x");
 }
 
 pub fn parse(program: &str) -> String {

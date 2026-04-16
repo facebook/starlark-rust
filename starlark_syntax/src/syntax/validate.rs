@@ -104,9 +104,24 @@ pub(crate) fn validate_module(stmt: &AstStmt, parser_state: &mut ParserState) {
         let span = stmt.span;
 
         match &stmt.node {
-            Stmt::Def(DefP { params, body, .. }) => {
+            Stmt::Def(DefP {
+                decorators,
+                params,
+                body,
+                ..
+            }) => {
                 if !parser_state.dialect.enable_def {
                     parser_state.error(span, "`def` is not allowed in this dialect");
+                }
+                if !parser_state.dialect.enable_decorators && !decorators.is_empty() {
+                    let first = &decorators[0];
+                    let last = &decorators[decorators.len() - 1];
+                    let span = first.span.merge(last.span);
+
+                    parser_state.error(
+                        span,
+                        "decorator expressions are not allowed in this dialect",
+                    );
                 }
                 validate_params(params, parser_state);
                 f(body, parser_state, false, false, true)

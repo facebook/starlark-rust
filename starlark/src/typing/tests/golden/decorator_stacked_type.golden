@@ -1,0 +1,25 @@
+# @generated
+# To regenerate, run:
+# ```
+# STARLARK_RUST_REGENERATE_GOLDEN_TESTS=1 cargo test -p starlark --lib
+# ```
+
+Code:
+def outer_dec(f) -> int:
+    return 0
+
+def inner_dec(f):
+    return f
+
+@outer_dec
+@inner_dec
+def fn(x: str) -> bool:
+    return True
+
+No errors.
+
+Types:
+fn: int
+
+Compiler typechecker (eval):
+No errors.

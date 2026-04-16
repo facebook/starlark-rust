@@ -20,6 +20,7 @@ mod bc;
 mod before_stmt;
 mod call;
 mod comprehension;
+mod decorator;
 mod def;
 mod derive;
 mod for_loop;

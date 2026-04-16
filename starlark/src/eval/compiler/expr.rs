@@ -1221,7 +1221,7 @@ impl<'v, 'a, 'e> Compiler<'v, 'a, 'e, '_> {
         }
     }
 
-    fn opt_ctx<'s>(&'s mut self) -> OptCtx<'v, 'a, 'e, 's> {
+    pub(crate) fn opt_ctx<'s>(&'s mut self) -> OptCtx<'v, 'a, 'e, 's> {
         let param_count = self.current_scope().param_count();
         OptCtx::new(self.eval, param_count)
     }

@@ -57,9 +57,11 @@ use crate::typing::Approximation;
 use crate::typing::ParamSpec;
 use crate::typing::Ty;
 use crate::typing::TypingOracleCtx;
+use crate::typing::call_args::TyCallArgs;
 use crate::typing::callable_param::ParamIsRequired;
 use crate::typing::error::InternalError;
 use crate::typing::error::TypingError;
+use crate::typing::error::TypingOrInternalError;
 use crate::util::arc_str::ArcStr;
 use crate::values::Heap;
 use crate::values::Value;
@@ -482,7 +484,42 @@ impl<'a, 'v> GlobalTypesBuilder<'a, 'v> {
         let params = ParamSpec::new_parts(pos_only, pos_or_name, args, name_only, kwargs)
             .map_err(|e| InternalError::from_error(e, def.signature_span(), self.ctx.codemap))?;
 
-        self.assign_ident_value(&def.name, GlobalValue::ty(Ty::function(params, result)))
+        let fn_ty = self.apply_decorators(def, result, params)?;
+
+        self.assign_ident_value(&def.name, GlobalValue::ty(fn_ty))
+    }
+
+    fn apply_decorators(
+        &mut self,
+        def: &DefP<CstPayload>,
+        return_ty: Ty,
+        params: ParamSpec,
+    ) -> Result<Ty, InternalError> {
+        let mut fn_ty = Ty::function(params, return_ty);
+        for decorator in def.decorators.iter().rev() {
+            let span = decorator.span;
+            let decorator_val = self.expr(decorator)?;
+            let decorator_ty = decorator_val.ty;
+            let args = TyCallArgs {
+                pos: vec![Spanned { node: fn_ty, span }],
+                named: vec![],
+                args: None,
+                kwargs: None,
+            };
+            fn_ty = match self.ctx.validate_call(span, &decorator_ty, &args) {
+                Ok(ty) => ty,
+                Err(TypingOrInternalError::Typing(e)) => {
+                    // Record the error, but return the resulting type as Any to avoid further
+                    // errors down the line.
+                    self.errors.push(e);
+                    Ty::any()
+                }
+                Err(TypingOrInternalError::Internal(e)) => {
+                    return Err(e);
+                }
+            };
+        }
+        Ok(fn_ty)
     }
 
     fn eval_stmt(&mut self, stmt: &CstStmt) -> Result<(), InternalError> {

@@ -1,0 +1,23 @@
+# @generated
+# To regenerate, run:
+# ```
+# STARLARK_RUST_REGENERATE_GOLDEN_TESTS=1 cargo test -p starlark --lib
+# ```
+
+Program:
+@dec_a
+@dec_b
+@dec_c
+def foo():
+  pass
+
+Error:
+error: decorator expressions are not allowed in this dialect
+ --> decorator_disabled_stacked:1:2
+  |
+1 |   @dec_a
+  |  __^
+2 | | @dec_b
+3 | | @dec_c
+  | |______^
+  |

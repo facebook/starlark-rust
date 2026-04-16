@@ -71,12 +71,14 @@ impl<'a, P: AstPayload> Visit<'a, P> {
 impl<P: AstPayload> DefP<P> {
     fn visit_children<'a>(&'a self, mut f: impl FnMut(Visit<'a, P>)) {
         let DefP {
+            decorators,
             name: _,
             params,
             return_type,
             body,
             payload: _,
         } = self;
+        decorators.iter().for_each(|x| f(Visit::Expr(x)));
         params
             .iter()
             .for_each(|x| x.visit_expr(|x| f(Visit::Expr(x))));
@@ -155,12 +157,14 @@ impl<P: AstPayload> StmtP<P> {
                 f(VisitMut::Stmt(else_block));
             }
             StmtP::Def(DefP {
+                decorators,
                 name: _,
                 params,
                 return_type,
                 body,
                 payload: _,
             }) => {
+                decorators.iter_mut().for_each(|x| f(VisitMut::Expr(x)));
                 params
                     .iter_mut()
                     .for_each(|x| x.visit_expr_mut(|x| f(VisitMut::Expr(x))));
