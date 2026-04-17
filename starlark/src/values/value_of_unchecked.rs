@@ -190,6 +190,28 @@ impl<'v, T: StarlarkTypeRepr> UnpackValue<'v> for ValueOfUnchecked<'v, T> {
     }
 }
 
+impl<T: StarlarkTypeRepr> crate::pagable::StarlarkSerialize
+    for ValueOfUncheckedGeneric<FrozenValue, T>
+{
+    fn starlark_serialize(
+        &self,
+        ctx: &mut dyn crate::pagable::starlark_serialize::StarlarkSerializeContext,
+    ) -> crate::Result<()> {
+        self.0.starlark_serialize(ctx)
+    }
+}
+
+impl<T: StarlarkTypeRepr> crate::pagable::StarlarkDeserialize
+    for ValueOfUncheckedGeneric<FrozenValue, T>
+{
+    fn starlark_deserialize(
+        ctx: &mut dyn crate::pagable::starlark_deserialize::StarlarkDeserializeContext<'_>,
+    ) -> crate::Result<Self> {
+        let fv = FrozenValue::starlark_deserialize(ctx)?;
+        Ok(Self::new(fv))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::rc::Rc;
