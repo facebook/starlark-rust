@@ -41,6 +41,9 @@ pub mod traits;
 pub mod typetag;
 
 pub use impls::StaticStr;
+pub use impls::static_value;
+pub use impls::static_value::StaticBytes;
+pub use impls::static_value::StaticValue;
 pub use storage::data::DataKey;
 pub use storage::data::OptionalDataKey;
 pub use traits::Pagable;
@@ -63,8 +66,6 @@ pub mod __internal {
 
     pub use anyhow;
     pub use inventory;
+    pub use once_cell;
     pub use serde;
-
-    // Re-export StaticStrEntry for the static_str! macro
-    pub use crate::impls::static_str::StaticStrEntry;
 }
