@@ -27,6 +27,8 @@ use allocative::Allocative;
 use num_bigint::BigInt;
 use num_bigint::Sign;
 use num_traits::cast::ToPrimitive;
+use pagable::PagableDeserialize;
+use pagable::PagableSerialize;
 use serde::Serialize;
 use starlark_derive::starlark_value;
 
@@ -165,7 +167,36 @@ impl AllocFrozenValue for StarlarkBigInt {
     }
 }
 
-#[starlark_value(type = "int")]
+impl crate::pagable::StarlarkSerialize for StarlarkBigInt {
+    fn starlark_serialize(
+        &self,
+        ctx: &mut dyn crate::pagable::starlark_serialize::StarlarkSerializeContext,
+    ) -> crate::Result<()> {
+        let bytes = self.value.to_signed_bytes_le();
+        // Serialize as length-prefixed byte array using primitives.
+        bytes.len().pagable_serialize(ctx.pagable())?;
+        for &b in &bytes {
+            b.pagable_serialize(ctx.pagable())?;
+        }
+        Ok(())
+    }
+}
+
+impl crate::pagable::StarlarkDeserialize for StarlarkBigInt {
+    fn starlark_deserialize(
+        ctx: &mut dyn crate::pagable::starlark_deserialize::StarlarkDeserializeContext<'_>,
+    ) -> crate::Result<Self> {
+        let len = usize::pagable_deserialize(ctx.pagable())?;
+        let mut bytes = Vec::with_capacity(len);
+        for _ in 0..len {
+            bytes.push(u8::pagable_deserialize(ctx.pagable())?);
+        }
+        let value = BigInt::from_signed_bytes_le(&bytes);
+        Ok(StarlarkBigInt { value })
+    }
+}
+
+#[starlark_value(type = "int", skip_pagable)]
 impl<'v> StarlarkValue<'v> for StarlarkBigInt {
     fn to_bool(&self) -> bool {
         // `StarlarkBigInt` is non-zero.
