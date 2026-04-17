@@ -41,6 +41,7 @@ use std::sync::Arc;
 use allocative::Allocative;
 use dupe::Dupe;
 use once_cell::sync::Lazy;
+use pagable::StaticValue;
 
 use crate::fast_string;
 
@@ -205,7 +206,7 @@ impl CodeMapId {
 enum CodeMapImpl {
     Real(Arc<CodeMapData>),
     #[allocative(skip)]
-    Native(&'static NativeCodeMap),
+    Native(StaticValue<NativeCodeMap>),
 }
 
 /// A data structure recording a source code file for position lookup.
@@ -254,6 +255,7 @@ struct CodeMapData {
 }
 
 /// "Codemap" for `.rs` files.
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
 pub struct NativeCodeMap {
     filename: &'static str,
     start: ResolvedPos,
@@ -277,10 +279,12 @@ impl NativeCodeMap {
         }
     }
 
-    pub const fn to_codemap(&'static self) -> CodeMap {
-        CodeMap(CodeMapImpl::Native(self))
+    pub const fn to_codemap(self_: StaticValue<NativeCodeMap>) -> CodeMap {
+        CodeMap(CodeMapImpl::Native(self_))
     }
 }
+
+pagable::declare_static_value_type!(NativeCodeMap, NativeCodeMapStaticEntry);
 
 impl Default for CodeMap {
     fn default() -> Self {
@@ -331,7 +335,9 @@ impl CodeMap {
     pub fn id(&self) -> CodeMapId {
         match &self.0 {
             CodeMapImpl::Real(data) => CodeMapId(Arc::as_ptr(data) as *const ()),
-            CodeMapImpl::Native(data) => CodeMapId(*data as *const NativeCodeMap as *const ()),
+            CodeMapImpl::Native(data) => {
+                CodeMapId(data.value() as *const NativeCodeMap as *const ())
+            }
         }
     }
 
@@ -856,7 +862,8 @@ mod tests {
     #[test]
     fn test_native_code_map() {
         static NATIVE_CODEMAP: NativeCodeMap = NativeCodeMap::new("test.rs", 100, 200);
-        static CODEMAP: CodeMap = NATIVE_CODEMAP.to_codemap();
+        pagable::static_value!(NATIVE_CODEMAP_STATIC: NativeCodeMap = &NATIVE_CODEMAP, NativeCodeMapStaticEntry);
+        static CODEMAP: CodeMap = NativeCodeMap::to_codemap(NATIVE_CODEMAP_STATIC);
         assert_eq!(NativeCodeMap::SOURCE, CODEMAP.source());
         assert_eq!(NativeCodeMap::SOURCE, CODEMAP.source_line(100));
         assert_eq!(

@@ -25,7 +25,8 @@ macro_rules! rust_loc {
         use crate::values::FrozenRef;
 
         static NATIVE_CODEMAP: NativeCodeMap = NativeCodeMap::new(file!(), line!(), column!());
-        static CODEMAP: CodeMap = NATIVE_CODEMAP.to_codemap();
+        pagable::static_value!(NATIVE_CODEMAP_STATIC: NativeCodeMap = &NATIVE_CODEMAP, starlark_syntax::codemap::NativeCodeMapStaticEntry);
+        static CODEMAP: CodeMap = NativeCodeMap::to_codemap(NATIVE_CODEMAP_STATIC);
         static FROZEN_FILE_SPAN: FrameSpan = FrameSpan::new(FrozenFileSpan::new_unchecked(
             FrozenRef::new(&CODEMAP),
             NativeCodeMap::FULL_SPAN,
