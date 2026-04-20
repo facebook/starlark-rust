@@ -21,6 +21,8 @@ use std::hash::Hasher;
 
 use allocative::Allocative;
 use dupe::Dupe;
+use pagable::PagablePanic;
+use pagable::pagable_typetag;
 use starlark_map::sorted_map::SortedMap;
 use starlark_syntax::codemap::Span;
 
@@ -29,6 +31,7 @@ use crate::typing::TyBasic;
 use crate::typing::TypingOracleCtx;
 use crate::typing::call_args::TyCallArgs;
 use crate::typing::callable::TyCallable;
+use crate::typing::custom::TyCustomDyn;
 use crate::typing::custom::TyCustomImpl;
 use crate::typing::error::TypingNoContextError;
 use crate::typing::error::TypingNoContextOrInternalError;
@@ -116,8 +119,9 @@ pub struct TyUserParams {
 }
 
 /// Type description for arbitrary type.
-#[derive(Allocative, Debug, derive_more::Display)]
+#[derive(Allocative, Debug, derive_more::Display, PagablePanic)]
 #[display("{}", name)]
+#[pagable_typetag(TyCustomDyn)]
 pub struct TyUser {
     name: String,
     /// Base type for this custom type, e.g. generic record for record with known fields.

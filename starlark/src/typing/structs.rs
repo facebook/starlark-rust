@@ -22,6 +22,8 @@ use std::sync::Arc;
 
 use allocative::Allocative;
 use dupe::Dupe;
+use pagable::PagablePanic;
+use pagable::pagable_typetag;
 use starlark_derive::type_matcher;
 use starlark_map::sorted_map::SortedMap;
 
@@ -30,6 +32,7 @@ use crate::typing::Ty;
 use crate::typing::TyBasic;
 use crate::typing::TypingBinOp;
 use crate::typing::TypingOracleCtx;
+use crate::typing::custom::TyCustomDyn;
 use crate::typing::custom::TyCustomImpl;
 use crate::typing::error::TypingNoContextError;
 use crate::typing::error::TypingNoContextOrInternalError;
@@ -50,7 +53,18 @@ impl TypeMatcher for StructMatcher {
 }
 
 /// Struct type.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Allocative)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    Allocative,
+    PagablePanic
+)]
+#[pagable_typetag(TyCustomDyn)]
 pub struct TyStruct {
     /// The fields that are definitely present in the struct, with their types.
     pub(crate) fields: SortedMap<ArcStr, Ty>,

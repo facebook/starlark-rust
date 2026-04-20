@@ -20,6 +20,9 @@ use std::hash::Hash;
 
 use allocative::Allocative;
 use dupe::Dupe;
+use pagable::PagablePanic;
+use pagable::PagableRegisteredFor;
+use pagable::pagable_tagged;
 
 use crate::codemap::Span;
 use crate::typing::ParamSpec;
@@ -29,6 +32,7 @@ use crate::typing::TypingBinOp;
 use crate::typing::TypingOracleCtx;
 use crate::typing::call_args::TyCallArgs;
 use crate::typing::callable::TyCallable;
+use crate::typing::custom::TyCustomDyn;
 use crate::typing::custom::TyCustomImpl;
 use crate::typing::error::TypingNoContextError;
 use crate::typing::error::TypingNoContextOrInternalError;
@@ -69,16 +73,21 @@ pub trait TyCustomFunctionImpl:
     Ord,
     PartialOrd,
     Debug,
-    derive_more::Display
+    derive_more::Display,
+    PagablePanic
 )]
 #[display(
     "def({}) -> {}",
     self.0.as_callable().params(),
     self.0.as_callable().result(),
 )]
+#[pagable_tagged(TyCustomDyn)]
 pub struct TyCustomFunction<F: TyCustomFunctionImpl>(pub F);
 
-impl<F: TyCustomFunctionImpl> TyCustomImpl for TyCustomFunction<F> {
+impl<F: TyCustomFunctionImpl> TyCustomImpl for TyCustomFunction<F>
+where
+    F: PagableRegisteredFor<dyn TyCustomDyn, Self>,
+{
     fn as_name(&self) -> Option<&str> {
         Some("function")
     }
@@ -163,6 +172,8 @@ impl TyFunction {
         &self.callable
     }
 }
+
+pagable::register_typetag!(TyCustomFunction<TyFunction> as dyn TyCustomDyn);
 
 impl TyCustomFunctionImpl for TyFunction {
     fn is_type(&self) -> bool {

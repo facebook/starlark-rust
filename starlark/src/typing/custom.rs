@@ -29,6 +29,9 @@ use allocative::Allocative;
 use cmp_any::OrdAny;
 use cmp_any::PartialEqAny;
 use dupe::Dupe;
+use pagable::Pagable;
+use pagable::PagableTagged;
+use pagable::pagable_typetag;
 use starlark_map::StarlarkHasher;
 
 use crate::codemap::Span;
@@ -51,7 +54,9 @@ use crate::values::typing::type_compiled::matcher::TypeMatcherBox;
 use crate::values::typing::type_compiled::matcher::TypeMatcherBoxAlloc;
 
 /// Custom type implementation. [`Display`] must implement the representation of the type.
-pub trait TyCustomImpl: Debug + Display + Hash + Ord + Allocative + Send + Sync + 'static {
+pub trait TyCustomImpl:
+    Debug + Display + Hash + Ord + Allocative + PagableTagged + Send + Sync + 'static
+{
     /// The type name used for display and error messages.
     fn as_name(&self) -> Option<&str>;
     /// Type-check a call expression, returning the result type.
@@ -113,7 +118,10 @@ pub trait TyCustomImpl: Debug + Display + Hash + Ord + Allocative + Send + Sync 
     fn matcher<T: TypeMatcherAlloc>(&self, factory: T) -> T::Result;
 }
 
-pub(crate) trait TyCustomDyn: Debug + Display + Allocative + Send + Sync + 'static {
+#[pagable_typetag]
+pub(crate) trait TyCustomDyn:
+    Debug + Display + Allocative + PagableTagged + Send + Sync + 'static
+{
     fn eq_token(&self) -> PartialEqAny<'_>;
     fn hash_code(&self) -> u64;
     fn cmp_token(&self) -> (OrdAny<'_>, &'static str);
@@ -264,7 +272,7 @@ impl<T: TyCustomImpl> TyCustomDyn for T {
     }
 }
 
-#[derive(Debug, derive_more::Display, Allocative, Clone, Dupe)]
+#[derive(Debug, derive_more::Display, Allocative, Clone, Dupe, Pagable)]
 pub struct TyCustom(pub(crate) Arc<dyn TyCustomDyn>);
 
 impl TyCustom {

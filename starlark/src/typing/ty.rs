@@ -24,6 +24,7 @@ use allocative::Allocative;
 use dupe::Dupe;
 use dupe::IterDupedExt;
 use either::Either;
+use pagable::PagableRegisteredFor;
 use starlark_derive::Trace;
 use starlark_syntax::codemap::CodeMap;
 use starlark_syntax::codemap::Span;
@@ -38,6 +39,7 @@ use crate::typing::basic::TyBasic;
 use crate::typing::call_args::TyCallArgs;
 use crate::typing::callable::TyCallable;
 use crate::typing::custom::TyCustom;
+use crate::typing::custom::TyCustomDyn;
 use crate::typing::custom::TyCustomImpl;
 use crate::typing::error::TypingNoContextError;
 use crate::typing::function::TyCustomFunction;
@@ -420,7 +422,16 @@ impl Ty {
     }
 
     /// Create a custom function type.
-    pub fn custom_function(f: impl TyCustomFunctionImpl) -> Self {
+    #[expect(
+        private_bounds,
+        reason = "TyCustomDyn is intentionally pub(crate); it appears in the bound \
+                  only to enforce typetag registration at compile time and is not \
+                  part of the public API surface callers need to name."
+    )]
+    pub fn custom_function<F>(f: F) -> Self
+    where
+        F: TyCustomFunctionImpl + PagableRegisteredFor<dyn TyCustomDyn, TyCustomFunction<F>>,
+    {
         Ty::custom(TyCustomFunction(f))
     }
 

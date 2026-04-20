@@ -21,6 +21,8 @@ use std::fmt::Formatter;
 
 use allocative::Allocative;
 use dupe::Dupe;
+use pagable::PagablePanic;
+use pagable::pagable_typetag;
 use starlark_derive::type_matcher;
 use starlark_map::sorted_map::SortedMap;
 
@@ -30,9 +32,11 @@ use crate::typing::ParamSpec;
 use crate::typing::Ty;
 use crate::typing::call_args::TyCallArgs;
 use crate::typing::callable::TyCallable;
+use crate::typing::custom::TyCustomDyn;
 use crate::typing::custom::TyCustomImpl;
 use crate::typing::error::TypingNoContextError;
 use crate::typing::error::TypingOrInternalError;
+use crate::typing::function::TyCustomFunction;
 use crate::typing::function::TyCustomFunctionImpl;
 use crate::typing::oracle::ctx::TypingOracleCtx;
 use crate::util::arc_str::ArcStr;
@@ -53,9 +57,21 @@ impl TypeMatcher for NamespaceMatcher {
 }
 
 #[derive(
-    Allocative, Clone, Copy, Dupe, Debug, Eq, PartialEq, Hash, Ord, PartialOrd
+    Allocative,
+    Clone,
+    Copy,
+    Dupe,
+    Debug,
+    Eq,
+    PartialEq,
+    Hash,
+    Ord,
+    PartialOrd,
+    PagablePanic
 )]
 pub(super) struct TyNamespaceFunction;
+
+pagable::register_typetag!(TyCustomFunction<TyNamespaceFunction> as dyn TyCustomDyn);
 
 impl TyCustomFunctionImpl for TyNamespaceFunction {
     fn as_callable(&self) -> TyCallable {
@@ -91,7 +107,18 @@ impl TyCustomFunctionImpl for TyNamespaceFunction {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Allocative)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    Allocative,
+    PagablePanic
+)]
+#[pagable_typetag(TyCustomDyn)]
 pub(super) struct TyNamespace {
     pub(super) fields: SortedMap<ArcStr, Ty>,
     /// [`true`] if there might be additional fields not captured above,
