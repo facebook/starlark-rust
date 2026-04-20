@@ -33,69 +33,52 @@ use syn::spanned::Spanned;
 pub fn typetag_trait(item: ItemTrait) -> syn::Result<TokenStream> {
     let trait_name = &item.ident;
     let trait_vis = &item.vis;
-    let registry_name = Ident::new(
-        &format!(
-            "__PAGABLE_REGISTRY_{}",
-            trait_name.to_string().to_uppercase()
-        ),
-        Span::call_site(),
-    );
     let registration_struct_name = Ident::new(
         &format!("__PagableRegistration_{}", trait_name),
         Span::call_site(),
     );
-
     Ok(quote_spanned! { item.span() =>
         #item
 
-        // Define a registration struct specific to this trait - in the users crate
-        // This avoids orphan rule issues with inventory::collect!
+        // Per-trait wrapper around TypetagRegistration to satisfy inventory orphan rules.
         #[doc(hidden)]
         #[allow(non_camel_case_types)]
-        #trait_vis struct #registration_struct_name {
-            pub tag: &'static str,
-            pub deserialize: pagable::typetag::DeserializeFn<dyn #trait_name>,
-        }
+        #trait_vis struct #registration_struct_name(
+            pub pagable::typetag::TypetagRegistration<dyn #trait_name>
+        );
 
-        // SAFETY: The deserialize function pointer is Send + Sync
+        // SAFETY: The inner TypetagRegistration only contains function pointers,
+        // which are inherently Send + Sync.
         unsafe impl Send for #registration_struct_name {}
         unsafe impl Sync for #registration_struct_name {}
 
-        // Collect registrations for this trait - works because the struct is defined here
-        pagable::__internal::inventory::collect!(#registration_struct_name);
-
-        // Provide a way to construct registration structs through the trait object type.
-        // This allows impl blocks to use `<dyn TraitName>::__pagable_registration(...)`
-        // without needing to import the registration struct directly.
         impl dyn #trait_name {
             #[doc(hidden)]
-            #trait_vis const fn __pagable_registration(
-                tag: &'static str,
-                deserialize: pagable::typetag::DeserializeFn<dyn #trait_name>,
+            #trait_vis const fn __pagable_wrap_registration(
+                reg: pagable::typetag::TypetagRegistration<dyn #trait_name>,
             ) -> #registration_struct_name {
-                #registration_struct_name { tag, deserialize }
+                #registration_struct_name(reg)
             }
         }
 
-        // Define the registry that uses our custom registration struct
-        #trait_vis static #registry_name: std::sync::OnceLock<pagable::typetag::Registry<dyn #trait_name>> = std::sync::OnceLock::new();
-
-        fn __pagable_init_registry() -> &'static pagable::typetag::Registry<dyn #trait_name> {
-            #registry_name.get_or_init(|| {
-                let mut map = std::collections::HashMap::new();
-                for registered in pagable::__internal::inventory::iter::<#registration_struct_name> {
-                    map.insert(registered.tag, registered.deserialize);
-                }
-                pagable::typetag::Registry(map)
-            })
-        }
+        pagable::__internal::inventory::collect!(#registration_struct_name);
 
         impl<'de> pagable::PagableBoxDeserialize<'de> for dyn #trait_name {
             fn deserialize_box<D: pagable::PagableDeserializer<'de> + ?Sized>(
                 deserializer: &mut D,
             ) -> pagable::Result<Box<Self>> {
-                let mut deserializer = deserializer;
-                __pagable_init_registry().deserialize_tagged(&mut deserializer)
+                static REGISTRY: std::sync::OnceLock<
+                    pagable::typetag::TypetagRegistry<dyn #trait_name>
+                > = std::sync::OnceLock::new();
+                REGISTRY
+                    .get_or_init(|| {
+                        pagable::typetag::TypetagRegistry::from_inventory(
+                            pagable::__internal::inventory::iter::<#registration_struct_name>
+                                .into_iter()
+                                .map(|r| &r.0)
+                        )
+                    })
+                    .deserialize_tagged(deserializer.as_dyn())
             }
         }
     })
@@ -123,17 +106,23 @@ fn typetag_struct(
             }
         }
 
-        // Submit to inventory for automatic registration.
-        // Uses the trait object's inherent method to construct the registration struct,
-        // so users only need the trait in scope, not the registration struct itself.
+        // Direct (non-wrapped) typetag registrations deliberately do NOT emit
+        // a `PagableRegisteredFor` impl: that marker is only meaningful when
+        // paired with a wrapper type. Use `register_typetag!(Wrapper<T> as dyn Trait)`
+        // to register `T` for a specific wrapper.
+
+        // Submit to inventory for automatic registration,
+        // using the per-trait wrapper struct generated by #[pagable_typetag] on the trait.
         pagable::__internal::inventory::submit! {
-            <dyn #trait_path>::__pagable_registration(
-                #type_tag,
-                |deserializer| {
-                    let value: #self_ty =
-                        pagable::PagableDeserialize::pagable_deserialize(deserializer)?;
-                    Ok(Box::new(value) as Box<dyn #trait_path>)
-                },
+            <dyn #trait_path>::__pagable_wrap_registration(
+                pagable::typetag::TypetagRegistration {
+                    tag: || #type_tag,
+                    deserialize: |deserializer| {
+                        let value: #self_ty =
+                            pagable::PagableDeserialize::pagable_deserialize(deserializer)?;
+                        Ok(Box::new(value) as Box<dyn #trait_path>)
+                    },
+                }
             )
         }
     }

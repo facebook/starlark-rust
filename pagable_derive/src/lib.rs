@@ -12,6 +12,7 @@ use proc_macro::TokenStream;
 
 mod derive_pagable;
 mod derive_pagable_panic;
+mod derive_pagable_tagged;
 mod typetag;
 
 #[proc_macro_derive(Pagable, attributes(pagable))]
@@ -65,7 +66,22 @@ pub fn derive_pagable_deserialize(input: TokenStream) -> TokenStream {
 ///
 /// This generates automatic registration via `inventory`.
 ///
-/// **Note:** The type must also derive `PagableTagged` to provide the type tag.
+/// **Note:** The type must also implement `PagableTagged` (via `#[pagable_tagged]`
+/// or `#[pagable_typetag(Trait)]`).
+///
+/// Generate a `PagableTagged` impl using `type_name`, with
+/// `PagableRegistered<dyn Trait, Self>` bounds on generic params to enforce
+/// that concrete instantiations are registered via `register_typetag!`.
+///
+/// ```ignore
+/// #[pagable_tagged(MyTrait)]
+/// struct Wrapper<T: MyInnerTrait>(pub T);
+/// ```
+#[proc_macro_attribute]
+pub fn pagable_tagged(attr: TokenStream, item: TokenStream) -> TokenStream {
+    derive_pagable_tagged::pagable_tagged_impl(attr, item)
+}
+
 #[proc_macro_attribute]
 pub fn pagable_typetag(attr: TokenStream, item: TokenStream) -> TokenStream {
     typetag::pagable_typetag_impl(attr, item)

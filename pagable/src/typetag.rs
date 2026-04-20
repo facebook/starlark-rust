@@ -70,29 +70,93 @@ pub trait PagableTagged: PagableSerialize + Send + Sync {
     }
 }
 
-/// Function pointer type for deserializing a concrete type into a boxed trait object.
-pub type DeserializeFn<T> = fn(&mut dyn PagableDeserializer<'_>) -> crate::Result<Box<T>>;
+/// Marker trait: implemented for inner types registered via `register_typetag!`
+/// for a specific `(Trait, Wrapper<Inner>)` triple. Use as a bound to enforce
+/// registration at compile time.
+///
+/// The second type parameter names the wrapper a given inner type is registered
+/// for, which lets the same inner type be registered under multiple wrappers
+/// against the same trait without conflicting impls.
+///
+/// ```ignore
+/// #[pagable_tagged(MyTrait)]
+/// struct Wrapper<T: MyInnerTrait>(pub T)
+/// where
+///     T: PagableRegisteredFor<dyn MyTrait, Wrapper<T>>;
+/// ```
+pub trait PagableRegisteredFor<T: ?Sized, W: ?Sized> {}
 
-/// Registry created once per tagged trait by `#[pagable_typetag]` to store deserialize functions.
-pub struct Registry<T: ?Sized>(pub HashMap<&'static str, DeserializeFn<T>>);
+/// Registration entry for a concrete type implementing a trait object.
+///
+/// Used by both `#[pagable_typetag]` (proc macro) and `register_typetag!` (macro_rules).
+pub struct TypetagRegistration<T: ?Sized + 'static> {
+    pub tag: fn() -> &'static str,
+    pub deserialize: fn(&mut dyn PagableDeserializer<'_>) -> crate::Result<Box<T>>,
+}
 
-impl<T: ?Sized> Registry<T> {
-    /// Deserialize a tagged trait object from a registry of deserializers.
-    ///
-    /// Used by the `#[pagable_typetag]` macro to implement `PagableBoxDeserialize`
-    /// for trait objects.
+// SAFETY: TypetagRegistration only contains function pointers (fn types),
+// which are inherently Send + Sync.
+unsafe impl<T: ?Sized> Send for TypetagRegistration<T> {}
+unsafe impl<T: ?Sized> Sync for TypetagRegistration<T> {}
+
+/// A registry built from `TypetagRegistration` entries collected via `inventory`.
+pub struct TypetagRegistry<T: ?Sized + 'static> {
+    map: HashMap<&'static str, fn(&mut dyn PagableDeserializer<'_>) -> crate::Result<Box<T>>>,
+}
+
+impl<T: ?Sized + 'static> TypetagRegistry<T> {
+    pub fn from_inventory(iter: impl Iterator<Item = &'static TypetagRegistration<T>>) -> Self {
+        let mut map = HashMap::new();
+        for reg in iter {
+            map.insert((reg.tag)(), reg.deserialize);
+        }
+        TypetagRegistry { map }
+    }
+
     pub fn deserialize_tagged(
         &self,
         deserializer: &mut dyn PagableDeserializer<'_>,
     ) -> crate::Result<Box<T>> {
         let tag: String = serde::Deserialize::deserialize(deserializer.serde())?;
         let deserialize_fn = self
-            .0
+            .map
             .get(tag.as_str())
             .ok_or_else(|| crate::__internal::anyhow::anyhow!("Unknown type tag: {}", tag))?;
-
         (deserialize_fn)(deserializer)
     }
+}
+
+/// Register a concrete generic instantiation for pagable deserialization.
+///
+/// Use for generic wrappers where `#[pagable_typetag]` can't be applied.
+/// Implements `PagableRegisteredFor` for the inner type and registers
+/// `Wrapper<Inner>` for deserialization.
+///
+/// The trait must have `#[pagable_typetag]` applied.
+///
+/// # Example
+///
+/// ```ignore
+/// pagable::register_typetag!(Wrapper<Cat> as dyn MyTrait);
+/// ```
+#[macro_export]
+macro_rules! register_typetag {
+    ($wrapper:ident < $inner:ty > as dyn $trait:path) => {
+        impl $crate::typetag::PagableRegisteredFor<dyn $trait, $wrapper<$inner>> for $inner {}
+
+        $crate::__internal::inventory::submit! {
+            <dyn $trait>::__pagable_wrap_registration(
+                $crate::typetag::TypetagRegistration {
+                    tag: ::std::any::type_name::<$wrapper<$inner>>,
+                    deserialize: |deserializer| {
+                        let value: $wrapper<$inner> =
+                            $crate::PagableDeserialize::pagable_deserialize(deserializer)?;
+                        Ok(Box::new(value) as Box<dyn $trait>)
+                    },
+                }
+            )
+        }
+    };
 }
 
 #[cfg(test)]
@@ -100,6 +164,7 @@ mod tests {
     use std::fmt::Debug;
     use std::sync::Arc;
 
+    use pagable::PagableRegisteredFor;
     use pagable::PagableTagged;
 
     use crate as pagable;
@@ -165,6 +230,63 @@ mod tests {
         assert_eq!(restored.name(), "test");
         Ok(())
     }
+
+    // --- Generic wrapper tests (like TyCustomFunction<F>) ---
+    // Uses register_typetag! + TypetagRegistry instead of #[pagable_typetag]
+
+    /// Trait for the dyn object (like TyCustomDyn)
+    #[crate::pagable_typetag]
+    pub trait Animal: PagableTagged + Send + Sync + Debug {
+        fn species(&self) -> &str;
+    }
+
+    /// Generic wrapper (like TyCustomFunction<F>).
+    /// The Registered bound on T enforces that only registered inner types can be used.
+    #[derive(Debug, Pagable)]
+    #[crate::pagable_tagged(Animal)]
+    pub struct Wrapper<T: Pagable + Send + Sync + Debug + 'static>(pub T);
+
+    impl<T: Pagable + Send + Sync + Debug + 'static> Animal for Wrapper<T>
+    where
+        T: PagableRegisteredFor<dyn Animal, Self>,
+    {
+        fn species(&self) -> &str {
+            "wrapped"
+        }
+    }
+
+    /// Concrete inner type (like ZipType) — registered
+    #[derive(Debug, Pagable, Eq, PartialEq)]
+    pub struct Cat;
+
+    // Register Wrapper<Cat> for deserialization as dyn Animal.
+    // This generates: impl PagableRegisteredFor<dyn Animal, Wrapper<Cat>> for Cat {}
+    crate::register_typetag!(Wrapper<Cat> as dyn Animal);
+
+    #[test]
+    fn test_register_typetag_generic_roundtrip() -> crate::Result<()> {
+        use crate::testing::TestingDeserializer;
+        use crate::testing::TestingSerializer;
+        use crate::traits::PagableBoxDeserialize;
+
+        let value: Arc<dyn Animal> = Arc::new(Wrapper(Cat));
+
+        let mut serializer = TestingSerializer::new();
+        value.serialize_tagged(&mut serializer)?;
+        let bytes = serializer.finish();
+
+        let mut deserializer = TestingDeserializer::new(&bytes);
+        let restored: Box<dyn Animal> = <dyn Animal>::deserialize_box(&mut deserializer)?;
+
+        assert_eq!(restored.species(), "wrapped");
+        Ok(())
+    }
+
+    // Using an unregistered type as `dyn Animal` fails to compile:
+    // #[derive(Debug, Pagable)]
+    // struct Dog;
+    // const _: Arc<dyn Animal> = Arc::new(Wrapper(Dog));
+    //      error: Dog: PagableRegisteredFor<dyn Animal, Wrapper<Dog>> is not satisfied
 
     #[test]
     fn test_typetag_roundtrip_indirect_impl() -> crate::Result<()> {
