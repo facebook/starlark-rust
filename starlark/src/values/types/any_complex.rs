@@ -94,6 +94,21 @@ where
     type Canonical = Self;
 }
 
+#[cfg(feature = "pagable")]
+impl<'v, T> AllocValue<'v> for StarlarkAnyComplex<T>
+where
+    Self: StarlarkValue<'v> + Freeze,
+    T: Trace<'v> + ProvidesStaticType<'v>,
+    <Self as Freeze>::Frozen:
+        StarlarkValue<'static> + HeapSendable<'static> + HeapSyncable<'static> + VtableRegistered,
+    <Self as ProvidesStaticType<'v>>::StaticType: Send,
+{
+    fn alloc_value(self, heap: Heap<'v>) -> Value<'v> {
+        heap.alloc_complex(self)
+    }
+}
+
+#[cfg(not(feature = "pagable"))]
 impl<'v, T> AllocValue<'v> for StarlarkAnyComplex<T>
 where
     Self: StarlarkValue<'v> + Freeze,
@@ -107,8 +122,18 @@ where
     }
 }
 
-// TODO(nero): Better handle StarlarkAnyComplex registration.
-unsafe impl<T> VtableRegistered for StarlarkAnyComplex<T> {}
+/// Marker trait for frozen types that can be wrapped in `StarlarkAnyComplex`
+/// and are registered for vtable lookup.
+///
+/// # Safety
+///
+/// Implementors must also register the vtable entry for `StarlarkAnyComplex<Self>`
+/// using [`register_simple_vtable_entry!`]. Use the [`register_any_complex_frozen!`]
+/// macro instead of implementing this trait manually, as it handles both the trait
+/// implementation and vtable registration.
+pub unsafe trait FrozenAnyComplexRegistered {}
+
+unsafe impl<T> VtableRegistered for StarlarkAnyComplex<T> where T: FrozenAnyComplexRegistered {}
 
 #[cfg(test)]
 mod tests {
@@ -119,6 +144,7 @@ mod tests {
     use crate as starlark;
     use crate::const_frozen_string;
     use crate::environment::Module;
+    use crate::register_any_complex_frozen;
     use crate::values::Freeze;
     use crate::values::FreezeResult;
     use crate::values::Freezer;
@@ -155,6 +181,8 @@ mod tests {
             #[expect(dead_code)]
             other: FrozenValue,
         }
+
+        register_any_complex_frozen!(FrozenData);
 
         Module::with_temp_heap(|module| {
             let data = module.heap().alloc(StarlarkAnyComplex::new(UnfrozenData {

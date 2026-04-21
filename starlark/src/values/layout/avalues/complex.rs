@@ -137,6 +137,23 @@ where
 
 impl<'v> Heap<'v> {
     /// Allocate a [`ComplexValue`] on the [`Heap`].
+    #[cfg(feature = "pagable")]
+    pub fn alloc_complex<T>(self, x: T) -> Value<'v>
+    where
+        T: ComplexValue<'v>,
+        T::Frozen: StarlarkValue<'static>
+            + HeapSendable<'static>
+            + HeapSyncable<'static>
+            + crate::pagable::vtable_register::VtableRegistered,
+        T: HeapSendable<'v>,
+    {
+        assert!(!T::is_special(Private));
+        self.alloc_raw(AValueImpl::<AValueComplex<T>>::new(x))
+            .to_value()
+    }
+
+    /// Allocate a [`ComplexValue`] on the [`Heap`].
+    #[cfg(not(feature = "pagable"))]
     pub fn alloc_complex<T>(self, x: T) -> Value<'v>
     where
         T: ComplexValue<'v>,
