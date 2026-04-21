@@ -21,6 +21,7 @@ use dupe::Dupe;
 
 use crate::errors::Frame;
 use crate::eval::runtime::frame_span::FrameSpan;
+use crate::register_starlark_any;
 use crate::values::FrozenHeap;
 use crate::values::FrozenRef;
 use crate::values::FrozenValue;
@@ -137,6 +138,8 @@ impl<'f> InlinedFrameAlloc<'f> {
         frame
     }
 }
+
+register_starlark_any!(InlinedFrame);
 
 #[cfg(test)]
 mod tests {

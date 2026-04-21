@@ -22,6 +22,7 @@ use dupe::Dupe;
 
 use crate::eval::runtime::frozen_file_span::FrozenFileSpan;
 use crate::eval::runtime::inlined_frame::InlinedFrames;
+use crate::register_starlark_any;
 
 /// Span of the call frame (including inlined call frames).
 #[derive(Debug, Clone, Copy, Dupe, PartialEq, Eq, Default)]
@@ -63,3 +64,5 @@ impl FrameSpan {
         }
     }
 }
+
+register_starlark_any!(FrameSpan);

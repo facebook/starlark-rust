@@ -39,6 +39,7 @@ use crate::values::layout::heap::repr::AValueForward;
 use crate::values::layout::heap::repr::AValueHeader;
 use crate::values::layout::heap::repr::AValueRepr;
 use crate::values::layout::heap::repr::ForwardPtr;
+use crate::values::types::any::StarlarkAnyBound;
 use crate::values::types::any_array::AnyArray;
 use crate::values::types::array::Array;
 
@@ -155,7 +156,7 @@ impl FrozenHeap {
     }
 
     /// Allocate a slice in the frozen heap.
-    pub(crate) fn alloc_any_slice<T: Debug + Send + Sync + Clone>(
+    pub(crate) fn alloc_any_slice<T: StarlarkAnyBound + Clone>(
         &self,
         values: &[T],
     ) -> FrozenRef<'static, [T]> {

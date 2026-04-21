@@ -92,21 +92,26 @@ mod tests {
 
     use dupe::Dupe;
 
+    use crate::register_starlark_any;
     use crate::values::FrozenHeap;
+
+    // Type used for drop test - must be at module level for registration.
+    #[derive(Debug, Clone, Dupe)]
+    struct IncrementOnDrop(Arc<AtomicU32>);
+
+    // Register IncrementOnDrop for use with alloc_any_slice in pagable mode.
+    register_starlark_any!(IncrementOnDrop);
+
+    impl Drop for IncrementOnDrop {
+        fn drop(&mut self) {
+            self.0.fetch_add(1, Ordering::SeqCst);
+        }
+    }
 
     #[test]
     fn test_drop() {
         let counter1 = Arc::new(AtomicU32::new(0));
         let counter2 = Arc::new(AtomicU32::new(0));
-
-        #[derive(Debug, Clone, Dupe)]
-        struct IncrementOnDrop(Arc<AtomicU32>);
-
-        impl Drop for IncrementOnDrop {
-            fn drop(&mut self) {
-                self.0.fetch_add(1, Ordering::SeqCst);
-            }
-        }
 
         let heap = FrozenHeap::new();
         let values = heap.alloc_any_slice(&[
@@ -134,6 +139,9 @@ mod tests {
         assert_eq!(6, counter1.load(Ordering::SeqCst));
         assert_eq!(4, counter2.load(Ordering::SeqCst));
     }
+
+    // Register i32 for use with alloc_any_slice in pagable mode.
+    register_starlark_any!(i32);
 
     #[test]
     fn test_allocation_size() {

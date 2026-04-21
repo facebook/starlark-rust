@@ -81,6 +81,7 @@ use crate::eval::runtime::params::spec::ParametersSpec;
 use crate::eval::runtime::profile::instant::ProfilerInstant;
 use crate::eval::runtime::slots::LocalSlotId;
 use crate::eval::runtime::slots::LocalSlotIdCapturedOrNot;
+use crate::register_starlark_any;
 use crate::starlark_complex_values;
 use crate::typing::ParamSpec;
 use crate::typing::Ty;
@@ -879,3 +880,6 @@ impl FrozenDef {
         }
     }
 }
+
+register_starlark_any!(DefInfo);
+register_starlark_any!(CopySlotFromParent);

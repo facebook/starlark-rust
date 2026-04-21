@@ -39,6 +39,8 @@
 //! #[derive(Debug)]
 //! struct MyInstant(Instant);
 //!
+//! starlark::register_starlark_any!(MyInstant);
+//!
 //! #[starlark_module]
 //! fn globals(builder: &mut GlobalsBuilder) {
 //!     fn start() -> anyhow::Result<StarlarkAny<MyInstant>> {
@@ -104,7 +106,7 @@ impl<'v, T: Debug + Send + Sync + 'static> StarlarkValue<'v> for StarlarkAny<T> 
     type Canonical = Self;
 }
 
-impl<'v, T: Debug + Send + Sync + 'static> AllocValue<'v> for StarlarkAny<T> {
+impl<'v, T: StarlarkAnyBound> AllocValue<'v> for StarlarkAny<T> {
     fn alloc_value(self, heap: Heap<'v>) -> Value<'v> {
         heap.alloc_simple(self)
     }
@@ -133,12 +135,42 @@ impl<T: Debug + Send + Sync + 'static> StarlarkAny<T> {
 
 impl FrozenHeap {
     /// Allocate any value in the frozen heap.
-    pub fn alloc_any<T: Debug + Send + Sync>(&self, value: T) -> FrozenRef<'static, T> {
+    pub fn alloc_any<T: StarlarkAnyBound>(&self, value: T) -> FrozenRef<'static, T> {
         self.alloc_simple_typed_static(StarlarkAny::new(value))
             .as_frozen_ref()
             .map(|r| &r.0)
     }
 }
 
-// TODO(nero): Better handle VtableRegistered for StarlarkAny
-unsafe impl<T: Debug + Send + Sync + 'static> VtableRegistered for StarlarkAny<T> {}
+/// Marker trait for types that can be wrapped in `StarlarkAny`
+/// and are registered for vtable lookup.
+///
+/// # Safety
+///
+/// Implementors must also register the vtable entry for `StarlarkAny<Self>`
+/// using [`register_simple_vtable_entry!`]. Use the [`register_starlark_any!`]
+/// macro instead of implementing this trait manually, as it handles both the trait
+/// implementation and vtable registration.
+pub unsafe trait StarlarkAnyRegistered {}
+
+/// Trait alias that captures the bounds required for types wrapped in `StarlarkAny`.
+///
+/// When the `pagable` feature is enabled, this includes `StarlarkAnyRegistered`.
+#[cfg(feature = "pagable")]
+pub trait StarlarkAnyBound: Debug + Send + Sync + 'static + StarlarkAnyRegistered {}
+
+#[cfg(feature = "pagable")]
+impl<T: Debug + Send + Sync + 'static + StarlarkAnyRegistered> StarlarkAnyBound for T {}
+
+/// Trait alias that captures the bounds required for types wrapped in `StarlarkAny`.
+#[cfg(not(feature = "pagable"))]
+pub trait StarlarkAnyBound: Debug + Send + Sync + 'static {}
+
+#[cfg(not(feature = "pagable"))]
+impl<T: Debug + Send + Sync + 'static> StarlarkAnyBound for T {}
+
+#[cfg(feature = "pagable")]
+unsafe impl<T: StarlarkAnyBound> VtableRegistered for StarlarkAny<T> {}
+
+#[cfg(not(feature = "pagable"))]
+unsafe impl<T: StarlarkAnyBound> VtableRegistered for StarlarkAny<T> {}

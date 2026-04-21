@@ -46,6 +46,7 @@ use starlark_syntax::slice_vec_ext::SliceExt;
 use starlark_syntax::syntax::module::AstModule;
 use starlark_syntax::syntax::module::AstModuleFields;
 
+use crate::codemap::CodeMap;
 use crate::collections::symbol::symbol::Symbol;
 use crate::docs::DocString;
 use crate::environment::Globals;
@@ -58,8 +59,12 @@ pub use crate::eval::params::param_specs;
 use crate::eval::runtime::arguments::ArgNames;
 use crate::eval::runtime::arguments::ArgumentsFull;
 use crate::eval::runtime::evaluator;
+use crate::register_starlark_any;
 use crate::syntax::DialectTypes;
 use crate::values::Value;
+
+// Register CodeMap for use with StarlarkAny
+register_starlark_any!(CodeMap);
 
 impl<'v, 'a, 'e> Evaluator<'v, 'a, 'e> {
     /// Evaluate an [`AstModule`] with this [`Evaluator`], modifying the in-scope

@@ -39,6 +39,7 @@ use crate::cast;
 use crate::cast::transmute;
 use crate::coerce::Coerce;
 use crate::coerce::CoerceKey;
+use crate::register_starlark_any;
 use crate::typing::Ty;
 use crate::values::AllocFrozenValue;
 use crate::values::AllocValue;
@@ -495,6 +496,9 @@ impl AllocFrozenStringValue for FrozenStringValue {
         self
     }
 }
+
+// Register FrozenValueTyped<StarlarkStr> for use with alloc_any_slice in pagable mode.
+register_starlark_any!(FrozenValueTyped<'static, StarlarkStr>);
 
 #[cfg(test)]
 mod tests {

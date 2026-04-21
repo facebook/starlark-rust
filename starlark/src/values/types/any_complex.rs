@@ -156,34 +156,35 @@ mod tests {
     use crate::values::list::AllocList;
     use crate::values::types::any_complex::StarlarkAnyComplex;
 
+    // Types used for StarlarkAnyComplex test - must be at module level for registration.
+    #[derive(Trace, Allocative, ProvidesStaticType)]
+    struct UnfrozenData<'v> {
+        string: StringValue<'v>,
+        other: Value<'v>,
+    }
+
+    impl<'v> Freeze for UnfrozenData<'v> {
+        type Frozen = FrozenData;
+
+        fn freeze(self, freezer: &Freezer) -> FreezeResult<Self::Frozen> {
+            Ok(FrozenData {
+                string: self.string.freeze(freezer)?,
+                other: freezer.freeze(self.other)?,
+            })
+        }
+    }
+
+    #[derive(Allocative, ProvidesStaticType)]
+    struct FrozenData {
+        string: FrozenStringValue,
+        #[expect(dead_code)]
+        other: FrozenValue,
+    }
+
+    register_any_complex_frozen!(FrozenData);
+
     #[test]
     fn test_any_complex() {
-        #[derive(Trace, Allocative, ProvidesStaticType)]
-        struct UnfrozenData<'v> {
-            string: StringValue<'v>,
-            other: Value<'v>,
-        }
-
-        impl<'v> Freeze for UnfrozenData<'v> {
-            type Frozen = FrozenData;
-
-            fn freeze(self, freezer: &Freezer) -> FreezeResult<Self::Frozen> {
-                Ok(FrozenData {
-                    string: self.string.freeze(freezer)?,
-                    other: freezer.freeze(self.other)?,
-                })
-            }
-        }
-
-        #[derive(Allocative, ProvidesStaticType)]
-        struct FrozenData {
-            string: FrozenStringValue,
-            #[expect(dead_code)]
-            other: FrozenValue,
-        }
-
-        register_any_complex_frozen!(FrozenData);
-
         Module::with_temp_heap(|module| {
             let data = module.heap().alloc(StarlarkAnyComplex::new(UnfrozenData {
                 string: module.heap().alloc_str("aaa"),

@@ -44,6 +44,7 @@ use crate::environment::slots::MutableSlots;
 use crate::errors::did_you_mean::did_you_mean;
 use crate::eval::ProfileData;
 use crate::eval::runtime::profile::heap::RetainedHeapProfileMode;
+use crate::register_starlark_any;
 use crate::singleton_heap_name;
 use crate::values::Freeze;
 use crate::values::FreezeResult;
@@ -680,3 +681,5 @@ x = f(1)
         );
     }
 }
+
+register_starlark_any!(FrozenModuleData);

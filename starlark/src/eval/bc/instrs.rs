@@ -382,8 +382,13 @@ mod tests {
     use crate::eval::bc::instrs::BcInstrsWriter;
     use crate::eval::bc::stack_ptr::BcSlot;
     use crate::eval::bc::writer::BcStatementLocations;
+    use crate::register_starlark_any;
     use crate::values::FrozenHeap;
+    use crate::values::FrozenStringValue;
     use crate::values::FrozenValue;
+
+    // Register Vec<FrozenStringValue> for use with alloc_any in pagable mode.
+    register_starlark_any!(Vec<FrozenStringValue>);
 
     #[test]
     fn write() {

@@ -23,6 +23,7 @@ use starlark_derive::VisitSpanMut;
 
 use crate as starlark;
 use crate::eval::bc::stack_ptr::BcSlot;
+use crate::register_starlark_any;
 use crate::values::Freeze;
 
 /// Not captured.
@@ -84,3 +85,5 @@ impl LocalCapturedSlotId {
 /// This is used only during AST analysis.
 #[derive(Clone, Copy, Dupe, Debug, PartialEq, Eq, Trace)]
 pub(crate) struct LocalSlotIdCapturedOrNot(pub(crate) u32);
+
+register_starlark_any!(LocalSlotId);

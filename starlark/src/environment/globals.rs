@@ -32,6 +32,7 @@ use crate::docs::DocString;
 use crate::docs::DocStringKind;
 use crate::docs::DocType;
 use crate::eval::ParametersSpec;
+use crate::register_starlark_any;
 use crate::stdlib;
 pub use crate::stdlib::LibraryExtension;
 use crate::typing::Ty;
@@ -439,6 +440,8 @@ pub(crate) fn common_documentation<'a, T: IntoIterator<Item = (&'a str, FrozenVa
 
     (main_docs, member_docs)
 }
+
+register_starlark_any!(Globals);
 
 #[cfg(test)]
 mod tests {

@@ -21,6 +21,8 @@ use std::ops::Add;
 
 use dupe::Dupe;
 
+use crate::register_starlark_any;
+
 /// Index of the slot in the function frame.
 /// This can be both a local variable or a temporary.
 /// When reading local variable, it must be definitely initialized (e.g. function parameter).
@@ -200,3 +202,5 @@ impl BcSlotOut {
         self.0
     }
 }
+
+register_starlark_any!(BcSlotOut);
