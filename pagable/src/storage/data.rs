@@ -38,7 +38,7 @@ use dupe::Dupe;
     bytemuck::AnyBitPattern
 )]
 #[repr(transparent)]
-pub struct DataKey(u128);
+pub struct DataKey(pub u128);
 
 static_assertions::assert_eq_size!(DataKey, OptionalDataKey);
 

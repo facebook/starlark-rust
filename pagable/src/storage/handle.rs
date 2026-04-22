@@ -50,7 +50,7 @@ impl PagableStorageHandle {
     }
 
     /// Creates a new handle wrapping the given storage implementation.
-    pub(crate) fn new(backing_storage: std::sync::Arc<dyn PagableStorage>) -> Self {
+    pub fn new(backing_storage: std::sync::Arc<dyn PagableStorage>) -> Self {
         Self { backing_storage }
     }
 

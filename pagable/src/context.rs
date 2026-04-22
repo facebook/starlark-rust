@@ -99,11 +99,7 @@ pub struct PagableDeserializerImpl<'de, 's> {
 }
 
 impl<'de, 's> PagableDeserializerImpl<'de, 's> {
-    pub(crate) fn new(
-        data: &'de [u8],
-        arcs: &'de [DataKey],
-        storage: &'s PagableStorageHandle,
-    ) -> Self {
+    pub fn new(data: &'de [u8], arcs: &'de [DataKey], storage: &'s PagableStorageHandle) -> Self {
         let pos = crate::flavors::SharedPosition::new();
         Self {
             pos: pos.clone(),
