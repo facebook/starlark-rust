@@ -102,7 +102,7 @@ impl BcStatementLocations {
     }
 
     fn last_stmt_idx(&self) -> Option<u32> {
-        for stmt_idx in (&self.stmts).iter().rev() {
+        for stmt_idx in self.stmts.iter().rev() {
             if *stmt_idx != u32::MAX {
                 return Some(*stmt_idx & !Self::CONTINUED_BIT);
             }

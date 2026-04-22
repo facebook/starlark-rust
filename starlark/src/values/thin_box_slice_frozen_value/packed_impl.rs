@@ -158,7 +158,7 @@ impl<'v> Default for ThinBoxSliceFrozenValue<'v> {
 impl<'v> std::fmt::Debug for ThinBoxSliceFrozenValue<'v> {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        <[_] as std::fmt::Debug>::fmt(&self, f)
+        <[_] as std::fmt::Debug>::fmt(self, f)
     }
 }
 

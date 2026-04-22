@@ -92,8 +92,7 @@ impl DefParamIndices {
 
     pub fn named_only(&self, param_count: usize) -> Range<usize> {
         self.args
-            .map(|a| a as usize + 1)
-            .unwrap_or(self.num_positional as usize)
+            .map_or(self.num_positional as usize, |a| a as usize + 1)
             ..self.kwargs.unwrap_or(param_count as u32) as usize
     }
 }

@@ -48,7 +48,7 @@ impl fmt::Display for Label {
 
         if let Some(package) = &self.package {
             f.write_str("//")?;
-            f.write_str(&package)?;
+            f.write_str(package)?;
         }
 
         f.write_str(":")?;

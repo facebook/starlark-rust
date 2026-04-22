@@ -436,8 +436,8 @@ mod tests {
             )?);
             Ok(FruitCallable {
                 name,
-                ty_fruit,
                 ty_fruit_callable,
+                ty_fruit,
             })
         }
 

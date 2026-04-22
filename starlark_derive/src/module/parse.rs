@@ -114,10 +114,10 @@ pub(crate) fn parse(mut input: ItemFn) -> syn::Result<StarModule> {
     let arg_span = arg.span();
 
     let (pat, module_kind) = match arg {
-        FnArg::Typed(PatType { ty, pat, .. }) if is_mut_globals_builder(&ty) => {
+        FnArg::Typed(PatType { ty, pat, .. }) if is_mut_globals_builder(ty) => {
             (pat, ModuleKind::Globals)
         }
-        FnArg::Typed(PatType { ty, pat, .. }) if is_mut_methods_builder(&ty) => {
+        FnArg::Typed(PatType { ty, pat, .. }) if is_mut_methods_builder(ty) => {
             (pat, ModuleKind::Methods)
         }
         _ => {

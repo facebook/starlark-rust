@@ -318,7 +318,7 @@ impl TypingContext<'_> {
         for pos in pos {
             pos_ty.push(Spanned {
                 span: pos.span,
-                node: self.expression_type(&pos.node.expr())?,
+                node: self.expression_type(pos.node.expr())?,
             });
         }
 
@@ -333,12 +333,12 @@ impl TypingContext<'_> {
             };
             named_ty.push(Spanned {
                 span: named.span,
-                node: (name, self.expression_type(&named.node.expr())?),
+                node: (name, self.expression_type(named.node.expr())?),
             });
         }
 
         let args_ty = if let Some(star) = star {
-            let ty = self.expression_type_spanned(&star.node.expr())?;
+            let ty = self.expression_type_spanned(star.node.expr())?;
             self.from_iterated(&ty, star.span);
             Some(ty)
         } else {
@@ -346,7 +346,7 @@ impl TypingContext<'_> {
         };
 
         let kwargs_ty = if let Some(star_star) = star_star {
-            let ty = self.expression_type_spanned(&star_star.node.expr())?;
+            let ty = self.expression_type_spanned(star_star.node.expr())?;
             self.validate_type(ty.as_ref(), &Ty::dict(Ty::string(), Ty::any()))?;
             Some(ty)
         } else {

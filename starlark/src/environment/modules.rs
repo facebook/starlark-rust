@@ -487,7 +487,7 @@ impl<'v> Module<'v> {
         };
         let frozen_module_ref = freezer.heap.alloc_any(rest);
         for frozen_def in freezer.frozen_defs.borrow().as_slice() {
-            frozen_def.post_freeze(frozen_module_ref, heap, &freezer.heap);
+            frozen_def.post_freeze(frozen_module_ref, heap, freezer.heap);
         }
 
         Ok(FrozenModule {
