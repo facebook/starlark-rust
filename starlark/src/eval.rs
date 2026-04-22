@@ -31,6 +31,7 @@ use std::time::Instant;
 
 use dupe::Dupe;
 pub use runtime::arguments::Arguments;
+pub use runtime::before_stmt::BeforeStmtFunc;
 pub use runtime::before_stmt::BeforeStmtFuncDyn;
 pub use runtime::evaluator::Evaluator;
 pub use runtime::file_loader::FileLoader;
