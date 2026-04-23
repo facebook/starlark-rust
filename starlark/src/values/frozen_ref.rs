@@ -23,8 +23,6 @@ use std::fmt::Formatter;
 use std::hash::Hash;
 use std::hash::Hasher;
 use std::ops::Deref;
-use std::ptr;
-use std::sync::atomic;
 
 use allocative::Allocative;
 use dupe::Clone_;
@@ -170,40 +168,5 @@ impl<'fv, T: 'fv + ?Sized> Freeze for FrozenRef<'fv, T> {
 
     fn freeze(self, _freezer: &Freezer) -> FreezeResult<Self::Frozen> {
         Ok(self)
-    }
-}
-
-/// `Atomic<Option<FrozenRef<T>>>`.
-pub(crate) struct AtomicFrozenRefOption<T>(atomic::AtomicPtr<T>);
-
-unsafe impl<'v, T> Trace<'v> for AtomicFrozenRefOption<T> {
-    fn trace(&mut self, _: &Tracer<'v>) {
-        // Do nothing, because `AtomicFrozenRefOption` holds `FrozenRef`.
-    }
-}
-
-impl<T> AtomicFrozenRefOption<T> {
-    pub(crate) fn new(module: Option<FrozenRef<T>>) -> AtomicFrozenRefOption<T> {
-        AtomicFrozenRefOption(atomic::AtomicPtr::new(match module {
-            Some(v) => v.as_ref() as *const T as *mut T,
-            None => ptr::null_mut(),
-        }))
-    }
-
-    pub(crate) fn load_relaxed(&self) -> Option<FrozenRef<'static, T>> {
-        // Note this is relaxed load which is cheap.
-        let ptr = self.0.load(atomic::Ordering::Relaxed);
-        if ptr.is_null() {
-            None
-        } else {
-            Some(FrozenRef::new(unsafe { &*ptr }))
-        }
-    }
-
-    pub(crate) fn store_relaxed(&self, module: FrozenRef<T>) {
-        self.0.store(
-            module.as_ref() as *const T as *mut T,
-            atomic::Ordering::Relaxed,
-        );
     }
 }

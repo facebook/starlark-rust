@@ -79,6 +79,7 @@ use crate::values::Trace;
 use crate::values::Tracer;
 use crate::values::Value;
 use crate::values::ValueLike;
+use crate::values::any::FrozenAnyValue;
 use crate::values::function::NativeFunction;
 use crate::values::layout::value_captured::FrozenValueCaptured;
 use crate::values::layout::value_captured::ValueCaptured;
@@ -752,7 +753,7 @@ impl<'v, 'a, 'e: 'a> Evaluator<'v, 'a, 'e> {
     pub(crate) fn top_frame_def_frozen_module(
         &self,
         for_debugger: bool,
-    ) -> anyhow::Result<Option<FrozenRef<'static, FrozenModuleData>>> {
+    ) -> anyhow::Result<Option<FrozenAnyValue<FrozenModuleData>>> {
         let func = self.top_frame_maybe_for_debugger(for_debugger)?;
         if let Some(func) = func.downcast_ref::<FrozenDef>() {
             Ok(func.module.load_relaxed())

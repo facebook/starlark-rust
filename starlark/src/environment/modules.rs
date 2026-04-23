@@ -51,7 +51,6 @@ use crate::values::FreezeResult;
 use crate::values::Freezer;
 use crate::values::FrozenHeap;
 use crate::values::FrozenHeapRef;
-use crate::values::FrozenRef;
 use crate::values::FrozenStringValue;
 use crate::values::FrozenValue;
 use crate::values::Heap;
@@ -59,6 +58,7 @@ use crate::values::OwnedFrozenValue;
 use crate::values::Trace;
 use crate::values::Tracer;
 use crate::values::Value;
+use crate::values::any::FrozenAnyValue;
 use crate::values::layout::heap::heap_type::FrozenHeapName;
 use crate::values::layout::heap::heap_type::HeapKind;
 use crate::values::layout::heap::profile::aggregated::AggregateHeapProfileInfo;
@@ -85,7 +85,7 @@ enum ModuleError {
 // Two Arc's should still be plenty cheap enough to qualify for `Dupe`.
 pub struct FrozenModule {
     heap: FrozenHeapRef,
-    module: FrozenRef<'static, FrozenModuleData>,
+    module: FrozenAnyValue<FrozenModuleData>,
     extra_value: Option<FrozenValue>,
     /// Module evaluation duration:
     /// * evaluation of the top-level statements
@@ -485,7 +485,7 @@ impl<'v> Module<'v> {
             docstring: docstring.into_inner(),
             heap_profile: stacks,
         };
-        let frozen_module_ref = freezer.heap.alloc_any(rest);
+        let frozen_module_ref = freezer.heap.alloc_any_value(rest);
         for frozen_def in freezer.frozen_defs.borrow().as_slice() {
             frozen_def.post_freeze(frozen_module_ref, heap, freezer.heap);
         }

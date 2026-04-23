@@ -72,6 +72,7 @@ use std::fmt;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::ops::Deref;
+use std::sync::atomic;
 
 use allocative::Allocative;
 use dupe::Clone_;
@@ -280,11 +281,60 @@ impl<T: Debug + Send + Sync + 'static> FrozenAnyValue<T> {
     ///
     /// # Safety
     /// The caller must ensure the value is a `StarlarkAny<T>`.
-    #[expect(dead_code)] // Used starting from diff 4.
     #[inline]
     pub(crate) unsafe fn new_unchecked(value: FrozenValue) -> Self {
         // SAFETY: caller guarantees value is a StarlarkAny<T>.
         FrozenAnyValue(unsafe { FrozenValueTyped::new_unchecked(value) })
+    }
+}
+
+/// `Atomic<Option<FrozenAnyValue<T>>>`.
+///
+/// Used to lazily store a `FrozenAnyValue` reference (e.g., for module back-references
+/// that are populated after freezing).
+pub(crate) struct AtomicFrozenAnyValueOption<T: Debug + Send + Sync + 'static>(
+    atomic::AtomicPtr<()>,
+    std::marker::PhantomData<T>,
+);
+
+// Lets us transmute `Option<FrozenValue>` <-> `*mut ()`; niche optimization
+// maps `None` to null.
+const _: () = assert!(std::mem::size_of::<Option<FrozenValue>>() == std::mem::size_of::<*mut ()>());
+
+unsafe impl<'v, T: Debug + Send + Sync + 'static> Trace<'v> for AtomicFrozenAnyValueOption<T> {
+    fn trace(&mut self, _: &Tracer<'v>) {
+        // No-op: points to frozen data.
+    }
+}
+
+impl<T: Debug + Send + Sync + 'static> AtomicFrozenAnyValueOption<T> {
+    fn encode(value: Option<FrozenAnyValue<T>>) -> *mut () {
+        let opt: Option<FrozenValue> = value.map(FrozenAnyValue::to_frozen_value);
+        // SAFETY: const_assert above guarantees the sizes match; the only other way this could be wrong is if `Option<FrozenValue>` had internal padding (uninit memory) but that's clearly not possible, so this is justified
+        unsafe { std::mem::transmute(opt) }
+    }
+
+    unsafe fn decode(raw: *mut ()) -> Option<FrozenAnyValue<T>> {
+        // SAFETY: `raw` was produced by `encode`
+        let opt: Option<FrozenValue> = unsafe { std::mem::transmute(raw) };
+        opt.map(|fv| unsafe { FrozenAnyValue::new_unchecked(fv) })
+    }
+
+    pub(crate) fn new(value: Option<FrozenAnyValue<T>>) -> Self {
+        AtomicFrozenAnyValueOption(
+            atomic::AtomicPtr::new(Self::encode(value)),
+            std::marker::PhantomData,
+        )
+    }
+
+    pub(crate) fn load_relaxed(&self) -> Option<FrozenAnyValue<T>> {
+        let raw = self.0.load(atomic::Ordering::Relaxed);
+        unsafe { Self::decode(raw) }
+    }
+
+    pub(crate) fn store_relaxed(&self, value: FrozenAnyValue<T>) {
+        self.0
+            .store(Self::encode(Some(value)), atomic::Ordering::Relaxed);
     }
 }
 

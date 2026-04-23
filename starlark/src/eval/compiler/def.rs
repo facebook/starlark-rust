@@ -100,7 +100,8 @@ use crate::values::Trace;
 use crate::values::Tracer;
 use crate::values::Value;
 use crate::values::ValueLike;
-use crate::values::frozen_ref::AtomicFrozenRefOption;
+use crate::values::any::AtomicFrozenAnyValueOption;
+use crate::values::any::FrozenAnyValue;
 use crate::values::function::FUNCTION_TYPE;
 use crate::values::typing::type_compiled::compiled::TypeCompiled;
 
@@ -558,7 +559,7 @@ pub(crate) struct DefGen<V> {
     /// When the module is not frozen yet, this field contains `None`, and function's module
     /// can be accessed from evaluator's module.
     #[allocative(skip)]
-    pub(crate) module: AtomicFrozenRefOption<FrozenModuleData>,
+    pub(crate) module: AtomicFrozenAnyValueOption<FrozenModuleData>,
     /// This field is only used in `FrozenDef`. It is populated in `post_freeze`.
     #[derivative(Debug = "ignore")]
     #[allocative(skip)]
@@ -594,7 +595,7 @@ impl<'v> Def<'v> {
             parameter_types,
             return_type,
             captured,
-            module: AtomicFrozenRefOption::new(eval.top_frame_def_frozen_module(false)?),
+            module: AtomicFrozenAnyValueOption::new(eval.top_frame_def_frozen_module(false)?),
             optimized_on_freeze_stmt: StmtCompiledCell::new(),
             def_info: stmt,
         }))
@@ -609,7 +610,7 @@ impl<'v> Freeze for Def<'v> {
         let parameter_types = self.parameter_types.freeze(freezer)?;
         let return_type = self.return_type.freeze(freezer)?;
         let captured = self.captured.try_map(|x| x.freeze(freezer))?;
-        let module = AtomicFrozenRefOption::new(self.module.load_relaxed());
+        let module = AtomicFrozenAnyValueOption::new(self.module.load_relaxed());
         Ok(FrozenDef {
             parameters,
             parameter_captures: self.parameter_captures,
@@ -837,7 +838,7 @@ where
 impl FrozenDef {
     pub(crate) fn post_freeze(
         &self,
-        module: FrozenRef<FrozenModuleData>,
+        module: FrozenAnyValue<FrozenModuleData>,
         heap: Heap<'_>,
         frozen_heap: &FrozenHeap,
     ) {
@@ -859,7 +860,7 @@ impl FrozenDef {
             .body_stmts
             .optimize(&mut OptCtx::new(
                 &mut OptimizeOnFreezeContext {
-                    module: def_module.as_ref(),
+                    module: &def_module,
                     heap,
                     frozen_heap,
                 },
