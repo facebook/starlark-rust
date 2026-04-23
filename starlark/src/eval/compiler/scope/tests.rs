@@ -56,7 +56,7 @@ fn test_with_module(program: &str, expected: &str, module: &MutableNames) {
         &HashMap::new(),
         ast.into_parts().1,
         ScopeResolverGlobals {
-            globals: Some(frozen_heap.alloc_any(Globals::new())),
+            globals: Some(frozen_heap.alloc_any_value(Globals::new())),
         },
         codemap,
         &Dialect::AllOptionsInternal,

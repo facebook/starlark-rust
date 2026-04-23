@@ -80,7 +80,10 @@ impl<'v, 'a, 'e> Evaluator<'v, 'a, 'e> {
             .frozen_heap()
             .alloc_any_value(codemap.dupe());
 
-        let globals = self.module_env.frozen_heap().alloc_any(globals.dupe());
+        let globals = self
+            .module_env
+            .frozen_heap()
+            .alloc_any_value(globals.dupe());
 
         if let Some(docstring) = DocString::extract_raw_starlark_docstring(&statement) {
             self.module_env.set_docstring(docstring)

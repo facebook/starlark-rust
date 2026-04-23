@@ -17,12 +17,12 @@
 
 use crate::const_frozen_string;
 use crate::environment::Globals;
-use crate::values::FrozenRef;
 use crate::values::FrozenValue;
+use crate::values::any::FrozenAnyValue;
 
 pub(crate) struct ScopeResolverGlobals {
     /// None if unknown.
-    pub(crate) globals: Option<FrozenRef<'static, Globals>>,
+    pub(crate) globals: Option<FrozenAnyValue<Globals>>,
 }
 
 impl ScopeResolverGlobals {

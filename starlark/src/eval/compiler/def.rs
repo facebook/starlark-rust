@@ -356,7 +356,7 @@ pub(crate) struct DefInfo {
     pub(crate) inline_def_body: Option<InlineDefBody>,
     /// Globals captured during function or module creation.
     /// Only needed for debugger evaluation.
-    pub(crate) globals: FrozenRef<'static, Globals>,
+    pub(crate) globals: FrozenAnyValue<Globals>,
 }
 
 impl DefInfo {
@@ -364,7 +364,7 @@ impl DefInfo {
         codemap: FrozenAnyValue<CodeMap>,
         local_names: FrozenRef<'static, [FrozenStringValue]>,
         parent: FrozenRef<'static, [CopySlotFromParent]>,
-        globals: FrozenRef<'static, Globals>,
+        globals: FrozenAnyValue<Globals>,
     ) -> DefInfo {
         DefInfo {
             name: const_frozen_string!("<module>"),
