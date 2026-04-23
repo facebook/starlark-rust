@@ -24,7 +24,6 @@ use std::fmt::Formatter;
 use crate::eval::Arguments;
 use crate::eval::Evaluator;
 use crate::eval::runtime::frame_span::FrameSpan;
-use crate::values::FrozenRef;
 use crate::values::FrozenValue;
 use crate::values::FrozenValueTyped;
 use crate::values::Heap;
@@ -73,7 +72,7 @@ impl UnboundValue {
     pub(crate) fn invoke_method<'v>(
         &self,
         this: Value<'v>,
-        span: FrozenRef<'static, FrameSpan>,
+        span: &'static FrameSpan,
         args: &Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_, '_>,
     ) -> crate::Result<Value<'v>> {

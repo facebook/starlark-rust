@@ -670,7 +670,7 @@ impl<'v> Value<'v> {
 
     pub(crate) fn invoke_with_loc(
         self,
-        location: Option<FrozenRef<'static, FrameSpan>>,
+        location: Option<&'static FrameSpan>,
         args: &Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_, '_>,
     ) -> crate::Result<Value<'v>> {

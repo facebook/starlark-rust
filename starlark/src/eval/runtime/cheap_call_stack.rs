@@ -29,7 +29,6 @@ use crate::eval::CallStack;
 use crate::eval::runtime::frame_span::FrameSpan;
 use crate::eval::runtime::inlined_frame::InlinedFrames;
 use crate::hint::unlikely;
-use crate::values::FrozenRef;
 use crate::values::Trace;
 use crate::values::Tracer;
 use crate::values::Value;
@@ -40,7 +39,7 @@ use crate::values::Value;
 #[derive(Clone, Copy, Dupe)]
 struct CheapFrame<'v> {
     function: Value<'v>,
-    span: Option<FrozenRef<'static, FrameSpan>>,
+    span: Option<&'static FrameSpan>,
 }
 
 impl CheapFrame<'_> {
@@ -154,7 +153,7 @@ impl<'v> CheapCallStack<'v> {
     pub(crate) fn push(
         &mut self,
         function: Value<'v>,
-        span: Option<FrozenRef<'static, FrameSpan>>,
+        span: Option<&'static FrameSpan>,
     ) -> crate::Result<()> {
         if unlikely(self.count >= self.stack.len()) {
             return Err(crate::Error::new_kind(ErrorKind::StackOverflow(

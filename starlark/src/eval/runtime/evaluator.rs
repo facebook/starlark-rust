@@ -532,7 +532,7 @@ impl<'v, 'a, 'e: 'a> Evaluator<'v, 'a, 'e> {
     pub(crate) fn with_call_stack<R>(
         &mut self,
         function: Value<'v>,
-        span: Option<FrozenRef<'static, FrameSpan>>,
+        span: Option<&'static FrameSpan>,
         within: impl FnOnce(&mut Self) -> crate::Result<R>,
     ) -> crate::Result<R> {
         #[cold]

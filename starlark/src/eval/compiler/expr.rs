@@ -62,7 +62,6 @@ use crate::eval::runtime::frozen_file_span::FrozenFileSpan;
 use crate::eval::runtime::slots::LocalCapturedSlotId;
 use crate::eval::runtime::slots::LocalSlotId;
 use crate::values::FrozenHeap;
-use crate::values::FrozenRef;
 use crate::values::FrozenStringValue;
 use crate::values::FrozenValue;
 use crate::values::FrozenValueTyped;
@@ -1129,7 +1128,7 @@ impl<'v, 'a> MemberOrValue<'v, 'a> {
     pub(crate) fn invoke(
         &self,
         this: Value<'v>,
-        span: FrozenRef<'static, FrameSpan>,
+        span: &'static FrameSpan,
         args: &Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_, '_>,
     ) -> crate::Result<Value<'v>> {
