@@ -70,7 +70,6 @@ use crate::eval::runtime::frame_span::FrameSpan;
 use crate::eval::runtime::profile::instant::ProfilerInstant;
 use crate::eval::runtime::slots::LocalCapturedSlotId;
 use crate::eval::runtime::slots::LocalSlotId;
-use crate::values::FrozenRef;
 use crate::values::FrozenStringValue;
 use crate::values::FrozenValue;
 use crate::values::FrozenValueTyped;
@@ -85,6 +84,7 @@ use crate::values::int::pointer_i32::PointerI32;
 use crate::values::layout::value_not_special::FrozenValueNotSpecial;
 use crate::values::string::dot_format::format_one;
 use crate::values::string::interpolation::percent_s_one;
+use crate::values::types::any_array::FrozenAnyArray;
 use crate::values::types::known_methods::KnownMethod;
 use crate::values::types::list::value::ListData;
 use crate::values::typing::type_compiled::compiled::TypeCompiled;
@@ -282,14 +282,14 @@ impl InstrNoFlowImpl for InstrStoreModuleImpl {
 }
 
 impl InstrNoFlowImpl for InstrUnpackImpl {
-    type Arg = (BcSlotIn, FrozenRef<'static, [BcSlotOut]>);
+    type Arg = (BcSlotIn, FrozenAnyArray<BcSlotOut>);
 
     #[inline(always)]
     fn run_with_args<'v>(
         eval: &mut Evaluator<'v, '_, '_>,
         frame: BcFramePtr<'v>,
         _ip: BcPtrAddr,
-        (source, target): &(BcSlotIn, FrozenRef<'static, [BcSlotOut]>),
+        (source, target): &(BcSlotIn, FrozenAnyArray<BcSlotOut>),
     ) -> crate::Result<()> {
         let v = frame.get_bc_slot(*source);
         let nvl = v.length()?;
