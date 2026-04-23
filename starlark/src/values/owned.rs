@@ -281,7 +281,6 @@ impl<'de> PagableDeserialize<'de> for OwnedFrozenValue {
 
 /// Same as [`OwnedFrozenValue`] but it is known to contain `T`.
 #[derive(Debug, Clone_, Dupe_, Allocative)]
-#[derive(pagable::PagablePanic)]
 pub struct OwnedFrozenValueTyped<T: StarlarkValue<'static>> {
     owner: FrozenHeapRef,
     value: FrozenValueTyped<'static, T>,
@@ -435,5 +434,28 @@ impl<T: for<'a> StarlarkValue<'a>> OwnedFrozenValueTyped<T> {
             owner: self.owner.dupe(),
             value: f(self.value)?,
         })
+    }
+}
+
+impl<T: for<'a> StarlarkValue<'a>> PagableSerialize for OwnedFrozenValueTyped<T> {
+    fn pagable_serialize(&self, serializer: &mut dyn PagableSerializer) -> pagable::Result<()> {
+        // Delegate to OwnedFrozenValue serialization (same wire format).
+        self.to_owned_frozen_value().pagable_serialize(serializer)
+    }
+}
+
+impl<'de, T: for<'a> StarlarkValue<'a>> PagableDeserialize<'de> for OwnedFrozenValueTyped<T> {
+    fn pagable_deserialize<D: PagableDeserializer<'de> + ?Sized>(
+        deserializer: &mut D,
+    ) -> pagable::Result<Self> {
+        let owned = OwnedFrozenValue::pagable_deserialize(deserializer)?;
+        match owned.downcast::<T>() {
+            Ok(typed) => Ok(typed),
+            Err(owned) => Err(anyhow::anyhow!(
+                "OwnedFrozenValueTyped deserialization: expected type `{}`, got `{}`",
+                T::TYPE,
+                owned.value().to_string_for_type_error()
+            )),
+        }
     }
 }

@@ -32,6 +32,7 @@ use crate::values::FrozenHeap;
 use crate::values::FrozenHeapRef;
 use crate::values::FrozenValue;
 use crate::values::OwnedFrozenValue;
+use crate::values::OwnedFrozenValueTyped;
 use crate::values::StarlarkValue;
 use crate::values::ValueLike;
 use crate::values::layout::heap::heap_type::FrozenHeapName;
@@ -1024,6 +1025,39 @@ fn test_owned_frozen_value_round_trip() -> crate::Result<()> {
         .expect("should be SimpleData");
     assert_eq!(simple.flag, true);
     assert_eq!(simple.count, 42);
+
+    Ok(())
+}
+
+#[test]
+fn test_owned_frozen_value_typed_round_trip() -> crate::Result<()> {
+    // Create a heap with a SimpleData value.
+    let heap = FrozenHeap::new();
+    let fv = heap.alloc_simple(SimpleData {
+        flag: false,
+        count: 99,
+    });
+    let typed_fv =
+        crate::values::FrozenValueTyped::<SimpleData>::new(fv).expect("should be SimpleData");
+    let heap_ref = heap.into_ref_named(TestHeapName::heap_name("test_owned_typed"));
+
+    // Create an OwnedFrozenValueTyped.
+    let owned = unsafe { OwnedFrozenValueTyped::new(heap_ref, typed_fv) };
+
+    // Round-trip via pagable ser/de.
+    let mut ser = pagable::testing::TestingSerializer::new();
+    owned
+        .pagable_serialize(&mut ser)
+        .map_err(crate::Error::new_other)?;
+    let bytes = ser.finish();
+
+    let mut de = pagable::testing::TestingDeserializer::new(&bytes);
+    let restored = OwnedFrozenValueTyped::<SimpleData>::pagable_deserialize(&mut de)
+        .map_err(crate::Error::new_other)?;
+
+    // Verify the restored value via Deref (OwnedFrozenValueTyped<T> derefs to T).
+    assert_eq!(restored.flag, false);
+    assert_eq!(restored.count, 99);
 
     Ok(())
 }
