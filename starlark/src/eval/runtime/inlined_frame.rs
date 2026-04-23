@@ -175,7 +175,7 @@ mod tests {
 
         fn make_span(heap: &FrozenHeap, text: &str) -> FrameSpan {
             let codemap = CodeMap::new(format!("{text}.bzl"), text.to_owned());
-            let codemap = heap.alloc_any(codemap);
+            let codemap = heap.alloc_any_value(codemap);
             FrameSpan {
                 span: FrozenFileSpan::new(codemap, codemap.full_span()),
                 inlined_frames: InlinedFrames::default(),

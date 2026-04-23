@@ -210,7 +210,7 @@ impl AstModuleTypecheck for AstModule {
             ScopeResolverGlobals {
                 globals: Some(frozen_heap.alloc_any(globals.dupe())),
             },
-            frozen_heap.alloc_any(codemap.dupe()),
+            frozen_heap.alloc_any_value(codemap.dupe()),
             &Dialect::AllOptionsInternal,
         );
         let scope_errors = scope_errors.into_map(TypingError::from_eval_exception);

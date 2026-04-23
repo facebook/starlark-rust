@@ -23,12 +23,20 @@ use dupe::Dupe;
 use crate::codemap::CodeMap;
 use crate::codemap::FileSpan;
 use crate::codemap::FileSpanRef;
+use crate::codemap::NativeCodeMap;
 use crate::codemap::Span;
-use crate::values::FrozenRef;
+use crate::values::any::FrozenAnyValue;
+
+static EMPTY_NATIVE_CODEMAP: NativeCodeMap = NativeCodeMap::new("", 0, 0);
+pagable::static_value!(
+    EMPTY_NATIVE_CODEMAP_STATIC: NativeCodeMap = &EMPTY_NATIVE_CODEMAP,
+    starlark_syntax::codemap::NativeCodeMapStaticEntry
+);
+crate::static_starlark_any!(pub(crate) VALUE_EMPTY_CODEMAP: CodeMap = NativeCodeMap::to_codemap(EMPTY_NATIVE_CODEMAP_STATIC));
 
 #[derive(Debug, Copy, Clone, Dupe, PartialEq, Eq)]
 pub(crate) struct FrozenFileSpan {
-    file: FrozenRef<'static, CodeMap>,
+    file: FrozenAnyValue<CodeMap>,
     span: Span,
 }
 
@@ -40,26 +48,23 @@ impl Display for FrozenFileSpan {
 
 impl Default for FrozenFileSpan {
     fn default() -> FrozenFileSpan {
-        FrozenFileSpan::new(FrozenRef::new(CodeMap::empty_static()), Span::default())
+        FrozenFileSpan::new_unchecked(VALUE_EMPTY_CODEMAP.unpack_any(), Span::default())
     }
 }
 
 impl FrozenFileSpan {
-    pub(crate) const fn new_unchecked(
-        file: FrozenRef<'static, CodeMap>,
-        span: Span,
-    ) -> FrozenFileSpan {
+    pub(crate) const fn new_unchecked(file: FrozenAnyValue<CodeMap>, span: Span) -> FrozenFileSpan {
         FrozenFileSpan { file, span }
     }
 
-    pub(crate) fn new(file: FrozenRef<'static, CodeMap>, span: Span) -> FrozenFileSpan {
+    pub(crate) fn new(file: FrozenAnyValue<CodeMap>, span: Span) -> FrozenFileSpan {
         // Check the span is valid: this will panic if the span is not valid.
         file.source_span(span);
 
         Self::new_unchecked(file, span)
     }
 
-    pub(crate) fn file(&self) -> FrozenRef<'static, CodeMap> {
+    pub(crate) fn file(&self) -> FrozenAnyValue<CodeMap> {
         self.file
     }
 

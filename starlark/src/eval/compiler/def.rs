@@ -77,6 +77,7 @@ use crate::eval::runtime::arguments::ResolvedArgName;
 use crate::eval::runtime::evaluator::Evaluator;
 use crate::eval::runtime::frame_span::FrameSpan;
 use crate::eval::runtime::frozen_file_span::FrozenFileSpan;
+use crate::eval::runtime::frozen_file_span::VALUE_EMPTY_CODEMAP;
 use crate::eval::runtime::params::spec::ParametersSpec;
 use crate::eval::runtime::profile::instant::ProfilerInstant;
 use crate::eval::runtime::slots::LocalSlotId;
@@ -335,7 +336,7 @@ pub(crate) struct DefInfo {
     /// Type of this function, for the typechecker.
     ty: Ty,
     /// Codemap of the file where the function is declared.
-    pub(crate) codemap: FrozenRef<'static, CodeMap>,
+    pub(crate) codemap: FrozenAnyValue<CodeMap>,
     /// The raw docstring pulled out of the AST.
     pub(crate) docstring: Option<String>,
     /// Slots this scope uses, including for parameters and `parent`.
@@ -367,7 +368,7 @@ impl DefInfo {
             signature_span: FrozenFileSpan::default(),
             parameter_captures: FrozenRef::new(&[]),
             ty: Ty::any(),
-            codemap: FrozenRef::new(CodeMap::empty_static()),
+            codemap: VALUE_EMPTY_CODEMAP.unpack_any(),
             docstring: None,
             used: FrozenRef::new(&[]),
             parent: FrozenRef::new(&[]),
@@ -381,7 +382,7 @@ impl DefInfo {
     }
 
     pub(crate) fn for_module(
-        codemap: FrozenRef<'static, CodeMap>,
+        codemap: FrozenAnyValue<CodeMap>,
         local_names: FrozenRef<'static, [FrozenStringValue]>,
         parent: FrozenRef<'static, [CopySlotFromParent]>,
         globals: FrozenRef<'static, Globals>,

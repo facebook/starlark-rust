@@ -76,7 +76,10 @@ impl<'v, 'a, 'e> Evaluator<'v, 'a, 'e> {
 
         let (codemap, statement, dialect, typecheck) = ast.into_parts();
 
-        let codemap = self.module_env.frozen_heap().alloc_any(codemap.dupe());
+        let codemap = self
+            .module_env
+            .frozen_heap()
+            .alloc_any_value(codemap.dupe());
 
         let globals = self.module_env.frozen_heap().alloc_any(globals.dupe());
 
