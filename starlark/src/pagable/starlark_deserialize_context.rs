@@ -143,6 +143,18 @@ impl HeapDeserializationState {
         }
     }
 
+    /// Create an empty state (no values to track).
+    /// Used when deserializing outside a heap context (e.g. `OwnedFrozenValue`),
+    /// where the target heap is already fully deserialized.
+    pub(crate) fn empty() -> Self {
+        Self {
+            slots: Vec::new(),
+            ptr_to_index: HashMap::new(),
+            base_pos: PagableCursor::default(),
+            end_pos: PagableCursor::default(),
+        }
+    }
+
     /// Number of values in this heap.
     pub(crate) fn value_count(&self) -> usize {
         self.slots.len()
