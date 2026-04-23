@@ -27,6 +27,7 @@ use crate::values::FrozenRef;
 use crate::values::FrozenValue;
 use crate::values::FrozenValueTyped;
 use crate::values::StarlarkValue;
+use crate::values::any::FrozenAnyValue;
 use crate::values::typing::type_compiled::compiled::TypeCompiled;
 
 /// Visitor for code spans in the IR.
@@ -80,6 +81,10 @@ impl<T: StarlarkValue<'static>> VisitSpanMut for FrozenValueTyped<'static, T> {
 }
 
 impl<T> VisitSpanMut for FrozenRef<'static, T> {
+    fn visit_spans(&mut self, _visitor: &mut impl FnMut(&mut FrameSpan)) {}
+}
+
+impl<T: std::fmt::Debug + Send + Sync + 'static> VisitSpanMut for FrozenAnyValue<T> {
     fn visit_spans(&mut self, _visitor: &mut impl FnMut(&mut FrameSpan)) {}
 }
 

@@ -54,6 +54,7 @@ use crate::values::FrozenRef;
 use crate::values::FrozenValue;
 use crate::values::FrozenValueTyped;
 use crate::values::StarlarkValue;
+use crate::values::any::FrozenAnyValue;
 use crate::values::layout::value_not_special::FrozenValueNotSpecial;
 use crate::values::types::known_methods::KnownMethod;
 use crate::values::typing::type_compiled::compiled::TypeCompiled;
@@ -368,6 +369,19 @@ impl<T: Display> BcInstrArg for FrozenRef<'static, T>
 where
     FrozenRef<'static, T>: Copy,
 {
+    fn fmt_append(
+        param: &Self,
+        _ip: BcAddr,
+        _end_arg: Option<&BcInstrEndArg>,
+        f: &mut dyn Write,
+    ) -> fmt::Result {
+        write!(f, " {}", param.as_ref())
+    }
+
+    fn visit_jump_addr(_param: &Self, _ip: BcAddr, _consumer: &mut dyn FnMut(BcAddr)) {}
+}
+
+impl<T: Display + fmt::Debug + Send + Sync + 'static> BcInstrArg for FrozenAnyValue<T> {
     fn fmt_append(
         param: &Self,
         _ip: BcAddr,

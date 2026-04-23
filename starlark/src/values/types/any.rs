@@ -70,8 +70,13 @@
 
 use std::fmt;
 use std::fmt::Debug;
+use std::fmt::Display;
+use std::ops::Deref;
 
 use allocative::Allocative;
+use dupe::Clone_;
+use dupe::Copy_;
+use dupe::Dupe_;
 use starlark_derive::NoSerialize;
 use starlark_derive::starlark_value;
 
@@ -79,10 +84,17 @@ use crate as starlark;
 use crate::any::ProvidesStaticType;
 use crate::pagable::vtable_register::VtableRegistered;
 use crate::values::AllocValue;
+use crate::values::Freeze;
+use crate::values::FreezeResult;
+use crate::values::Freezer;
 use crate::values::FrozenHeap;
 use crate::values::FrozenRef;
+use crate::values::FrozenValue;
+use crate::values::FrozenValueTyped;
 use crate::values::Heap;
 use crate::values::StarlarkValue;
+use crate::values::Trace;
+use crate::values::Tracer;
 use crate::values::Value;
 use crate::values::ValueLike;
 
@@ -96,6 +108,7 @@ use crate::values::ValueLike;
 #[derive(ProvidesStaticType, NoSerialize, Allocative, derive_more::Display)]
 #[allocative(bound = "")]
 #[display("{:?}", self)]
+#[repr(transparent)]
 pub struct StarlarkAny<T: Debug + Send + Sync + 'static>(
     #[allocative(skip)] // TODO(nga): do not skip.
     pub  T,
@@ -115,6 +128,15 @@ impl<'v, T: StarlarkAnyBound> AllocValue<'v> for StarlarkAny<T> {
 impl<T: Debug + Send + Sync + 'static> Debug for StarlarkAny<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         Debug::fmt(&self.0, f)
+    }
+}
+
+impl<T: Debug + Send + Sync + 'static> Deref for StarlarkAny<T> {
+    type Target = T;
+
+    #[inline]
+    fn deref(&self) -> &T {
+        &self.0
     }
 }
 
@@ -174,3 +196,101 @@ unsafe impl<T: StarlarkAnyBound> VtableRegistered for StarlarkAny<T> {}
 
 #[cfg(not(feature = "pagable"))]
 unsafe impl<T: StarlarkAnyBound> VtableRegistered for StarlarkAny<T> {}
+
+/// Typed reference to a `T` allocated via [`StarlarkAny<T>`] on a frozen heap.
+///
+/// Implemented as a newtype rather than a type alias for
+/// `FrozenValueTyped<'static, StarlarkAny<T>>` so we can define our own
+/// `Display`, `Debug`, `Deref`, and `BcInstrArg` trait impls that delegate
+/// to `T`. With a type alias, the existing impls on `FrozenValueTyped`
+/// would apply — including the `BcInstrArg` trait impl for
+/// `FrozenValueTyped<T>` — and all of them go through the Starlark value
+/// repr, printing `<any>` instead of the inner value.
+///
+/// Specifically, the newtype provides:
+/// - `Deref` trait with `Target = T` directly to the inner value (skipping `StarlarkAny`)
+/// - `Display` trait delegating to `T::Display` (not the Starlark `<any>` repr)
+/// - `Debug` trait delegating to `T::Debug`
+#[derive(Allocative, Copy_, Clone_, Dupe_)]
+#[allocative(skip)]
+pub struct FrozenAnyValue<T: Debug + Send + Sync + 'static>(
+    FrozenValueTyped<'static, StarlarkAny<T>>,
+);
+
+impl<T: Debug + Send + Sync + 'static> Debug for FrozenAnyValue<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        Debug::fmt(self.as_ref(), f)
+    }
+}
+
+impl<T: Debug + Display + Send + Sync + 'static> Display for FrozenAnyValue<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        Display::fmt(self.as_ref(), f)
+    }
+}
+
+impl<T: Debug + Send + Sync + 'static> Deref for FrozenAnyValue<T> {
+    type Target = T;
+
+    #[inline]
+    fn deref(&self) -> &T {
+        self.as_ref()
+    }
+}
+
+impl<T: Debug + Send + Sync + 'static + PartialEq> PartialEq for FrozenAnyValue<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_ref() == other.as_ref()
+    }
+}
+impl<T: Debug + Send + Sync + 'static + Eq> Eq for FrozenAnyValue<T> {}
+
+unsafe impl<'v, T: Debug + Send + Sync + 'static> Trace<'v> for FrozenAnyValue<T> {
+    fn trace(&mut self, _: &Tracer<'v>) {}
+}
+
+impl<T: Debug + Send + Sync + 'static> Freeze for FrozenAnyValue<T> {
+    type Frozen = Self;
+
+    fn freeze(self, _freezer: &Freezer) -> FreezeResult<Self::Frozen> {
+        Ok(self)
+    }
+}
+
+impl<T: Debug + Send + Sync + 'static> FrozenAnyValue<T> {
+    /// Get a reference to the inner value with `'static` lifetime.
+    #[inline]
+    pub fn as_ref(&self) -> &'static T {
+        &self.0.as_ref().0
+    }
+
+    /// Convert to the underlying `FrozenValue`.
+    #[inline]
+    pub fn to_frozen_value(self) -> FrozenValue {
+        self.0.to_frozen_value()
+    }
+
+    /// Wrap a `FrozenValueTyped<StarlarkAny<T>>`.
+    #[inline]
+    pub(crate) fn from_typed(typed: FrozenValueTyped<'static, StarlarkAny<T>>) -> Self {
+        FrozenAnyValue(typed)
+    }
+
+    /// Construct from a raw `FrozenValue` without type checking.
+    ///
+    /// # Safety
+    /// The caller must ensure the value is a `StarlarkAny<T>`.
+    #[expect(dead_code)] // Used starting from diff 4.
+    #[inline]
+    pub(crate) unsafe fn new_unchecked(value: FrozenValue) -> Self {
+        // SAFETY: caller guarantees value is a StarlarkAny<T>.
+        FrozenAnyValue(unsafe { FrozenValueTyped::new_unchecked(value) })
+    }
+}
+
+impl FrozenHeap {
+    /// Allocate any value on the frozen heap, returning a [`FrozenAnyValue`].
+    pub fn alloc_any_value<T: StarlarkAnyBound>(&self, value: T) -> FrozenAnyValue<T> {
+        FrozenAnyValue::from_typed(self.alloc_simple_typed_static(StarlarkAny::new(value)))
+    }
+}
