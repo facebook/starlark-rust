@@ -79,6 +79,7 @@ use crate::values::StarlarkValue;
 use crate::values::StringValue;
 use crate::values::StringValueLike;
 use crate::values::Value;
+use crate::values::any::FrozenAnyValue;
 use crate::values::dict::Dict;
 use crate::values::int::pointer_i32::PointerI32;
 use crate::values::layout::value_not_special::FrozenValueNotSpecial;
@@ -1539,19 +1540,19 @@ pub(crate) type InstrCallMaybeKnownMethodPos =
     InstrNoFlow<InstrCallMaybeKnownMethodImpl<BcCallArgsPos>>;
 
 impl<A: BcCallArgs<Symbol>> InstrNoFlowImpl for InstrCallImpl<A> {
-    type Arg = (BcSlotIn, A, FrozenRef<'static, FrameSpan>, BcSlotOut);
+    type Arg = (BcSlotIn, A, FrozenAnyValue<FrameSpan>, BcSlotOut);
 
     #[inline(always)]
     fn run_with_args<'v>(
         eval: &mut Evaluator<'v, '_, '_>,
         frame: BcFramePtr<'v>,
         _ip: BcPtrAddr,
-        (this, args, span, target): &(BcSlotIn, A, FrozenRef<'static, FrameSpan>, BcSlotOut),
+        (this, args, span, target): &(BcSlotIn, A, FrozenAnyValue<FrameSpan>, BcSlotOut),
     ) -> crate::Result<()> {
         eval.report_forward_progress()?;
         let f = frame.get_bc_slot(*this);
         let arguments = Arguments(args.pop_from_stack(frame));
-        let r = f.invoke_with_loc(Some(span.value), &arguments, eval)?;
+        let r = f.invoke_with_loc(Some(span.as_ref()), &arguments, eval)?;
         frame.set_bc_slot(*target, r);
         Ok(())
     }
@@ -1560,18 +1561,18 @@ impl<A: BcCallArgs<Symbol>> InstrNoFlowImpl for InstrCallImpl<A> {
 impl<F: BcFrozenCallable, A: BcCallArgs<Symbol>> InstrNoFlowImpl
     for InstrCallFrozenGenericImpl<F, A>
 {
-    type Arg = (F, A, FrozenRef<'static, FrameSpan>, BcSlotOut);
+    type Arg = (F, A, FrozenAnyValue<FrameSpan>, BcSlotOut);
 
     #[inline(always)]
     fn run_with_args<'v>(
         eval: &mut Evaluator<'v, '_, '_>,
         frame: BcFramePtr<'v>,
         _ip: BcPtrAddr,
-        (fun, args, span, target): &(F, A, FrozenRef<'static, FrameSpan>, BcSlotOut),
+        (fun, args, span, target): &(F, A, FrozenAnyValue<FrameSpan>, BcSlotOut),
     ) -> crate::Result<()> {
         eval.report_forward_progress()?;
         let arguments = Arguments(args.pop_from_stack(frame));
-        let r = fun.bc_invoke(span.value, &arguments, eval)?;
+        let r = fun.bc_invoke(span.as_ref(), &arguments, eval)?;
         frame.set_bc_slot(*target, r);
         Ok(())
     }
@@ -1581,7 +1582,7 @@ impl<A: BcCallArgsForDef> InstrNoFlowImpl for InstrCallFrozenDefImpl<A> {
     type Arg = (
         FrozenValueTyped<'static, FrozenDef>,
         A,
-        FrozenRef<'static, FrameSpan>,
+        FrozenAnyValue<FrameSpan>,
         BcSlotOut,
     );
 
@@ -1593,13 +1594,13 @@ impl<A: BcCallArgsForDef> InstrNoFlowImpl for InstrCallFrozenDefImpl<A> {
         (fun, args, span, target): &(
             FrozenValueTyped<'static, FrozenDef>,
             A,
-            FrozenRef<'static, FrameSpan>,
+            FrozenAnyValue<FrameSpan>,
             BcSlotOut,
         ),
     ) -> crate::Result<()> {
         eval.report_forward_progress()?;
         let arguments = args.pop_from_stack(frame);
-        let r = eval.with_call_stack(fun.to_value(), Some(span.value), |eval| {
+        let r = eval.with_call_stack(fun.to_value(), Some(span.as_ref()), |eval| {
             fun.as_ref()
                 .invoke_with_args(fun.to_value(), &arguments, eval)
         })?;
@@ -1656,13 +1657,7 @@ fn call_maybe_known_method_common<'v>(
 }
 
 impl<A: BcCallArgs<Symbol>> InstrNoFlowImpl for InstrCallMethodImpl<A> {
-    type Arg = (
-        BcSlotIn,
-        Symbol,
-        A,
-        FrozenRef<'static, FrameSpan>,
-        BcSlotOut,
-    );
+    type Arg = (BcSlotIn, Symbol, A, FrozenAnyValue<FrameSpan>, BcSlotOut);
 
     #[inline(always)]
     fn run_with_args<'v>(
@@ -1673,13 +1668,21 @@ impl<A: BcCallArgs<Symbol>> InstrNoFlowImpl for InstrCallMethodImpl<A> {
             BcSlotIn,
             Symbol,
             A,
-            FrozenRef<'static, FrameSpan>,
+            FrozenAnyValue<FrameSpan>,
             BcSlotOut,
         ),
     ) -> crate::Result<()> {
         let this = frame.get_bc_slot(*this);
         let arguments = Arguments(args.pop_from_stack(frame));
-        call_method_common(eval, frame, this, symbol, &arguments, span.value, *target)
+        call_method_common(
+            eval,
+            frame,
+            this,
+            symbol,
+            &arguments,
+            span.as_ref(),
+            *target,
+        )
     }
 }
 
@@ -1689,7 +1692,7 @@ impl<A: BcCallArgs<Symbol>> InstrNoFlowImpl for InstrCallMaybeKnownMethodImpl<A>
         Symbol,
         KnownMethod,
         A,
-        FrozenRef<'static, FrameSpan>,
+        FrozenAnyValue<FrameSpan>,
         BcSlotOut,
     );
 
@@ -1703,7 +1706,7 @@ impl<A: BcCallArgs<Symbol>> InstrNoFlowImpl for InstrCallMaybeKnownMethodImpl<A>
             Symbol,
             KnownMethod,
             A,
-            FrozenRef<'static, FrameSpan>,
+            FrozenAnyValue<FrameSpan>,
             BcSlotOut,
         ),
     ) -> crate::Result<()> {
@@ -1716,7 +1719,7 @@ impl<A: BcCallArgs<Symbol>> InstrNoFlowImpl for InstrCallMaybeKnownMethodImpl<A>
             symbol,
             known_method,
             &arguments,
-            span.value,
+            span.as_ref(),
             *target,
         )
     }

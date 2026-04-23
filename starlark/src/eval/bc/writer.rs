@@ -57,6 +57,7 @@ use crate::values::FrozenHeap;
 use crate::values::FrozenRef;
 use crate::values::FrozenStringValue;
 use crate::values::FrozenValue;
+use crate::values::any::FrozenAnyValue;
 
 #[derive(Debug)]
 pub(crate) struct BcStmtLoc {
@@ -621,7 +622,7 @@ impl<'f> BcWriter<'f> {
         r
     }
 
-    pub(crate) fn alloc_file_span(&self, span: FrameSpan) -> FrozenRef<'static, FrameSpan> {
-        self.heap.alloc_any(span)
+    pub(crate) fn alloc_file_span(&self, span: FrameSpan) -> FrozenAnyValue<FrameSpan> {
+        self.heap.alloc_any_value(span)
     }
 }
