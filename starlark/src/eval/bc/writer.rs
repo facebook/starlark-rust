@@ -19,7 +19,6 @@
 
 use std::cmp;
 
-use crate::cast::transmute;
 use crate::eval::bc::addr::BcAddr;
 use crate::eval::bc::addr::BcAddrOffset;
 use crate::eval::bc::bytecode::Bc;
@@ -54,10 +53,10 @@ use crate::eval::runtime::frame_span::FrameSpan;
 use crate::eval::runtime::slots::LocalCapturedSlotId;
 use crate::eval::runtime::slots::LocalSlotId;
 use crate::values::FrozenHeap;
-use crate::values::FrozenRef;
 use crate::values::FrozenStringValue;
 use crate::values::FrozenValue;
 use crate::values::any::FrozenAnyValue;
+use crate::values::types::any_array::FrozenAnyArray;
 
 #[derive(Debug)]
 pub(crate) struct BcStmtLoc {
@@ -164,7 +163,7 @@ pub(crate) struct BcWriter<'f> {
     /// Current stack size.
     stack_size: u32,
     /// Local slot count.
-    local_names: FrozenRef<'f, [FrozenStringValue]>,
+    local_names: FrozenAnyArray<FrozenStringValue>,
     /// Local variables which are known to be definitely assigned at current program point.
     definitely_assigned: BcDefinitelyAssigned,
     /// Max observed stack size.
@@ -181,7 +180,7 @@ pub(crate) struct BcWriter<'f> {
 impl<'f> BcWriter<'f> {
     /// Empty.
     pub(crate) fn new(
-        local_names: FrozenRef<'f, [FrozenStringValue]>,
+        local_names: FrozenAnyArray<FrozenStringValue>,
         param_count: u32,
         heap: &'f FrozenHeap,
     ) -> BcWriter<'f> {
@@ -226,14 +225,6 @@ impl<'f> BcWriter<'f> {
         let _ = definitely_assigned;
         assert_eq!(stack_size, 0);
         assert!(for_loops.is_empty());
-        // Drop lifetime.
-        let local_names = unsafe {
-            transmute!(
-                FrozenRef<[FrozenStringValue]>,
-                FrozenRef<[FrozenStringValue]>,
-                local_names
-            )
-        };
         Bc {
             instrs: instrs.finish(spans, stmt_locs, local_names),
             local_count: local_names.len().try_into().unwrap(),

@@ -17,8 +17,8 @@
 
 use crate::eval::bc::addr::BcAddr;
 use crate::eval::runtime::frame_span::FrameSpan;
-use crate::values::FrozenRef;
 use crate::values::FrozenStringValue;
+use crate::values::types::any_array::FrozenAnyArray;
 
 /// Slow instruction arg: stored in the end of bytecode,
 /// expensive to access. Used to implement errors.
@@ -30,12 +30,12 @@ pub(crate) struct BcInstrSlowArg {
     pub(crate) spans: Vec<FrameSpan>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub(crate) struct BcInstrEndArg {
     /// Offset of end instruction.
     pub(crate) end_addr: BcAddr,
     /// Spans of all instructions.
     pub(crate) slow_args: Vec<(BcAddr, BcInstrSlowArg)>,
     /// Frame local names.
-    pub(crate) local_names: FrozenRef<'static, [FrozenStringValue]>,
+    pub(crate) local_names: FrozenAnyArray<FrozenStringValue>,
 }

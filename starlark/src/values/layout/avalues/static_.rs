@@ -99,6 +99,11 @@ impl<T: StarlarkValue<'static>> AllocStaticSimple<T> {
     pub fn to_frozen_value(&'static self) -> FrozenValue {
         self.unpack().to_frozen_value()
     }
+
+    /// Get a reference to the payload value.
+    pub const fn as_payload(&'static self) -> &'static T {
+        &self.0.payload.1
+    }
 }
 
 impl<T: std::fmt::Debug + Send + Sync + 'static> AllocStaticSimple<StarlarkAny<T>> {

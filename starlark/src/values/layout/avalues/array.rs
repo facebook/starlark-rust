@@ -175,7 +175,6 @@ impl FrozenHeap {
     ///
     /// Unlike [`alloc_any_slice`](Self::alloc_any_slice), this always allocates via
     /// `AnyArray<T>`, which enables recovering the [`FrozenValue`] for serialization.
-    #[expect(dead_code)]
     pub(crate) fn alloc_any_array_value<T: Debug + Send + Sync + Clone>(
         &self,
         values: &[T],

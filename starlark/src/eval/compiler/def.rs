@@ -102,6 +102,7 @@ use crate::values::ValueLike;
 use crate::values::any::AtomicFrozenAnyValueOption;
 use crate::values::any::FrozenAnyValue;
 use crate::values::function::FUNCTION_TYPE;
+use crate::values::types::any_array::FrozenAnyArray;
 use crate::values::typing::type_compiled::compiled::TypeCompiled;
 
 #[derive(thiserror::Error, Debug)]
@@ -339,7 +340,7 @@ pub(crate) struct DefInfo {
     pub(crate) docstring: Option<String>,
     /// Slots this scope uses, including for parameters and `parent`.
     /// Indexed by [`LocalSlotId`], values are variable names.
-    pub(crate) used: FrozenRef<'static, [FrozenStringValue]>,
+    pub(crate) used: FrozenAnyArray<FrozenStringValue>,
     /// Slots to copy from the parent.
     /// Module-level identifiers are not copied over, to avoid excess copying.
     pub(crate) parent: FrozenRef<'static, [CopySlotFromParent]>,
@@ -362,7 +363,7 @@ pub(crate) struct DefInfo {
 impl DefInfo {
     pub(crate) fn for_module(
         codemap: FrozenAnyValue<CodeMap>,
-        local_names: FrozenRef<'static, [FrozenStringValue]>,
+        local_names: FrozenAnyArray<FrozenStringValue>,
         parent: FrozenRef<'static, [CopySlotFromParent]>,
         globals: FrozenAnyValue<Globals>,
     ) -> DefInfo {
@@ -478,7 +479,10 @@ impl Compiler<'_, '_, '_, '_> {
 
         let param_count = params.count_param_variables();
 
-        let used = self.eval.frozen_heap().alloc_any_slice(&scope_names.used);
+        let used = self
+            .eval
+            .frozen_heap()
+            .alloc_any_array_value(&scope_names.used);
         let info = self.eval.module_env.frozen_heap().alloc_any_value(DefInfo {
             name,
             signature_span,

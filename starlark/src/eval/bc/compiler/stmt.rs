@@ -34,9 +34,9 @@ use crate::eval::compiler::stmt::StmtCompiled;
 use crate::eval::compiler::stmt::StmtsCompiled;
 use crate::eval::runtime::frame_span::FrameSpan;
 use crate::values::FrozenHeap;
-use crate::values::FrozenRef;
 use crate::values::FrozenStringValue;
 use crate::values::FrozenValue;
+use crate::values::types::any_array::FrozenAnyArray;
 use crate::values::typing::type_compiled::compiled::TypeCompiled;
 
 pub(crate) fn write_for(
@@ -258,7 +258,7 @@ impl StmtsCompiled {
     pub(crate) fn as_bc(
         &self,
         compiler: &StmtCompileContext,
-        local_names: FrozenRef<'static, [FrozenStringValue]>,
+        local_names: FrozenAnyArray<FrozenStringValue>,
         param_count: u32,
         heap: &FrozenHeap,
     ) -> Bc {

@@ -20,6 +20,7 @@
 use std::fmt;
 use std::fmt::Debug;
 use std::mem;
+use std::ops::Deref;
 use std::ptr;
 
 use allocative::Allocative;
@@ -42,6 +43,15 @@ pub(crate) struct AnyArray<T: Debug + 'static> {
 }
 
 impl<T: Debug + 'static> AnyArray<T> {
+    /// Create an empty `AnyArray` with no elements. Safe because there is
+    /// nothing to initialize or drop.
+    pub(crate) const fn empty() -> AnyArray<T> {
+        AnyArray {
+            len: 0,
+            content: [],
+        }
+    }
+
     /// This function is unsafe because it does not initialize content array,
     /// but drops in in destructor.
     pub(crate) unsafe fn new(len: usize) -> AnyArray<T> {
@@ -54,6 +64,15 @@ impl<T: Debug + 'static> AnyArray<T> {
 
     pub(crate) fn offset_of_content() -> usize {
         memoffset::offset_of!(Self, content)
+    }
+}
+
+impl<T: Debug + 'static> Deref for AnyArray<T> {
+    type Target = [T];
+
+    #[inline]
+    fn deref(&self) -> &[T] {
+        self.as_slice()
     }
 }
 

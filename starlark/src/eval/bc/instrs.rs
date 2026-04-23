@@ -43,8 +43,10 @@ use crate::eval::bc::repr::BcInstrRepr;
 use crate::eval::bc::slow_arg::BcInstrEndArg;
 use crate::eval::bc::slow_arg::BcInstrSlowArg;
 use crate::eval::bc::writer::BcStatementLocations;
-use crate::values::FrozenRef;
+use crate::static_starlark_value;
 use crate::values::FrozenStringValue;
+use crate::values::types::any_array::AnyArray;
+use crate::values::types::any_array::FrozenAnyArray;
 
 impl BcOpcode {
     /// Drop instruction at given address.
@@ -81,34 +83,37 @@ unsafe fn drop_instrs(instrs: &[u64]) {
     }
 }
 
-/// Statically allocate a valid instruction buffer micro-optimization.
-///
-/// Valid bytecode must end with `EndOfBc` instruction, otherwise evaluation overruns
-/// the instruction buffer.
-///
-/// `BcInstrs` type need to have `Default` (it is convenient).
-///
-/// Allocating a vec in `BcInstrs::default` is non-free.
-///
-/// Assertion that `BcInstrs::instrs` is not empty is cheap but not free.
-///
-/// But if `BcInstrs::instrs` is `Either` allocated instructions or a pointer to statically
-/// allocated instructions, then both `BcInstrs::default` is free
-/// and evaluation start [is free](https://rust.godbolt.org/z/3nEhWGo4Y).
+// Statically allocate a valid instruction buffer micro-optimization.
+//
+// Valid bytecode must end with `EndOfBc` instruction, otherwise evaluation overruns
+// the instruction buffer.
+//
+// `BcInstrs` type need to have `Default` (it is convenient).
+//
+// Allocating a vec in `BcInstrs::default` is non-free.
+//
+// Assertion that `BcInstrs::instrs` is not empty is cheap but not free.
+//
+// But if `BcInstrs::instrs` is `Either` allocated instructions or a pointer to statically
+// allocated instructions, then both `BcInstrs::default` is free
+// and evaluation start [is free](https://rust.godbolt.org/z/3nEhWGo4Y).
+static_starlark_value!(VALUE_EMPTY_LOCAL_NAMES: AnyArray<FrozenStringValue> = AnyArray::empty());
+
 fn empty_instrs() -> &'static [u64] {
-    static END_OF_BC: BcInstrRepr<InstrEnd> = BcInstrRepr {
-        header: BcInstrHeader::for_opcode(BcOpcode::End),
-        arg: BcInstrEndArg {
-            end_addr: BcAddr(0),
-            slow_args: Vec::new(),
-            local_names: FrozenRef::new(&[]),
-        },
-        _align: [],
-    };
+    static END_OF_BC: std::sync::LazyLock<BcInstrRepr<InstrEnd>> =
+        std::sync::LazyLock::new(|| BcInstrRepr {
+            header: BcInstrHeader::for_opcode(BcOpcode::End),
+            arg: BcInstrEndArg {
+                end_addr: BcAddr(0),
+                slow_args: Vec::new(),
+                local_names: VALUE_EMPTY_LOCAL_NAMES.unpack(),
+            },
+            _align: [],
+        });
     unsafe {
         slice::from_raw_parts(
-            &END_OF_BC as *const BcInstrRepr<_> as *const u64,
-            mem::size_of_val(&END_OF_BC) / mem::size_of::<u64>(),
+            &*END_OF_BC as *const BcInstrRepr<_> as *const u64,
+            mem::size_of_val(&*END_OF_BC) / mem::size_of::<u64>(),
         )
     }
 }
@@ -354,7 +359,7 @@ impl BcInstrsWriter {
         mut self,
         slow_args: Vec<(BcAddr, BcInstrSlowArg)>,
         stmt_locs: BcStatementLocations,
-        local_names: FrozenRef<'static, [FrozenStringValue]>,
+        local_names: FrozenAnyArray<FrozenStringValue>,
     ) -> BcInstrs {
         self.write::<InstrEnd>(BcInstrEndArg {
             end_addr: self.ip(),
@@ -408,9 +413,7 @@ mod tests {
     #[test]
     fn display() {
         let heap = FrozenHeap::new();
-        let local_names = heap
-            .alloc_any(vec![const_frozen_string!("abc")])
-            .map(|s| s.as_slice());
+        let local_names = heap.alloc_any_array_value(&[const_frozen_string!("abc")]);
         let mut bc = BcInstrsWriter::new();
         bc.write::<InstrConst>((FrozenValue::new_bool(true), BcSlot(0).to_out()));
         bc.write::<InstrReturn>(BcSlot(0).to_in());

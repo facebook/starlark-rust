@@ -107,7 +107,7 @@ impl<'v, 'a, 'e> Evaluator<'v, 'a, 'e> {
         )?;
 
         let scope_names = scope_data.get_scope(ScopeId::module());
-        let local_names = self.frozen_heap().alloc_any_slice(&scope_names.used);
+        let local_names = self.frozen_heap().alloc_any_array_value(&scope_names.used);
 
         self.module_env.slots().ensure_slots(module_slot_count);
         let old_def_info = self.module_def_info.replace(
