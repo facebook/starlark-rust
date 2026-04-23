@@ -23,8 +23,8 @@ use crate::errors::Frame;
 use crate::eval::runtime::frame_span::FrameSpan;
 use crate::register_starlark_any;
 use crate::values::FrozenHeap;
-use crate::values::FrozenRef;
 use crate::values::FrozenValue;
+use crate::values::any::FrozenAnyValue;
 
 /// When a function `a` is inlined into `b`, this struct contains
 /// the inlined frame for expressions in `a` which now reside in `b`.
@@ -51,13 +51,13 @@ impl InlinedFrame {
 #[derive(Copy, Clone, Dupe, Debug, Default)]
 pub(crate) struct InlinedFrames {
     /// Linked list.
-    pub(crate) frames: Option<FrozenRef<'static, InlinedFrame>>,
+    pub(crate) frames: Option<FrozenAnyValue<InlinedFrame>>,
 }
 
 impl PartialEq for InlinedFrames {
     fn eq(&self, other: &Self) -> bool {
         match (self.frames, other.frames) {
-            (Some(a), Some(b)) => ptr::eq(a.as_ref(), b.as_ref()),
+            (Some(a), Some(b)) => ptr::eq(&*a, &*b),
             (None, None) => true,
             (Some(_), None) | (None, Some(_)) => false,
         }
@@ -74,7 +74,7 @@ impl InlinedFrames {
         }
     }
 
-    fn to_inlined_frames(self) -> Vec<FrozenRef<'static, InlinedFrame>> {
+    fn to_inlined_frames(self) -> Vec<FrozenAnyValue<InlinedFrame>> {
         let mut r = Vec::new();
         let mut frames_iter = self;
         while let Some(frames) = frames_iter.frames {
@@ -116,7 +116,7 @@ impl InlinedFrames {
 /// Heap allocator for `InlinedFrame` which attempts to reuse previous allocation.
 pub(crate) struct InlinedFrameAlloc<'f> {
     frozen_heap: &'f FrozenHeap,
-    last_alloc: Option<FrozenRef<'static, InlinedFrame>>,
+    last_alloc: Option<FrozenAnyValue<InlinedFrame>>,
 }
 
 impl<'f> InlinedFrameAlloc<'f> {
@@ -127,13 +127,13 @@ impl<'f> InlinedFrameAlloc<'f> {
         }
     }
 
-    pub(crate) fn alloc_frame(&mut self, frame: InlinedFrame) -> FrozenRef<'static, InlinedFrame> {
+    pub(crate) fn alloc_frame(&mut self, frame: InlinedFrame) -> FrozenAnyValue<InlinedFrame> {
         if let Some(last_alloc) = self.last_alloc {
             if *last_alloc == frame {
                 return last_alloc;
             }
         }
-        let frame = self.frozen_heap.alloc_any(frame);
+        let frame = self.frozen_heap.alloc_any_value(frame);
         self.last_alloc = Some(frame);
         frame
     }
