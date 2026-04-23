@@ -28,6 +28,7 @@ use crate::values::FreezeError;
 use crate::values::FreezeResult;
 use crate::values::Freezer;
 use crate::values::FrozenValue;
+use crate::values::FrozenValueTyped;
 use crate::values::Heap;
 use crate::values::HeapSendable;
 use crate::values::StarlarkValue;
@@ -85,7 +86,7 @@ where
             let res = x.freeze(freezer)?;
             r.fill(res);
             if TypeId::of::<T::Frozen>() == TypeId::of::<FrozenDef>() {
-                let frozen_def = fv.downcast_frozen_ref().unwrap();
+                let frozen_def = FrozenValueTyped::new(fv).unwrap();
                 freezer.frozen_defs.borrow_mut().push(frozen_def);
             }
             Ok(fv)

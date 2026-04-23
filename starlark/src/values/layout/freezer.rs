@@ -21,7 +21,7 @@ use crate::eval::compiler::def::FrozenDef;
 use crate::values::AllocFrozenValue;
 use crate::values::FreezeResult;
 use crate::values::FrozenHeap;
-use crate::values::FrozenRef;
+use crate::values::FrozenValueTyped;
 use crate::values::HeapSendable;
 use crate::values::layout::avalue::AValue;
 use crate::values::layout::heap::arena::Reservation;
@@ -35,7 +35,7 @@ pub struct Freezer<'fv> {
     /// Freezing into this heap.
     pub(crate) heap: &'fv FrozenHeap,
     /// Defs frozen by this freezer.
-    pub(crate) frozen_defs: RefCell<Vec<FrozenRef<'static, FrozenDef>>>,
+    pub(crate) frozen_defs: RefCell<Vec<FrozenValueTyped<'static, FrozenDef>>>,
 }
 
 impl<'fv> Freezer<'fv> {
