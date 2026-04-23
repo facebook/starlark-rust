@@ -11,7 +11,8 @@
 //! Pagable implementation for static values.
 //!
 //! This module provides [`StaticValue`], a wrapper for `&'static T` that supports
-//! pagable serialization. Use the [`static_value!`] macro to create and register instances.
+//! pagable serialization. Use the [`static_value!`](macro@crate::static_value) macro to create
+//! and register instances.
 //!
 //! For convenience, type aliases are provided:
 //! - [`StaticStr`] = `StaticValue<str>`

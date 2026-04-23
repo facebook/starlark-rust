@@ -128,7 +128,8 @@ where
 /// # Safety
 ///
 /// Implementors must also register the vtable entry for `StarlarkAnyComplex<Self>`
-/// using [`register_simple_vtable_entry!`]. Use the [`register_any_complex_frozen!`]
+/// using [`register_simple_vtable_entry!`](macro@crate::register_simple_vtable_entry). Use the
+/// [`register_any_complex_frozen!`](macro@crate::register_any_complex_frozen)
 /// macro instead of implementing this trait manually, as it handles both the trait
 /// implementation and vtable registration.
 pub unsafe trait FrozenAnyComplexRegistered {}

@@ -122,10 +122,12 @@ macro_rules! register_type_matcher {
     };
 }
 
-/// Register a frozen type for use with [`StarlarkAnyComplex`].
+/// Register a frozen type for use with
+/// [`StarlarkAnyComplex`](crate::values::any_complex::StarlarkAnyComplex).
 ///
 /// This macro:
-/// 1. Implements [`FrozenAnyComplexRegistered`] for the frozen type
+/// 1. Implements [`FrozenAnyComplexRegistered`](crate::values::any_complex::FrozenAnyComplexRegistered)
+///    for the frozen type
 /// 2. Registers the vtable entry for `StarlarkAnyComplex<FrozenType>`
 ///
 /// # Example
@@ -147,10 +149,11 @@ macro_rules! register_any_complex_frozen {
     };
 }
 
-/// Register a type for use with [`StarlarkAny`].
+/// Register a type for use with [`StarlarkAny`](crate::values::any::StarlarkAny).
 ///
 /// This macro:
-/// 1. Implements [`StarlarkAnyRegistered`] for the type
+/// 1. Implements [`StarlarkAnyRegistered`](crate::values::any::StarlarkAnyRegistered) for the
+///    type
 /// 2. Registers the vtable entry for `StarlarkAny<Type>`
 ///
 /// # Example
