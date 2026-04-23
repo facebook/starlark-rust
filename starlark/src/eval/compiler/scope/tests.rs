@@ -43,7 +43,6 @@ use crate::eval::compiler::scope::scope_resolver_globals::ScopeResolverGlobals;
 use crate::syntax::AstModule;
 use crate::syntax::Dialect;
 use crate::values::FrozenHeap;
-use crate::values::FrozenRef;
 
 fn test_with_module(program: &str, expected: &str, module: &MutableNames) {
     let ast = AstModule::parse("t.star", program.to_owned(), &Dialect::AllOptionsInternal).unwrap();
@@ -57,7 +56,7 @@ fn test_with_module(program: &str, expected: &str, module: &MutableNames) {
         &HashMap::new(),
         ast.into_parts().1,
         ScopeResolverGlobals {
-            globals: Some(FrozenRef::new(Globals::empty())),
+            globals: Some(frozen_heap.alloc_any(Globals::new())),
         },
         codemap,
         &Dialect::AllOptionsInternal,

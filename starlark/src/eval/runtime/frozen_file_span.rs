@@ -32,7 +32,7 @@ pagable::static_value!(
     EMPTY_NATIVE_CODEMAP_STATIC: NativeCodeMap = &EMPTY_NATIVE_CODEMAP,
     starlark_syntax::codemap::NativeCodeMapStaticEntry
 );
-crate::static_starlark_any!(pub(crate) VALUE_EMPTY_CODEMAP: CodeMap = NativeCodeMap::to_codemap(EMPTY_NATIVE_CODEMAP_STATIC));
+crate::static_starlark_any!(VALUE_EMPTY_CODEMAP: CodeMap = NativeCodeMap::to_codemap(EMPTY_NATIVE_CODEMAP_STATIC));
 
 #[derive(Debug, Copy, Clone, Dupe, PartialEq, Eq)]
 pub(crate) struct FrozenFileSpan {

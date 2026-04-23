@@ -27,7 +27,6 @@ use allocative::Allocative;
 use derivative::Derivative;
 use derive_more::Display;
 use dupe::Dupe;
-use once_cell::sync::Lazy;
 use starlark_derive::NoSerialize;
 use starlark_derive::VisitSpanMut;
 use starlark_derive::starlark_value;
@@ -77,7 +76,6 @@ use crate::eval::runtime::arguments::ResolvedArgName;
 use crate::eval::runtime::evaluator::Evaluator;
 use crate::eval::runtime::frame_span::FrameSpan;
 use crate::eval::runtime::frozen_file_span::FrozenFileSpan;
-use crate::eval::runtime::frozen_file_span::VALUE_EMPTY_CODEMAP;
 use crate::eval::runtime::params::spec::ParametersSpec;
 use crate::eval::runtime::profile::instant::ProfilerInstant;
 use crate::eval::runtime::slots::LocalSlotId;
@@ -362,25 +360,6 @@ pub(crate) struct DefInfo {
 }
 
 impl DefInfo {
-    pub(crate) fn empty() -> FrozenRef<'static, DefInfo> {
-        static EMPTY: Lazy<DefInfo> = Lazy::new(|| DefInfo {
-            name: const_frozen_string!("<empty>"),
-            signature_span: FrozenFileSpan::default(),
-            parameter_captures: FrozenRef::new(&[]),
-            ty: Ty::any(),
-            codemap: VALUE_EMPTY_CODEMAP.unpack_any(),
-            docstring: None,
-            used: FrozenRef::new(&[]),
-            parent: FrozenRef::new(&[]),
-            stmt_compiled: Bc::default(),
-            body_stmts: StmtsCompiled::empty(),
-            stmt_compile_context: StmtCompileContext::default(),
-            inline_def_body: None,
-            globals: FrozenRef::new(Globals::empty()),
-        });
-        FrozenRef::new(&EMPTY)
-    }
-
     pub(crate) fn for_module(
         codemap: FrozenAnyValue<CodeMap>,
         local_names: FrozenRef<'static, [FrozenStringValue]>,

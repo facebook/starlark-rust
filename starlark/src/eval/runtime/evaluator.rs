@@ -144,7 +144,8 @@ pub struct Evaluator<'v, 'a, 'e> {
     pub(crate) loader: Option<&'a dyn FileLoader>,
     // `DefInfo` of currently executed module.
     // `DefInfo` of currently execution function can be obtained from call stack.
-    pub(crate) module_def_info: FrozenRef<'static, DefInfo>,
+    // `None` only during `Evaluator` construction, before `eval_module` sets it.
+    pub(crate) module_def_info: Option<FrozenRef<'static, DefInfo>>,
     // Should we enable heap profiling or not
     pub(crate) heap_profile: HeapProfile,
     // Should we enable flame profiling or not
@@ -286,7 +287,7 @@ impl<'v, 'a, 'e: 'a> Evaluator<'v, 'a, 'e> {
             typecheck_profile: TypecheckProfile::default(),
             time_flame_profile: TimeFlameProfile::new(),
             eval_instrumentation: EvaluationInstrumentation::new(),
-            module_def_info: DefInfo::empty(), // Will be replaced before it is used
+            module_def_info: None, // Will be replaced before it is used
             string_pool: StringPool::default(),
             breakpoint_handler: None,
             print_handler: &StderrPrintHandler,
@@ -738,8 +739,10 @@ impl<'v, 'a, 'e: 'a> Evaluator<'v, 'a, 'e> {
         } else if let Some(func) = func.downcast_ref::<FrozenDef>() {
             Ok(func.def_info)
         } else if func.is_none() {
-            // For module, it is `None`.
-            Ok(self.module_def_info)
+            // Module top-level has no Def (pushes `None` on the call stack),
+            // so DefInfo comes from module_def_info, set by `eval_module`.
+            self.module_def_info
+                .ok_or_else(|| internal_error!("module_def_info must be set during eval_module"))
         } else {
             Err(crate::Error::new_other(EvaluatorError::TopFrameNotDef))
         }

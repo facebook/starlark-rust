@@ -20,7 +20,6 @@ use std::sync::Arc;
 use allocative::Allocative;
 use dupe::Dupe;
 use itertools::Itertools;
-use once_cell::sync::Lazy;
 use once_cell::sync::OnceCell;
 
 use crate::__derive_refs::components::NativeCallableComponents;
@@ -114,12 +113,6 @@ impl Globals {
     #[doc(hidden)]
     pub fn extended_internal() -> Self {
         GlobalsBuilder::extended().build()
-    }
-
-    /// Empty globals.
-    pub(crate) fn empty() -> &'static Globals {
-        static EMPTY: Lazy<Globals> = Lazy::new(|| GlobalsBuilder::new().build());
-        &EMPTY
     }
 
     /// Create a [`Globals`] combining those functions in the Starlark standard plus

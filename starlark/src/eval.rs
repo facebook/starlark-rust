@@ -25,7 +25,6 @@ pub(crate) mod runtime;
 pub(crate) mod soft_error;
 
 use std::collections::HashMap;
-use std::mem;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
 
@@ -108,8 +107,7 @@ impl<'v, 'a, 'e> Evaluator<'v, 'a, 'e> {
         let local_names = self.frozen_heap().alloc_any_slice(&scope_names.used);
 
         self.module_env.slots().ensure_slots(module_slot_count);
-        let old_def_info = mem::replace(
-            &mut self.module_def_info,
+        let old_def_info = self.module_def_info.replace(
             self.module_env.frozen_heap().alloc_any(DefInfo::for_module(
                 codemap,
                 local_names,
