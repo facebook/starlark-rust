@@ -89,7 +89,6 @@ use crate::values::Freeze;
 use crate::values::FreezeResult;
 use crate::values::Freezer;
 use crate::values::FrozenHeap;
-use crate::values::FrozenRef;
 use crate::values::FrozenValue;
 use crate::values::FrozenValueTyped;
 use crate::values::Heap;
@@ -153,15 +152,6 @@ impl<T: Debug + Send + Sync + 'static> StarlarkAny<T> {
     pub fn get<'v>(x: Value<'v>) -> Option<&'v T> {
         let x: &StarlarkAny<T> = x.downcast_ref()?;
         Some(&x.0)
-    }
-}
-
-impl FrozenHeap {
-    /// Allocate any value in the frozen heap.
-    pub fn alloc_any<T: StarlarkAnyBound>(&self, value: T) -> FrozenRef<'static, T> {
-        self.alloc_simple_typed_static(StarlarkAny::new(value))
-            .as_frozen_ref()
-            .map(|r| &r.0)
     }
 }
 

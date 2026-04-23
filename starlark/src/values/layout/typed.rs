@@ -47,7 +47,6 @@ use crate::values::Freeze;
 use crate::values::FreezeResult;
 use crate::values::Freezer;
 use crate::values::FrozenHeap;
-use crate::values::FrozenRef;
 use crate::values::FrozenStringValue;
 use crate::values::FrozenValue;
 use crate::values::FrozenValueOfUnchecked;
@@ -318,11 +317,6 @@ impl<'v, T: StarlarkValue<'v>> FrozenValueTyped<'v, T> {
                     .payload::<T>()
             }
         }
-    }
-
-    #[inline]
-    pub(crate) fn as_frozen_ref(self) -> FrozenRef<'v, T> {
-        FrozenRef::new(self.as_ref())
     }
 
     /// Convert to another `FrozenValue` wrapper.

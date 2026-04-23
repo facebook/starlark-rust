@@ -17,7 +17,6 @@
 
 use std::fmt::Debug;
 use std::marker::PhantomData;
-use std::slice;
 
 use crate::cast;
 use crate::collections::maybe_uninit_backport::maybe_uninit_write_slice;
@@ -25,7 +24,6 @@ use crate::collections::maybe_uninit_backport::maybe_uninit_write_slice_cloned;
 use crate::values::FreezeResult;
 use crate::values::Freezer;
 use crate::values::FrozenHeap;
-use crate::values::FrozenRef;
 use crate::values::FrozenValue;
 use crate::values::Heap;
 use crate::values::Trace;
@@ -39,7 +37,6 @@ use crate::values::layout::heap::repr::AValueForward;
 use crate::values::layout::heap::repr::AValueHeader;
 use crate::values::layout::heap::repr::AValueRepr;
 use crate::values::layout::heap::repr::ForwardPtr;
-use crate::values::types::any::StarlarkAnyBound;
 use crate::values::types::any_array::AnyArray;
 use crate::values::types::any_array::FrozenAnyArray;
 use crate::values::types::array::Array;
@@ -145,38 +142,7 @@ impl<'v, T: Debug + 'static> AValue<'v> for AValueAnyArray<T> {
 }
 
 impl FrozenHeap {
-    #[allow(dead_code)]
-    fn do_alloc_any_slice<T: Debug + Send + Sync + Clone>(
-        &self,
-        values: &[T],
-    ) -> FrozenRef<'static, [T]> {
-        // SAFETY: Not.
-        let this: &'static FrozenHeap = unsafe { cast::ptr_lifetime(self) };
-        let (_any_array, content) = this.alloc_raw_extra(any_array_avalue(values.len()));
-        let content = unsafe { &mut *content };
-        FrozenRef::new(&*maybe_uninit_write_slice_cloned(content, values))
-    }
-
-    /// Allocate a slice in the frozen heap.
-    #[allow(dead_code)]
-    pub(crate) fn alloc_any_slice<T: StarlarkAnyBound + Clone>(
-        &self,
-        values: &[T],
-    ) -> FrozenRef<'static, [T]> {
-        if values.is_empty() {
-            FrozenRef::new(&[])
-        } else if values.len() == 1 {
-            self.alloc_any(values[0].clone())
-                .map(|r| slice::from_ref(r))
-        } else {
-            self.do_alloc_any_slice(values)
-        }
-    }
-
     /// Allocate a slice in the frozen heap, returning a [`FrozenAnyArray`].
-    ///
-    /// Unlike [`alloc_any_slice`](Self::alloc_any_slice), this always allocates via
-    /// `AnyArray<T>`, which enables recovering the [`FrozenValue`] for serialization.
     pub(crate) fn alloc_any_array_value<T: Debug + Send + Sync + Clone>(
         &self,
         values: &[T],
