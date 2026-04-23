@@ -20,6 +20,7 @@ use once_cell::sync::Lazy;
 
 use crate::environment::Globals;
 use crate::values::FrozenValue;
+use crate::values::FrozenValueTyped;
 use crate::values::namespace::FrozenNamespace;
 
 #[derive(Copy, Clone, Dupe, Debug)]
@@ -63,11 +64,9 @@ impl Constants {
                 fn_tuple: BuiltinFn(g.get_frozen("tuple").unwrap()),
                 fn_isinstance: BuiltinFn(g.get_frozen("isinstance").unwrap()),
                 typing_callable: {
-                    let typing = g
-                        .get_frozen("typing")
-                        .unwrap()
-                        .downcast_frozen_ref::<FrozenNamespace>()
-                        .unwrap();
+                    let typing =
+                        FrozenValueTyped::<FrozenNamespace>::new(g.get_frozen("typing").unwrap())
+                            .unwrap();
                     BuiltinFn(typing.as_ref().get("Callable").unwrap())
                 },
             }

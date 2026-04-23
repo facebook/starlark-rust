@@ -22,6 +22,7 @@ use dupe::Dupe;
 use crate::typing::Ty;
 use crate::values::FrozenStringValue;
 use crate::values::FrozenValue;
+use crate::values::FrozenValueTyped;
 use crate::values::StringValue;
 use crate::values::UnpackValue;
 use crate::values::Value;
@@ -85,8 +86,6 @@ impl<'f> FrozenStructRef<'f> {
 
     /// Downcast a value to a struct reference.
     pub fn from_value(value: FrozenValue) -> Option<FrozenStructRef<'f>> {
-        value
-            .downcast_frozen_ref::<FrozenStruct>()
-            .map(|f| FrozenStructRef(f.as_ref()))
+        FrozenValueTyped::<FrozenStruct>::new(value).map(|f| FrozenStructRef(f.as_ref()))
     }
 }

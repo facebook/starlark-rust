@@ -34,6 +34,7 @@ use crate::eval::runtime::inlined_frame::InlinedFrameAlloc;
 use crate::eval::runtime::visit_span::VisitSpanMut;
 use crate::values::FrozenStringValue;
 use crate::values::FrozenValue;
+use crate::values::FrozenValueTyped;
 use crate::values::Value;
 use crate::values::enumeration::FrozenEnumType;
 use crate::values::string::dot_format::parse_format_one;
@@ -231,10 +232,10 @@ impl CallCompiled {
         fun: &IrSpanned<ExprCompiled>,
         args: &ArgsCompiledValue,
     ) -> Option<ExprCompiled> {
-        let fun = fun.as_value()?.downcast_frozen_ref::<FrozenEnumType>()?;
+        let fun = FrozenValueTyped::<FrozenEnumType>::new(fun.as_value()?)?;
         let arg = args.one_pos()?.as_value()?;
         Some(ExprCompiled::Value(
-            fun.value.construct(arg.to_value()).ok()?,
+            fun.as_ref().construct(arg.to_value()).ok()?,
         ))
     }
 
