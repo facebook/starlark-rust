@@ -716,7 +716,7 @@ enum PagableArcInnerState<T> {
 impl<T> PagableArcInnerState<T> {
     fn unwrap_ready(&self) -> &T {
         match self {
-            PagableArcInnerState::Pinned(t) => &t,
+            PagableArcInnerState::Pinned(t) => t,
             PagableArcInnerState::Unpinned(_) => panic!("Unpinned state is not ready"),
             PagableArcInnerState::PagedOut => panic!("PagedOut state is not ready"),
         }

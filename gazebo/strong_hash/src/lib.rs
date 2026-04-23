@@ -95,7 +95,7 @@ impl<T: StrongHash> StrongHash for [T] {
 impl<T: StrongHash> StrongHash for Vec<T> {
     fn strong_hash<H: Hasher>(&self, state: &mut H) {
         self.len().strong_hash(state);
-        (&self[..]).strong_hash(state);
+        self[..].strong_hash(state);
     }
 }
 

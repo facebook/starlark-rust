@@ -265,7 +265,7 @@ impl<T: ?Sized + PagableSerialize + for<'de> PagableBoxDeserialize<'de> + Send +
     }
 
     fn serialize_inner(&self, ser: &mut dyn PagableSerializer) -> crate::Result<()> {
-        T::pagable_serialize(&self, ser)
+        T::pagable_serialize(self, ser)
     }
 
     fn deserialize_inner<'de, D: PagableDeserializer<'de> + ?Sized>(
@@ -296,7 +296,7 @@ impl<T: PagableSerialize + for<'de> PagableDeserialize<'de> + Send + Sync + 'sta
     }
 
     fn serialize_inner(&self, ser: &mut dyn PagableSerializer) -> crate::Result<()> {
-        T::pagable_serialize(&self, ser)
+        T::pagable_serialize(self, ser)
     }
 
     fn deserialize_inner<'de, D: PagableDeserializer<'de> + ?Sized>(
