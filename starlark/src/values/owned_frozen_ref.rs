@@ -16,15 +16,10 @@
  */
 
 use std::convert::Infallible;
-use std::fmt;
-use std::fmt::Formatter;
 use std::mem;
-use std::ops::Deref;
 
-use allocative::Allocative;
 use dupe::Clone_;
 use dupe::Copy_;
-use dupe::Dupe;
 use dupe::Dupe_;
 
 use crate::values::FrozenHeap;
@@ -36,18 +31,6 @@ use crate::values::Heap;
 pub struct OwnedRefFrozenRef<'f, T: ?Sized + 'static> {
     owner: &'f FrozenHeapRef,
     value: &'f T,
-}
-
-/// A reference to a value stored in a frozen heap, keeping the heap alive via an owned
-/// `FrozenHeapRef`.
-///
-/// Usually constructed from an `OwnedFrozenValueTyped`.
-#[derive(Clone, Dupe, Allocative)]
-pub struct OwnedFrozenRef<T: ?Sized + 'static> {
-    owner: FrozenHeapRef,
-    // Invariant: this value must be kept alive by the `owner` field.
-    #[allocative(skip)]
-    value: &'static T,
 }
 
 impl<'f, T: ?Sized> OwnedRefFrozenRef<'f, T> {
@@ -81,14 +64,6 @@ impl<'f, T: ?Sized> OwnedRefFrozenRef<'f, T> {
         unsafe { mem::transmute::<&'f T, &'v T>(self.value) }
     }
 
-    /// Convert heap pointer to an owned one.
-    pub fn to_owned(self) -> OwnedFrozenRef<T> {
-        OwnedFrozenRef {
-            owner: self.owner.dupe(),
-            value: unsafe { mem::transmute::<&'f T, &'static T>(self.value) },
-        }
-    }
-
     /// Fallible map the reference to another one.
     pub fn try_map_result<F, U: ?Sized, E>(self, f: F) -> Result<OwnedRefFrozenRef<'f, U>, E>
     where
@@ -116,89 +91,5 @@ impl<'f, T: ?Sized> OwnedRefFrozenRef<'f, T> {
         F: FnOnce(&'f T) -> Option<&'f U>,
     {
         self.try_map_result(|x| f(x).ok_or(())).ok()
-    }
-}
-
-impl<T: ?Sized> OwnedFrozenRef<T> {
-    /// Creates a new `OwnedFrozenRef` pointing at the given value.
-    ///
-    /// ## Safety
-    ///
-    /// The reference must be kept alive by the owning heap
-    pub unsafe fn new_unchecked(value: &'static T, owner: FrozenHeapRef) -> OwnedFrozenRef<T> {
-        OwnedFrozenRef { owner, value }
-    }
-
-    /// Borrow.
-    pub fn as_owned_ref_frozen_ref(&self) -> OwnedRefFrozenRef<'_, T> {
-        OwnedRefFrozenRef {
-            owner: &self.owner,
-            value: self.value,
-        }
-    }
-
-    /// Returns a reference to the underlying value.
-    pub fn as_ref<'a>(&'a self) -> &'a T {
-        self.as_owned_ref_frozen_ref().as_ref()
-    }
-
-    /// Converts `self` into a new reference that points at something reachable from the previous.
-    ///
-    /// See the caveats on `[starlark::values::OwnedFrozenValue::map]`
-    pub fn map<F, U: ?Sized>(self, f: F) -> OwnedFrozenRef<U>
-    where
-        for<'v> F: FnOnce(&'v T) -> &'v U,
-    {
-        OwnedFrozenRef {
-            owner: self.owner,
-            value: f(self.value),
-        }
-    }
-
-    /// Fallible map the reference to another one.
-    pub fn try_map_result<F, U: ?Sized, E>(self, f: F) -> Result<OwnedFrozenRef<U>, E>
-    where
-        for<'v> F: FnOnce(&'v T) -> Result<&'v U, E>,
-    {
-        Ok(OwnedFrozenRef {
-            owner: self.owner,
-            value: f(self.value)?,
-        })
-    }
-
-    /// Optionally map the reference to another one.
-    pub fn try_map_option<F, U: ?Sized>(self, f: F) -> Option<OwnedFrozenRef<U>>
-    where
-        for<'v> F: FnOnce(&'v T) -> Option<&'v U>,
-    {
-        Some(OwnedFrozenRef {
-            owner: self.owner,
-            value: f(self.value)?,
-        })
-    }
-
-    /// Get a reference to the owning frozen heap
-    pub fn owner(&self) -> &FrozenHeapRef {
-        &self.owner
-    }
-}
-
-impl<T: ?Sized + fmt::Debug> fmt::Debug for OwnedFrozenRef<T> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        fmt::Debug::fmt(self.value, f)
-    }
-}
-
-impl<T: ?Sized + fmt::Display> fmt::Display for OwnedFrozenRef<T> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(self.value, f)
-    }
-}
-
-impl<T: ?Sized> Deref for OwnedFrozenRef<T> {
-    type Target = T;
-
-    fn deref(&self) -> &T {
-        self.as_ref()
     }
 }

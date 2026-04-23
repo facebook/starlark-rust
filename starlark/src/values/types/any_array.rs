@@ -104,8 +104,6 @@ impl<'v, T: Debug + 'static> StarlarkValue<'v> for AnyArray<T> {
     type Canonical = Self;
 }
 
-/// A typed reference to a `[T]` slice allocated via [`AnyArray<T>`] on a frozen heap.
-///
 /// Type alias for `FrozenValueTyped<'static, AnyArray<T>>`.
 ///
 /// This is the array equivalent of [`FrozenAnyValue<T>`](crate::values::any::FrozenAnyValue).
