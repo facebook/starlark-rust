@@ -29,24 +29,25 @@ use dupe::Dupe_;
 
 use crate::values::FrozenHeap;
 use crate::values::FrozenHeapRef;
-use crate::values::FrozenRef;
 use crate::values::Heap;
 
-/// A reference to a value stored in a frozen heap with a reference to the heap.
+/// A reference to a value stored in a frozen heap with a borrowed reference to the heap.
 #[derive(Copy_, Clone_, Dupe_)]
 pub struct OwnedRefFrozenRef<'f, T: ?Sized + 'static> {
     owner: &'f FrozenHeapRef,
-    value: FrozenRef<'f, T>,
+    value: &'f T,
 }
 
-/// Same as a `FrozenRef`, but it keeps itself alive by storing a reference to the owning heap.
+/// A reference to a value stored in a frozen heap, keeping the heap alive via an owned
+/// `FrozenHeapRef`.
 ///
 /// Usually constructed from an `OwnedFrozenValueTyped`.
 #[derive(Clone, Dupe, Allocative)]
 pub struct OwnedFrozenRef<T: ?Sized + 'static> {
     owner: FrozenHeapRef,
-    // Invariant: this FrozenValue must be kept alive by the `owner` field.
-    value: FrozenRef<'static, T>,
+    // Invariant: this value must be kept alive by the `owner` field.
+    #[allocative(skip)]
+    value: &'static T,
 }
 
 impl<'f, T: ?Sized> OwnedRefFrozenRef<'f, T> {
@@ -55,10 +56,7 @@ impl<'f, T: ?Sized> OwnedRefFrozenRef<'f, T> {
         value: &'f T,
         owner: &'f FrozenHeapRef,
     ) -> OwnedRefFrozenRef<'f, T> {
-        OwnedRefFrozenRef {
-            owner,
-            value: FrozenRef::new(value),
-        }
+        OwnedRefFrozenRef { owner, value }
     }
 
     /// Owner heap.
@@ -68,26 +66,26 @@ impl<'f, T: ?Sized> OwnedRefFrozenRef<'f, T> {
 
     /// Return a reference to the underlying value.
     pub fn as_ref(self) -> &'f T {
-        self.value.as_ref()
+        self.value
     }
 
     /// Add a reference to a new heap, and return the pointer with the lifetime of the new heap.
     pub fn add_heap_ref<'v>(self, heap: &'v FrozenHeap) -> &'v T {
         heap.add_reference(self.owner);
-        unsafe { mem::transmute::<&'f T, &'v T>(self.value.as_ref()) }
+        unsafe { mem::transmute::<&'f T, &'v T>(self.value) }
     }
 
     /// Like `add_heap_ref`, but for an unfrozen heap.
     pub fn add_unfrozen_heap_ref<'v>(self, heap: Heap<'v>) -> &'v T {
         heap.add_reference(self.owner);
-        unsafe { mem::transmute::<&'f T, &'v T>(self.value.as_ref()) }
+        unsafe { mem::transmute::<&'f T, &'v T>(self.value) }
     }
 
     /// Convert heap pointer to an owned one.
     pub fn to_owned(self) -> OwnedFrozenRef<T> {
         OwnedFrozenRef {
             owner: self.owner.dupe(),
-            value: unsafe { mem::transmute::<FrozenRef<'f, T>, FrozenRef<'static, T>>(self.value) },
+            value: unsafe { mem::transmute::<&'f T, &'static T>(self.value) },
         }
     }
 
@@ -98,7 +96,7 @@ impl<'f, T: ?Sized> OwnedRefFrozenRef<'f, T> {
     {
         Ok(OwnedRefFrozenRef {
             owner: self.owner,
-            value: FrozenRef::new(f(self.value.as_ref())?),
+            value: f(self.value)?,
         })
     }
 
@@ -128,10 +126,7 @@ impl<T: ?Sized> OwnedFrozenRef<T> {
     ///
     /// The reference must be kept alive by the owning heap
     pub unsafe fn new_unchecked(value: &'static T, owner: FrozenHeapRef) -> OwnedFrozenRef<T> {
-        OwnedFrozenRef {
-            owner,
-            value: FrozenRef::new(value),
-        }
+        OwnedFrozenRef { owner, value }
     }
 
     /// Borrow.
@@ -156,7 +151,7 @@ impl<T: ?Sized> OwnedFrozenRef<T> {
     {
         OwnedFrozenRef {
             owner: self.owner,
-            value: self.value.map(f),
+            value: f(self.value),
         }
     }
 
@@ -167,7 +162,7 @@ impl<T: ?Sized> OwnedFrozenRef<T> {
     {
         Ok(OwnedFrozenRef {
             owner: self.owner,
-            value: self.value.try_map_result(f)?,
+            value: f(self.value)?,
         })
     }
 
@@ -178,7 +173,7 @@ impl<T: ?Sized> OwnedFrozenRef<T> {
     {
         Some(OwnedFrozenRef {
             owner: self.owner,
-            value: self.value.try_map_option(f)?,
+            value: f(self.value)?,
         })
     }
 
@@ -190,13 +185,13 @@ impl<T: ?Sized> OwnedFrozenRef<T> {
 
 impl<T: ?Sized + fmt::Debug> fmt::Debug for OwnedFrozenRef<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        fmt::Debug::fmt(&self.value, f)
+        fmt::Debug::fmt(self.value, f)
     }
 }
 
 impl<T: ?Sized + fmt::Display> fmt::Display for OwnedFrozenRef<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(&self.value, f)
+        fmt::Display::fmt(self.value, f)
     }
 }
 

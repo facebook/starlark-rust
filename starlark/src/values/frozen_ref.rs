@@ -59,6 +59,7 @@ unsafe impl<'v, 'fv, T: 'fv + ?Sized> Trace<'v> for FrozenRef<'fv, T> {
 }
 
 impl<'fv, T: 'fv + ?Sized> FrozenRef<'fv, T> {
+    #[expect(dead_code)]
     pub(crate) const fn new(value: &'fv T) -> FrozenRef<'fv, T> {
         FrozenRef { value }
     }
