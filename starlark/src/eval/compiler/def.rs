@@ -82,6 +82,7 @@ use crate::eval::runtime::slots::LocalSlotId;
 use crate::eval::runtime::slots::LocalSlotIdCapturedOrNot;
 use crate::register_starlark_any;
 use crate::starlark_complex_values;
+use crate::static_starlark_value;
 use crate::typing::ParamSpec;
 use crate::typing::Ty;
 use crate::typing::callable_param::ParamIsRequired;
@@ -90,7 +91,6 @@ use crate::values::Freeze;
 use crate::values::FreezeResult;
 use crate::values::Freezer;
 use crate::values::FrozenHeap;
-use crate::values::FrozenRef;
 use crate::values::FrozenStringValue;
 use crate::values::FrozenValue;
 use crate::values::Heap;
@@ -102,8 +102,11 @@ use crate::values::ValueLike;
 use crate::values::any::AtomicFrozenAnyValueOption;
 use crate::values::any::FrozenAnyValue;
 use crate::values::function::FUNCTION_TYPE;
+use crate::values::types::any_array::AnyArray;
 use crate::values::types::any_array::FrozenAnyArray;
 use crate::values::typing::type_compiled::compiled::TypeCompiled;
+
+static_starlark_value!(VALUE_EMPTY_PARAMETER_CAPTURES: AnyArray<LocalSlotId> = AnyArray::empty());
 
 #[derive(thiserror::Error, Debug)]
 enum DefError {
@@ -331,7 +334,7 @@ pub(crate) struct DefInfo {
     /// Span of function signature.
     pub(crate) signature_span: FrozenFileSpan,
     /// Indices of parameters, which are captured in nested defs.
-    parameter_captures: FrozenRef<'static, [LocalSlotId]>,
+    parameter_captures: FrozenAnyArray<LocalSlotId>,
     /// Type of this function, for the typechecker.
     ty: Ty,
     /// Codemap of the file where the function is declared.
@@ -370,7 +373,7 @@ impl DefInfo {
         DefInfo {
             name: const_frozen_string!("<module>"),
             signature_span: FrozenFileSpan::default(),
-            parameter_captures: FrozenRef::new(&[]),
+            parameter_captures: VALUE_EMPTY_PARAMETER_CAPTURES.unpack(),
             ty: Ty::any(),
             codemap,
             docstring: None,
@@ -489,7 +492,7 @@ impl Compiler<'_, '_, '_, '_> {
             parameter_captures: self
                 .eval
                 .frozen_heap()
-                .alloc_any_slice(&params.parameter_captures()),
+                .alloc_any_array_value(&params.parameter_captures()),
             ty,
             codemap: self.codemap,
             docstring,
@@ -527,7 +530,7 @@ pub(crate) struct DefGen<V> {
     pub(crate) parameters: ParametersSpec<V>, // The parameters, **kwargs etc including defaults (which are evaluated afresh each time)
     /// Indices of parameters, which are captured in nested defs.
     /// This is a copy of `DefInfo.parameter_captures`.
-    parameter_captures: FrozenRef<'static, [LocalSlotId]>,
+    parameter_captures: FrozenAnyArray<LocalSlotId>,
     // The types of the parameters.
     // (Sparse indexed array, (0, argm T) implies parameter 0 named arg must have type T).
     parameter_types: Vec<(LocalSlotId, String, TypeCompiled<FrozenValue>)>,
@@ -786,7 +789,7 @@ where
         // Parameters are collected into local slots without captures
         // (to avoid even more branches in parameter capture),
         // and this loop wraps captured parameters.
-        for &captured in &*self.parameter_captures {
+        for &captured in self.parameter_captures.as_slice() {
             eval.wrap_local_slot_captured(captured);
         }
 

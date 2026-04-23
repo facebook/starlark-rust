@@ -145,6 +145,7 @@ impl<'v, T: Debug + 'static> AValue<'v> for AValueAnyArray<T> {
 }
 
 impl FrozenHeap {
+    #[allow(dead_code)]
     fn do_alloc_any_slice<T: Debug + Send + Sync + Clone>(
         &self,
         values: &[T],
@@ -157,6 +158,7 @@ impl FrozenHeap {
     }
 
     /// Allocate a slice in the frozen heap.
+    #[allow(dead_code)]
     pub(crate) fn alloc_any_slice<T: StarlarkAnyBound + Clone>(
         &self,
         values: &[T],
