@@ -118,7 +118,7 @@ impl<'v, 'a, 'e> Evaluator<'v, 'a, 'e> {
                     local_names,
                     self.module_env
                         .frozen_heap()
-                        .alloc_any_slice(&scope_names.parent),
+                        .alloc_any_array_value(&scope_names.parent),
                     globals,
                 )),
         );

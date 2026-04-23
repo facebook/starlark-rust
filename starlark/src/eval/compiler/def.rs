@@ -343,7 +343,7 @@ pub(crate) struct DefInfo {
     pub(crate) used: FrozenAnyArray<FrozenStringValue>,
     /// Slots to copy from the parent.
     /// Module-level identifiers are not copied over, to avoid excess copying.
-    pub(crate) parent: FrozenRef<'static, [CopySlotFromParent]>,
+    pub(crate) parent: FrozenAnyArray<CopySlotFromParent>,
     /// Statement compiled for non-frozen def.
     #[derivative(Debug = "ignore")]
     stmt_compiled: Bc,
@@ -364,7 +364,7 @@ impl DefInfo {
     pub(crate) fn for_module(
         codemap: FrozenAnyValue<CodeMap>,
         local_names: FrozenAnyArray<FrozenStringValue>,
-        parent: FrozenRef<'static, [CopySlotFromParent]>,
+        parent: FrozenAnyArray<CopySlotFromParent>,
         globals: FrozenAnyValue<Globals>,
     ) -> DefInfo {
         DefInfo {
@@ -494,7 +494,10 @@ impl Compiler<'_, '_, '_, '_> {
             codemap: self.codemap,
             docstring,
             used,
-            parent: self.eval.frozen_heap().alloc_any_slice(&scope_names.parent),
+            parent: self
+                .eval
+                .frozen_heap()
+                .alloc_any_array_value(&scope_names.parent),
             stmt_compiled: body.as_bc(
                 &self.compile_context(return_type.is_some()),
                 used,
