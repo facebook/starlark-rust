@@ -23,7 +23,6 @@ use crate::environment::slots::ModuleSlotId;
 use crate::eval::compiler::expr::CompareOp;
 use crate::eval::compiler::span::IrSpanned;
 use crate::eval::runtime::frame_span::FrameSpan;
-use crate::values::FrozenRef;
 use crate::values::FrozenValue;
 use crate::values::FrozenValueTyped;
 use crate::values::StarlarkValue;
@@ -77,10 +76,6 @@ impl<V: VisitSpanMut> VisitSpanMut for Box<V> {
 }
 
 impl<T: StarlarkValue<'static>> VisitSpanMut for FrozenValueTyped<'static, T> {
-    fn visit_spans(&mut self, _visitor: &mut impl FnMut(&mut FrameSpan)) {}
-}
-
-impl<T> VisitSpanMut for FrozenRef<'static, T> {
     fn visit_spans(&mut self, _visitor: &mut impl FnMut(&mut FrameSpan)) {}
 }
 

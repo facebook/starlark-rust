@@ -50,7 +50,6 @@ use crate::eval::runtime::arguments::ArgSymbol;
 use crate::eval::runtime::frame_span::FrameSpan;
 use crate::eval::runtime::slots::LocalCapturedSlotId;
 use crate::eval::runtime::slots::LocalSlotId;
-use crate::values::FrozenRef;
 use crate::values::FrozenValue;
 use crate::values::FrozenValueTyped;
 use crate::values::StarlarkValue;
@@ -365,22 +364,6 @@ impl BcInstrArg for String {
     fn visit_jump_addr(_param: &Self, _ip: BcAddr, _consumer: &mut dyn FnMut(BcAddr)) {}
 }
 
-impl<T: Display> BcInstrArg for FrozenRef<'static, T>
-where
-    FrozenRef<'static, T>: Copy,
-{
-    fn fmt_append(
-        param: &Self,
-        _ip: BcAddr,
-        _end_arg: Option<&BcInstrEndArg>,
-        f: &mut dyn Write,
-    ) -> fmt::Result {
-        write!(f, " {}", param.as_ref())
-    }
-
-    fn visit_jump_addr(_param: &Self, _ip: BcAddr, _consumer: &mut dyn FnMut(BcAddr)) {}
-}
-
 impl<T: Display + fmt::Debug + Send + Sync + 'static> BcInstrArg for FrozenAnyValue<T> {
     fn fmt_append(
         param: &Self,
@@ -389,22 +372,6 @@ impl<T: Display + fmt::Debug + Send + Sync + 'static> BcInstrArg for FrozenAnyVa
         f: &mut dyn Write,
     ) -> fmt::Result {
         write!(f, " {}", param.as_ref())
-    }
-
-    fn visit_jump_addr(_param: &Self, _ip: BcAddr, _consumer: &mut dyn FnMut(BcAddr)) {}
-}
-
-impl<T: Display> BcInstrArg for FrozenRef<'static, [T]>
-where
-    FrozenRef<'static, T>: Copy,
-{
-    fn fmt_append(
-        param: &Self,
-        _ip: BcAddr,
-        _end_arg: Option<&BcInstrEndArg>,
-        f: &mut dyn Write,
-    ) -> fmt::Result {
-        write!(f, " [{}]", param.iter().map(|v| format!("{v}")).join(", "))
     }
 
     fn visit_jump_addr(_param: &Self, _ip: BcAddr, _consumer: &mut dyn FnMut(BcAddr)) {}

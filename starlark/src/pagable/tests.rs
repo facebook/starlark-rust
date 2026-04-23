@@ -32,6 +32,7 @@ use crate::values::FrozenHeap;
 use crate::values::FrozenHeapRef;
 use crate::values::FrozenValue;
 use crate::values::StarlarkValue;
+use crate::values::ValueLike;
 use crate::values::layout::heap::heap_type::FrozenHeapName;
 
 /// Private test heap name for pagable tests.
@@ -207,9 +208,9 @@ fn test_frozen_value_ref_round_trip() -> crate::Result<()> {
     // The FrozenValue in RefData should point to the restored SimpleData.
     let resolved: &SimpleData = ref_data
         .target
-        .downcast_frozen_ref::<SimpleData>()
-        .expect("FrozenValue should point to SimpleData")
-        .value;
+        .to_value()
+        .downcast_ref::<SimpleData>()
+        .expect("FrozenValue should point to SimpleData");
     assert_eq!(resolved.flag, true);
     assert_eq!(resolved.count, 99);
 
@@ -275,9 +276,9 @@ fn test_frozen_value_drop_to_undrop_round_trip() -> crate::Result<()> {
     // The FrozenValue in DropRefData should point to the restored SimpleData.
     let resolved: &SimpleData = drop_ref_data
         .target
-        .downcast_frozen_ref::<SimpleData>()
-        .expect("FrozenValue should point to SimpleData")
-        .value;
+        .to_value()
+        .downcast_ref::<SimpleData>()
+        .expect("FrozenValue should point to SimpleData");
     assert_eq!(resolved.flag, false);
     assert_eq!(resolved.count, 123);
 
@@ -323,9 +324,9 @@ fn test_frozen_value_undrop_to_drop_round_trip() -> crate::Result<()> {
     // The FrozenValue in RefData should point to the restored HeapData.
     let resolved: &HeapData = ref_data
         .target
-        .downcast_frozen_ref::<HeapData>()
-        .expect("FrozenValue should point to HeapData")
-        .value;
+        .to_value()
+        .downcast_ref::<HeapData>()
+        .expect("FrozenValue should point to HeapData");
     assert_eq!(resolved.items, vec![10, 20]);
     assert_eq!(resolved.label, "target");
     assert_eq!(*resolved.boxed, 42);
@@ -377,16 +378,16 @@ fn test_frozen_list_round_trip() -> crate::Result<()> {
 
     // Verify list elements point to the restored SimpleData values.
     let elem_a: &SimpleData = content[0]
-        .downcast_frozen_ref::<SimpleData>()
-        .expect("element 0 should be SimpleData")
-        .value;
+        .to_value()
+        .downcast_ref::<SimpleData>()
+        .expect("element 0 should be SimpleData");
     assert_eq!(elem_a.flag, true);
     assert_eq!(elem_a.count, 10);
 
     let elem_b: &SimpleData = content[1]
-        .downcast_frozen_ref::<SimpleData>()
-        .expect("element 1 should be SimpleData")
-        .value;
+        .to_value()
+        .downcast_ref::<SimpleData>()
+        .expect("element 1 should be SimpleData");
     assert_eq!(elem_b.flag, false);
     assert_eq!(elem_b.count, 20);
 
@@ -441,16 +442,16 @@ fn test_frozen_tuple_round_trip() -> crate::Result<()> {
 
     // Verify tuple elements point to the restored SimpleData values.
     let elem_a: &SimpleData = content[0]
-        .downcast_frozen_ref::<SimpleData>()
-        .expect("element 0 should be SimpleData")
-        .value;
+        .to_value()
+        .downcast_ref::<SimpleData>()
+        .expect("element 0 should be SimpleData");
     assert_eq!(elem_a.flag, true);
     assert_eq!(elem_a.count, 100);
 
     let elem_b: &SimpleData = content[1]
-        .downcast_frozen_ref::<SimpleData>()
-        .expect("element 1 should be SimpleData")
-        .value;
+        .to_value()
+        .downcast_ref::<SimpleData>()
+        .expect("element 1 should be SimpleData");
     assert_eq!(elem_b.flag, false);
     assert_eq!(elem_b.count, 200);
 
@@ -567,9 +568,9 @@ fn test_cross_heap_frozen_value_round_trip() -> crate::Result<()> {
     // The FrozenValue should resolve to a SimpleData with the dep heap's data.
     let resolved: &SimpleData = ref_data
         .target
-        .downcast_frozen_ref::<SimpleData>()
-        .expect("FrozenValue should point to SimpleData in dep heap")
-        .value;
+        .to_value()
+        .downcast_ref::<SimpleData>()
+        .expect("FrozenValue should point to SimpleData in dep heap");
     assert_eq!(resolved.flag, true);
     assert_eq!(resolved.count, 77);
 
@@ -791,18 +792,16 @@ fn test_small_map_string_key_round_trip() -> crate::Result<()> {
         .entries
         .get("alpha")
         .unwrap()
-        .downcast_frozen_ref::<SimpleData>()
-        .unwrap()
-        .value;
+        .downcast_ref::<SimpleData>()
+        .unwrap();
     assert_eq!(v1_restored.count, 10);
 
     let v2_restored: &SimpleData = map_data
         .entries
         .get("beta")
         .unwrap()
-        .downcast_frozen_ref::<SimpleData>()
-        .unwrap()
-        .value;
+        .downcast_ref::<SimpleData>()
+        .unwrap();
     assert_eq!(v2_restored.count, 20);
 
     Ok(())
@@ -865,13 +864,7 @@ fn test_small_map_frozen_value_key_backward_ref() -> crate::Result<()> {
     let val_labels: Vec<&str> = map_data
         .entries
         .iter()
-        .map(|(_, v)| {
-            v.downcast_frozen_ref::<HeapData>()
-                .unwrap()
-                .value
-                .label
-                .as_str()
-        })
+        .map(|(_, v)| v.downcast_ref::<HeapData>().unwrap().label.as_str())
         .collect();
     assert_eq!(val_labels, vec!["val_one", "val_two"]);
 

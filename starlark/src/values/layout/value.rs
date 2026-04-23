@@ -78,7 +78,6 @@ use crate::typing::TyCallable;
 use crate::util::ArcStr;
 use crate::values::FreezeResult;
 use crate::values::Freezer;
-use crate::values::FrozenRef;
 use crate::values::FrozenStringValue;
 use crate::values::FrozenValueTyped;
 use crate::values::Heap;
@@ -1216,28 +1215,6 @@ impl FrozenValue {
             || matches!(self.unpack_str(), Some(s) if s.len() <= 1)
             // Empty tuple is statically allocated.
             || matches!(Tuple::from_value(self.to_value()), Some(t) if t.len() == 0)
-    }
-
-    /// Downcast to given type.
-    #[inline]
-    pub fn downcast_frozen_ref<T: StarlarkValue<'static>>(self) -> Option<FrozenRef<'static, T>> {
-        self.downcast_ref::<T>().map(|value| FrozenRef { value })
-    }
-
-    /// Downcast to string.
-    #[inline]
-    pub fn downcast_frozen_str(self) -> Option<FrozenRef<'static, str>> {
-        self.to_value()
-            .unpack_str()
-            .map(|value| FrozenRef { value })
-    }
-
-    /// Note: see docs about ['Value::unpack_box_str'] about instability
-    #[inline]
-    pub fn downcast_frozen_starlark_str(self) -> Option<FrozenRef<'static, StarlarkStr>> {
-        self.to_value()
-            .unpack_starlark_str()
-            .map(|value| FrozenRef { value })
     }
 }
 
