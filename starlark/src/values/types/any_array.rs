@@ -28,6 +28,7 @@ use starlark_derive::starlark_value;
 
 use crate as starlark;
 use crate::any::ProvidesStaticType;
+use crate::values::FrozenValueTyped;
 use crate::values::StarlarkValue;
 
 #[derive(derive_more::Display, ProvidesStaticType, NoSerialize, Allocative)]
@@ -47,7 +48,7 @@ impl<T: Debug + 'static> AnyArray<T> {
         AnyArray { len, content: [] }
     }
 
-    fn as_slice(&self) -> &[T] {
+    pub(crate) fn as_slice(&self) -> &[T] {
         unsafe { std::slice::from_raw_parts(self.content.as_ptr(), self.len) }
     }
 
@@ -83,6 +84,15 @@ const _: () = assert!(mem::needs_drop::<AnyArray<String>>());
 impl<'v, T: Debug + 'static> StarlarkValue<'v> for AnyArray<T> {
     type Canonical = Self;
 }
+
+/// A typed reference to a `[T]` slice allocated via [`AnyArray<T>`] on a frozen heap.
+///
+/// Type alias for `FrozenValueTyped<'static, AnyArray<T>>`.
+///
+/// This is the array equivalent of [`FrozenAnyValue<T>`](crate::values::any::FrozenAnyValue).
+/// Access goes through the `FrozenValueTyped` tagged-pointer path, then auto-derefs
+/// through `AnyArray<T>` to reach `[T]`.
+pub type FrozenAnyArray<T> = FrozenValueTyped<'static, AnyArray<T>>;
 
 #[cfg(test)]
 mod tests {

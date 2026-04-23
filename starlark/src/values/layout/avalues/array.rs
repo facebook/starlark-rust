@@ -41,6 +41,7 @@ use crate::values::layout::heap::repr::AValueRepr;
 use crate::values::layout::heap::repr::ForwardPtr;
 use crate::values::types::any::StarlarkAnyBound;
 use crate::values::types::any_array::AnyArray;
+use crate::values::types::any_array::FrozenAnyArray;
 use crate::values::types::array::Array;
 
 fn array_avalue<'v>(
@@ -168,6 +169,25 @@ impl FrozenHeap {
         } else {
             self.do_alloc_any_slice(values)
         }
+    }
+
+    /// Allocate a slice in the frozen heap, returning a [`FrozenAnyArray`].
+    ///
+    /// Unlike [`alloc_any_slice`](Self::alloc_any_slice), this always allocates via
+    /// `AnyArray<T>`, which enables recovering the [`FrozenValue`] for serialization.
+    #[expect(dead_code)]
+    pub(crate) fn alloc_any_array_value<T: Debug + Send + Sync + Clone>(
+        &self,
+        values: &[T],
+    ) -> FrozenAnyArray<T> {
+        // Always allocate via AnyArray, even for empty/single elements.
+        // This ensures the reverse calculation to FrozenValue is valid.
+        // SAFETY: Not.
+        let this: &'static FrozenHeap = unsafe { cast::ptr_lifetime(self) };
+        let (any_array, content) = this.alloc_raw_extra(any_array_avalue(values.len()));
+        let content = unsafe { &mut *content };
+        maybe_uninit_write_slice_cloned(content, values);
+        any_array
     }
 }
 
