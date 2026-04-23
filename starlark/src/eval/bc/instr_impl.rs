@@ -1387,7 +1387,7 @@ pub(crate) struct InstrDefData {
     pub(crate) function_name: String,
     pub(crate) params: ParametersCompiled<u32>,
     pub(crate) return_type: Option<TypeCompiled<FrozenValue>>,
-    pub(crate) info: FrozenRef<'static, DefInfo>,
+    pub(crate) info: FrozenAnyValue<DefInfo>,
 }
 
 impl InstrNoFlowImpl for InstrDefImpl {

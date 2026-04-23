@@ -73,7 +73,6 @@ use crate::stdlib::breakpoint::RealBreakpointConsole;
 use crate::stdlib::extra::PrintHandler;
 use crate::stdlib::extra::StderrPrintHandler;
 use crate::values::FrozenHeap;
-use crate::values::FrozenRef;
 use crate::values::Heap;
 use crate::values::Trace;
 use crate::values::Tracer;
@@ -145,7 +144,7 @@ pub struct Evaluator<'v, 'a, 'e> {
     // `DefInfo` of currently executed module.
     // `DefInfo` of currently execution function can be obtained from call stack.
     // `None` only during `Evaluator` construction, before `eval_module` sets it.
-    pub(crate) module_def_info: Option<FrozenRef<'static, DefInfo>>,
+    pub(crate) module_def_info: Option<FrozenAnyValue<DefInfo>>,
     // Should we enable heap profiling or not
     pub(crate) heap_profile: HeapProfile,
     // Should we enable flame profiling or not
@@ -733,7 +732,7 @@ impl<'v, 'a, 'e: 'a> Evaluator<'v, 'a, 'e> {
         }
     }
 
-    fn func_to_def_info(&self, func: Value<'_>) -> crate::Result<FrozenRef<'_, DefInfo>> {
+    fn func_to_def_info(&self, func: Value<'_>) -> crate::Result<FrozenAnyValue<DefInfo>> {
         if let Some(func) = func.downcast_ref::<Def>() {
             Ok(func.def_info)
         } else if let Some(func) = func.downcast_ref::<FrozenDef>() {
@@ -748,7 +747,7 @@ impl<'v, 'a, 'e: 'a> Evaluator<'v, 'a, 'e> {
         }
     }
 
-    pub(crate) fn top_frame_def_info(&self) -> crate::Result<FrozenRef<'_, DefInfo>> {
+    pub(crate) fn top_frame_def_info(&self) -> crate::Result<FrozenAnyValue<DefInfo>> {
         let func = self.call_stack.top_nth_function(0)?;
         self.func_to_def_info(func)
     }
@@ -779,7 +778,7 @@ impl<'v, 'a, 'e: 'a> Evaluator<'v, 'a, 'e> {
 
     /// Gets the "top frame" for debugging. If the real top frame is `breakpoint` or `debug_evaluate`
     /// it will be skipped. This should only be used for the starlark debugger.
-    pub(crate) fn top_frame_def_info_for_debugger(&self) -> crate::Result<FrozenRef<'_, DefInfo>> {
+    pub(crate) fn top_frame_def_info_for_debugger(&self) -> crate::Result<FrozenAnyValue<DefInfo>> {
         let func = self.top_frame_maybe_for_debugger(true)?;
         self.func_to_def_info(func)
     }

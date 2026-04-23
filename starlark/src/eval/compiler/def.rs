@@ -389,7 +389,7 @@ pub(crate) struct DefCompiled {
     pub(crate) function_name: String,
     pub(crate) params: ParametersCompiled<IrSpanned<ExprCompiled>>,
     pub(crate) return_type: Option<TypeCompiled<FrozenValue>>,
-    pub(crate) info: FrozenRef<'static, DefInfo>,
+    pub(crate) info: FrozenAnyValue<DefInfo>,
 }
 
 impl Compiler<'_, '_, '_, '_> {
@@ -479,7 +479,7 @@ impl Compiler<'_, '_, '_, '_> {
         let param_count = params.count_param_variables();
 
         let used = self.eval.frozen_heap().alloc_any_slice(&scope_names.used);
-        let info = self.eval.module_env.frozen_heap().alloc_any(DefInfo {
+        let info = self.eval.module_env.frozen_heap().alloc_any_value(DefInfo {
             name,
             signature_span,
             parameter_captures: self
@@ -528,7 +528,7 @@ pub(crate) struct DefGen<V> {
     /// Data created during function compilation but before function instantiation.
     /// `DefInfo` can be shared by multiple `def` instances, for example,
     /// `lambda` functions can be instantiated multiple times.
-    pub(crate) def_info: FrozenRef<'static, DefInfo>,
+    pub(crate) def_info: FrozenAnyValue<DefInfo>,
     /// Any variables captured from the outer scope (nested def/lambda).
     /// Values are either [`Value`] or [`FrozenValue`] pointing respectively to
     /// [`ValueCaptured`] or [`FrozenValueCaptured`].
@@ -562,7 +562,7 @@ impl<'v> Def<'v> {
         parameters: ParametersSpec<Value<'v>>,
         parameter_types: Vec<(LocalSlotId, String, TypeCompiled<FrozenValue>)>,
         return_type: Option<TypeCompiled<FrozenValue>>,
-        stmt: FrozenRef<'static, DefInfo>,
+        stmt: FrozenAnyValue<DefInfo>,
         eval: &mut Evaluator<'v, '_, '_>,
     ) -> anyhow::Result<Value<'v>> {
         let captured = stmt

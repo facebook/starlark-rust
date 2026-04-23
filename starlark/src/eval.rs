@@ -111,14 +111,16 @@ impl<'v, 'a, 'e> Evaluator<'v, 'a, 'e> {
 
         self.module_env.slots().ensure_slots(module_slot_count);
         let old_def_info = self.module_def_info.replace(
-            self.module_env.frozen_heap().alloc_any(DefInfo::for_module(
-                codemap,
-                local_names,
-                self.module_env
-                    .frozen_heap()
-                    .alloc_any_slice(&scope_names.parent),
-                globals,
-            )),
+            self.module_env
+                .frozen_heap()
+                .alloc_any_value(DefInfo::for_module(
+                    codemap,
+                    local_names,
+                    self.module_env
+                        .frozen_heap()
+                        .alloc_any_slice(&scope_names.parent),
+                    globals,
+                )),
         );
 
         self.call_stack.alloc_if_needed(
