@@ -161,7 +161,8 @@ impl<T: Debug + Send + Sync + 'static> StarlarkAny<T> {
 /// # Safety
 ///
 /// Implementors must also register the vtable entry for `StarlarkAny<Self>`
-/// using [`register_simple_vtable_entry!`]. Use the [`register_starlark_any!`]
+/// using [`register_simple_vtable_entry!`](macro@crate::register_simple_vtable_entry). Use the
+/// [`register_starlark_any!`](macro@crate::register_starlark_any)
 /// macro instead of implementing this trait manually, as it handles both the trait
 /// implementation and vtable registration.
 pub unsafe trait StarlarkAnyRegistered {}
@@ -215,7 +216,7 @@ macro_rules! static_starlark_any {
         unsafe impl $crate::pagable::static_value::StaticValueRegistered
             for $crate::values::types::any::StarlarkAny<$T> {}
 
-        crate::static_starlark_any!(@no_impl $vis $name : $T = $value);
+        $crate::static_starlark_any!(@no_impl $vis $name : $T = $value);
     };
 
     (@no_impl $vis:vis $name:ident : $T:ty = $value:expr) => {
