@@ -101,9 +101,11 @@ use crate::values::Value;
 use crate::values::ValueLike;
 use crate::values::any::AtomicFrozenAnyValueOption;
 use crate::values::any::FrozenAnyValue;
+use crate::values::dict::DictRef;
 use crate::values::function::FUNCTION_TYPE;
 use crate::values::types::any_array::AnyArray;
 use crate::values::types::any_array::FrozenAnyArray;
+use crate::values::types::tuple::value::Tuple;
 use crate::values::typing::type_compiled::compiled::TypeCompiled;
 
 static_starlark_value!(VALUE_EMPTY_PARAMETER_CAPTURES: AnyArray<LocalSlotId> = AnyArray::empty());
@@ -692,18 +694,37 @@ where
         } else {
             None
         };
+
         for (i, arg_name, ty) in &self.parameter_types {
             match eval.current_frame.get_slot(i.to_captured_or_not()) {
                 None => {
                     panic!("Not allowed optional unassigned with type annotations on them")
                 }
-                Some(v) => ty.check_type(v, Some(arg_name))?,
+                Some(v) => {
+                    if self.parameters.is_args_index(i.0) {
+                        let tuple =
+                            Tuple::from_value(v).expect("*args parameter should be a tuple");
+                        for value in tuple.content() {
+                            ty.check_type(*value, Some(arg_name))?;
+                        }
+                    } else if self.parameters.is_kwargs_index(i.0) {
+                        let dict =
+                            DictRef::from_value(v).expect("**kwargs parameter should be a dict");
+                        for (_, value) in dict.iter() {
+                            ty.check_type(value, Some(arg_name))?;
+                        }
+                    } else {
+                        ty.check_type(v, Some(arg_name))?;
+                    }
+                }
             }
         }
+
         if let Some(start) = start {
             eval.typecheck_profile
                 .add(self.def_info.name, start.elapsed());
         }
+
         Ok(())
     }
 

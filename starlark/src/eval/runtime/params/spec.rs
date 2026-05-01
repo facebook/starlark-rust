@@ -485,6 +485,14 @@ impl<V> ParametersSpec<V> {
         self.indices.args.is_some() || self.indices.kwargs.is_some()
     }
 
+    pub(crate) fn is_args_index(&self, index: u32) -> bool {
+        self.indices.args == Some(index)
+    }
+
+    pub(crate) fn is_kwargs_index(&self, index: u32) -> bool {
+        self.indices.kwargs == Some(index)
+    }
+
     /// Generate documentation for each of the parameters, using a custom formatter for default values.
     pub fn documentation_with_default_value_formatter<F>(
         &self,
