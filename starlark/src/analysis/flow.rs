@@ -15,6 +15,8 @@
  * limitations under the License.
  */
 
+use std::path::Path;
+
 use starlark_syntax::syntax::ast::AstExpr;
 use starlark_syntax::syntax::ast::AstLiteral;
 use starlark_syntax::syntax::ast::AstStmt;
@@ -271,7 +273,18 @@ fn redundant(codemap: &CodeMap, x: &AstStmt, res: &mut Vec<LintT<FlowIssue>>) {
     x.visit_stmt(|x| f(codemap, x, res));
 }
 
+fn is_workspace_file(filename: &str) -> bool {
+    Path::new(filename)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| matches!(name, "WORKSPACE" | "WORKSPACE.bazel"))
+}
+
 fn misplaced_load(codemap: &CodeMap, x: &AstStmt, res: &mut Vec<LintT<FlowIssue>>) {
+    if is_workspace_file(codemap.filename()) {
+        return;
+    }
+
     // accumulate all statements at the top-level
     fn top_statements<'a>(x: &'a AstStmt, stmts: &mut Vec<&'a AstStmt>) {
         match &**x {
@@ -333,8 +346,12 @@ mod tests {
     use super::*;
     use crate::syntax::Dialect;
 
+    fn module_with_name(name: &str, x: &str) -> AstModule {
+        AstModule::parse(name, x.to_owned(), &Dialect::AllOptionsInternal).unwrap()
+    }
+
     fn module(x: &str) -> AstModule {
-        AstModule::parse("X", x.to_owned(), &Dialect::AllOptionsInternal).unwrap()
+        module_with_name("X", x)
     }
 
     impl FlowIssue {
@@ -497,6 +514,38 @@ load("c", "b")
         let mut res = Vec::new();
         misplaced_load(m.codemap(), m.statement(), &mut res);
         assert_eq!(res.len(), 1);
+    }
+
+    #[test]
+    fn test_lint_misplaced_load_workspace() {
+        let m = module_with_name(
+            "WORKSPACE",
+            r#"
+http_archive(
+    name = "x",
+)
+load("//:defs.bzl", "defs")
+"#,
+        );
+        let mut res = Vec::new();
+        misplaced_load(m.codemap(), m.statement(), &mut res);
+        assert!(res.is_empty());
+    }
+
+    #[test]
+    fn test_lint_misplaced_load_workspace_bazel() {
+        let m = module_with_name(
+            "/repo/WORKSPACE.bazel",
+            r#"
+local_repository(
+    name = "x",
+)
+load("//:defs.bzl", "defs")
+"#,
+        );
+        let mut res = Vec::new();
+        misplaced_load(m.codemap(), m.statement(), &mut res);
+        assert!(res.is_empty());
     }
 
     #[test]
