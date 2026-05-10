@@ -37,42 +37,42 @@ starlark_lsp = { version = "0.13", path = "starlark_lsp" }
 starlark_map = { version = "0.13", path = "starlark_map" }
 starlark_syntax = { version = "0.13", path = "starlark_syntax" }
 
-anyhow = "1.0.65"
-ctor = "0.1.26"
+anyhow = "1"
+ctor = "0.1"
 derivative = "2.2"
-derive_more = { version = "1.0.0", features = ["full"] }
+derive_more = { version = "2", features = ["full"] }
 either = "1.8"
-equivalent = "1.0.0"
-erased-serde = "0.3.20"
-indenter = "0.3.3"
-inventory = "0.3.8"
-memchr = "2.4.1"
+equivalent = "1"
+erased-serde = "0.3"
+indenter = "0.3"
+inventory = "0.3"
+memchr = "2"
 num-bigint = { version = "0.4.3", features = ["serde"] }
 proc-macro2 = "1.0"
-quote = "1.0.3"
-ref-cast = "1.0.0"
+quote = "1"
+ref-cast = "1"
 relative-path = { version = "1.7.0", features = ["serde"] }
 syn = "2"
 
 pagable = { path = "pagable" }
 pagable_derive = { path = "pagable_derive" }
 # dependencies of pagable
-async-trait = "0.1.24"
+async-trait = "0.1"
 blake3 = { version = "1.8.2", features = ["default", "rayon", "std", "traits-preview"] }
 bytemuck = { version = "1.24", features = ["const_zeroed", "derive", "min_const_generics", "must_cast", "nightly_stdsimd"] }
-dashmap = "6.1.0"
+dashmap = "6"
 indexmap = { version = "2.12.1", features = ["serde"] }
 once_cell = "1.8"
 parking_lot = { version = "0.12.1", features = ["send_guard"] }
 postcard = { version = "1.0.8", features = ["use-crc", "use-std"] }
-sequence_trie = "0.3.6"
+sequence_trie = "0.3"
 serde = { version = "1.0", features = ["derive", "rc"] }
 serde_json = { version = "1.0.48", features = ["raw_value"] }
 sled = "0.34"
 smallvec = "1.10"
 sorted_vector_map.git = "https://github.com/facebookexperimental/rust-shed"
 sorted_vector_map.version = "0.2"
-static_assertions = "1.1.0"
-take_mut = "0.2.2"
+static_assertions = "1"
+take_mut = "0.2"
 tokio = { version = "1.25.0", features = ["full", "test-util", "tracing"] }
-triomphe = "0.1.11"
+triomphe = "0.1"
