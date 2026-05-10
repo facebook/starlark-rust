@@ -48,7 +48,7 @@ starlark_derive = { version = "0.13.0", path = "../starlark_derive" }
 starlark_map = { version = "0.13.0", path = "../starlark_map", features = ["pagable_dep"] }
 starlark_syntax = { version = "0.13.0", path = "../starlark_syntax" }
 static_assertions = "1"
-strsim = "0.10"
+strsim = "0.11"
 textwrap = "0.16"
 thiserror = "2"
 

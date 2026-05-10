@@ -46,6 +46,9 @@ equivalent = "1"
 erased-serde = "0.3"
 indenter = "0.3"
 inventory = "0.3"
+lalrpop = "0.23"
+lalrpop-util = "0.23"
+lsp-types = "0.94"
 memchr = "2"
 num-bigint = { version = "0.4.3", features = ["serde"] }
 proc-macro2 = "1.0"
@@ -69,7 +72,7 @@ sequence_trie = "0.3"
 serde = { version = "1.0", features = ["derive", "rc"] }
 serde_json = { version = "1.0.48", features = ["raw_value"] }
 sled = "0.34"
-smallvec = "1.10"
+smallvec = { version = "1", features = ["const_generics", "union"] }
 sorted_vector_map.git = "https://github.com/facebookexperimental/rust-shed"
 sorted_vector_map.version = "0.2"
 static_assertions = "1"

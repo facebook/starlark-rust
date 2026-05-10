@@ -18,10 +18,12 @@
 fn lalrpop() {
     let source = "src/syntax/grammar.lalrpop";
     println!("cargo:rerun-if-changed={source}");
+    // lalrpop >=0.21 forbids combining `use_cargo_dir_conventions()` with `process_file()`;
+    // call plain `process()` which honours the cargo conventions itself.
     lalrpop::Configuration::new()
         .use_cargo_dir_conventions()
         .emit_report(true)
-        .process_file(source)
+        .process()
         .unwrap();
 }
 
