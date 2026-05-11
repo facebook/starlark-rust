@@ -563,7 +563,7 @@ pub(crate) struct DefGen<V> {
     optimized_on_freeze_stmt: StmtCompiledCell,
 }
 
-impl<V> Display for DefGen<V> {
+impl<V> std::fmt::Display for DefGen<V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.parameters.signature())
     }

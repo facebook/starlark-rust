@@ -121,7 +121,7 @@ impl TestExpr {
     }
 }
 
-impl Display for TestExpr {
+impl std::fmt::Display for TestExpr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             TestExpr::Const(x) => match x {
