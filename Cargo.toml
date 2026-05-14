@@ -38,7 +38,7 @@ starlark_map = { version = "0.13", path = "starlark_map" }
 starlark_syntax = { version = "0.13", path = "starlark_syntax" }
 
 anyhow = "1.0.65"
-ctor = "0.7.0"
+ctor = "0.8.0"
 derivative = "2.2"
 derive_more = { version = "1.0.0", features = ["full"] }
 either = "1.8"
