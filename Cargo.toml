@@ -54,7 +54,7 @@ ref-cast = "1.0.0"
 relative-path = { version = "1.7.0", features = ["serde"] }
 syn = "2"
 
-pagable = { path = "pagable" }
+pagable = { path = "pagable", features = ["tokio"] }
 pagable_derive = { path = "pagable_derive" }
 # dependencies of pagable
 async-trait = "0.1.24"
@@ -74,6 +74,7 @@ smallvec = "1.10"
 sorted_vector_map.git = "https://github.com/facebookexperimental/rust-shed"
 sorted_vector_map.version = "0.2"
 static_assertions = "1.1.0"
+static_interner = "0.1.2"
 take_mut = "0.2.2"
 tokio = { version = "1.25.0", features = ["full", "test-util", "tracing"] }
 triomphe = "0.1.11"
