@@ -57,6 +57,7 @@ pub struct Dialect {
     pub enable_load_reexport: bool,
     /// Are `load` statements allowed after other top-level statements.
     /// Disabled by default.
+    /// Currently only respected by lints.
     pub enable_load_after_statement: bool,
     /// Are `for`, `if` and other statements allowed at the top level.
     /// Disabled by default.
