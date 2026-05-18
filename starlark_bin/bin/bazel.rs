@@ -176,7 +176,23 @@ pub(crate) struct BazelContext<'v> {
 impl<'v> BazelContext<'v> {
     const DEFAULT_WORKSPACE_NAME: &'static str = "__main__";
     const BUILD_FILE_NAMES: [&'static str; 2] = ["BUILD", "BUILD.bazel"];
+    const WORKSPACE_FILE_NAMES: [&'static str; 2] = ["WORKSPACE", "WORKSPACE.bazel"];
     const LOADABLE_EXTENSIONS: [&'static str; 1] = ["bzl"];
+
+    fn is_workspace_file(filename: &str) -> bool {
+        Path::new(filename)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| Self::WORKSPACE_FILE_NAMES.contains(&name))
+    }
+
+    fn dialect_for_file(&self, filename: &str) -> Dialect {
+        let mut dialect = self.dialect.clone();
+        if Self::is_workspace_file(filename) {
+            dialect.enable_load_after_statement = true;
+        }
+        dialect
+    }
 
     pub(crate) fn new(
         mode: ContextMode,
@@ -372,7 +388,7 @@ impl<'v> BazelContext<'v> {
     ) -> EvalResult<impl Iterator<Item = EvalMessage> + use<>> {
         Self::err(
             filename,
-            AstModule::parse(filename, content, &self.dialect)
+            AstModule::parse(filename, content, &self.dialect_for_file(filename))
                 .map(|module| self.go(filename, module))
                 .map_err(Into::into),
         )
@@ -626,6 +642,66 @@ impl<'v> BazelContext<'v> {
                 .filter_map(|line| line.strip_prefix(module).map(|str| str.to_owned()))
                 .collect(),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use starlark::analysis::AstModuleLint;
+    use starlark::syntax::AstModule;
+    use starlark::syntax::Dialect;
+
+    use super::BazelContext;
+
+    #[test]
+    fn test_dialect_for_workspace_file_allows_load_after_statement() {
+        let context = BazelContext {
+            workspace_name: None,
+            external_output_base: None,
+            mode: crate::eval::ContextMode::Check,
+            print_non_none: false,
+            prelude: Vec::new(),
+            module: None,
+            dialect: Dialect::Standard,
+            globals: starlark::environment::Globals::standard(),
+            builtin_docs: Default::default(),
+            builtin_symbols: Default::default(),
+        };
+
+        assert!(
+            context
+                .dialect_for_file("/repo/WORKSPACE")
+                .enable_load_after_statement
+        );
+        assert!(
+            context
+                .dialect_for_file("/repo/WORKSPACE.bazel")
+                .enable_load_after_statement
+        );
+        assert!(
+            !context
+                .dialect_for_file("/repo/BUILD.bazel")
+                .enable_load_after_statement
+        );
+
+        let module = AstModule::parse(
+            "/repo/WORKSPACE",
+            r#"
+local_repository(
+    name = "x",
+)
+load("//:defs.bzl", "defs")
+"#
+            .to_owned(),
+            &context.dialect_for_file("/repo/WORKSPACE"),
+        )
+        .unwrap();
+        assert!(
+            module
+                .lint(None)
+                .into_iter()
+                .all(|lint| lint.short_name != "misplaced-load")
+        );
     }
 }
 

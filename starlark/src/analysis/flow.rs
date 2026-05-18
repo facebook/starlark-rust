@@ -321,7 +321,9 @@ pub(crate) fn lint(module: &AstModule) -> Vec<LintT<FlowIssue>> {
     stmt(module.codemap(), module.statement(), &mut res);
     reachable(module.codemap(), module.statement(), &mut res);
     redundant(module.codemap(), module.statement(), &mut res);
-    misplaced_load(module.codemap(), module.statement(), &mut res);
+    if !module.dialect().enable_load_after_statement {
+        misplaced_load(module.codemap(), module.statement(), &mut res);
+    }
     no_effect(module.codemap(), module.statement(), &mut res);
     res
 }
@@ -333,8 +335,16 @@ mod tests {
     use super::*;
     use crate::syntax::Dialect;
 
+    fn module_with_dialect(name: &str, x: &str, dialect: &Dialect) -> AstModule {
+        AstModule::parse(name, x.to_owned(), dialect).unwrap()
+    }
+
+    fn module_with_name(name: &str, x: &str) -> AstModule {
+        module_with_dialect(name, x, &Dialect::AllOptionsInternal)
+    }
+
     fn module(x: &str) -> AstModule {
-        AstModule::parse("X", x.to_owned(), &Dialect::AllOptionsInternal).unwrap()
+        module_with_name("X", x)
     }
 
     impl FlowIssue {
@@ -497,6 +507,29 @@ load("c", "b")
         let mut res = Vec::new();
         misplaced_load(m.codemap(), m.statement(), &mut res);
         assert_eq!(res.len(), 1);
+    }
+
+    #[test]
+    fn test_lint_misplaced_load_allowed_by_dialect() {
+        let dialect = Dialect {
+            enable_load_after_statement: true,
+            ..Dialect::AllOptionsInternal
+        };
+        let m = module_with_dialect(
+            "X",
+            r#"
+local_repository(
+    name = "x",
+)
+load("//:defs.bzl", "defs")
+"#,
+            &dialect,
+        );
+        assert!(
+            lint(&m)
+                .into_iter()
+                .all(|lint| !matches!(lint.problem, FlowIssue::MisplacedLoad))
+        );
     }
 
     #[test]
