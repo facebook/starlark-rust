@@ -16,12 +16,13 @@
  */
 
 use allocative::Allocative;
+use pagable::Pagable;
 
 use crate::typing::Ty;
 use crate::values::types::type_instance_id::TypeInstanceId;
 
 #[doc(hidden)]
-#[derive(Allocative, Ord, PartialOrd, Debug)]
+#[derive(Allocative, Ord, PartialOrd, Debug, Pagable)]
 pub struct TyEnumData {
     /// Name of the enum type.
     pub(crate) name: String,

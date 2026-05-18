@@ -9,13 +9,14 @@
  */
 
 use std::any::TypeId;
-use std::sync::Mutex;
+use std::collections::HashMap;
 
 use either::Either;
 
 use crate::arc_erase::ArcEraseDyn;
 use crate::storage::data::DataKey;
 use crate::storage::data::PagableData;
+use crate::storage::support::SerializerForPaging;
 use crate::traits::SessionContext;
 
 /// Trait for storage backends that can persist and retrieve paged-out data.
@@ -67,7 +68,94 @@ pub trait PagableStorage: Send + Sync + 'static {
 
     /// Access the session context for storing/retrieving layer-specific state
     /// during serialization and deserialization.
-    fn session_context(&self) -> &Mutex<SessionContext>;
+    fn session_context(&self) -> &SessionContext;
+
+    /// Stores a single content-addressable [`PagableData`] blob and returns its
+    /// [`DataKey`]. The key is derived from the data via
+    /// `PagableData::compute_key`; if the same data is stored twice the second
+    /// write is expected to be idempotent (or skipped).
+    fn store_data(&self, data: PagableData) -> anyhow::Result<DataKey>;
+
+    /// Stores a previously-serialized item (and its transitively reachable arcs)
+    /// to storage and returns its content-addressable [`DataKey`].
+    ///
+    /// The caller is responsible for the initial serialization: lock
+    /// `session_context()`, build a [`SerializerForPaging`], serialize the value,
+    /// `.finish()` to obtain `(item_data, item_arcs)`, then pass them in here
+    /// along with the still-locked `&mut SessionContext` (this method uses it to
+    /// recursively serialize nested arcs).
+    ///
+    /// `finished` is a cache of arc identity → `DataKey` that the caller may share
+    /// across multiple `page_out_item` invocations to avoid re-serializing arcs
+    /// that were already paged out earlier in the same batch.
+    fn page_out_item(
+        &self,
+        item_data: Vec<u8>,
+        item_arcs: Vec<Box<dyn ArcEraseDyn>>,
+        finished: &mut HashMap<usize, DataKey>,
+        session_context: &SessionContext,
+    ) -> anyhow::Result<DataKey> {
+        enum Task {
+            Start(Box<dyn ArcEraseDyn>),
+            Finish((Box<dyn ArcEraseDyn>, Vec<u8>, Vec<Box<dyn ArcEraseDyn>>)),
+        }
+
+        let mut tasks: Vec<Task> = item_arcs
+            .iter()
+            .map(|arc| Task::Start(arc.clone_dyn()))
+            .collect();
+
+        while let Some(task) = tasks.pop() {
+            match task {
+                Task::Start(v) => {
+                    if finished.contains_key(&v.identity()) {
+                        continue;
+                    }
+
+                    let mut serializer = SerializerForPaging::new(session_context);
+                    v.serialize(&mut serializer)?;
+                    let (data, arcs) = serializer.finish();
+
+                    let subtasks: Vec<_> = arcs
+                        .iter()
+                        .filter(|arc| !finished.contains_key(&arc.identity()))
+                        .map(|arc| Task::Start(arc.clone_dyn()))
+                        .collect();
+
+                    tasks.push(Task::Finish((v, data, arcs)));
+                    tasks.extend(subtasks);
+                }
+                Task::Finish((arc, data, serialized_arcs)) => {
+                    let arcs: Vec<DataKey> = serialized_arcs
+                        .iter()
+                        .map(|arc| {
+                            *finished
+                                .get(&arc.identity())
+                                .expect("nested arc should have been serialized first")
+                        })
+                        .collect();
+
+                    let key = self.store_data(PagableData { data, arcs })?;
+                    finished.insert(arc.identity(), key);
+                    arc.set_data_key(key);
+                }
+            }
+        }
+
+        let arcs: Vec<DataKey> = item_arcs
+            .iter()
+            .map(|arc| {
+                *finished
+                    .get(&arc.identity())
+                    .expect("nested arc should have been serialized first")
+            })
+            .collect();
+
+        self.store_data(PagableData {
+            data: item_data,
+            arcs,
+        })
+    }
 }
 
 static_assertions::assert_obj_safe!(PagableStorage);

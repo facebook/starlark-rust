@@ -22,8 +22,67 @@ use crate::slice_vec_ext::SliceExt;
 use crate::syntax::AstModule;
 use crate::syntax::Dialect;
 use crate::syntax::DialectTypes;
+use crate::syntax::ParserKind;
 use crate::syntax::ast::Expr;
 use crate::syntax::ast::Stmt;
+
+fn parse_with_kind(program: &str, dialect: &Dialect, kind: ParserKind) -> crate::Result<AstModule> {
+    AstModule::parse_with("assert.bzl", program.to_owned(), dialect, kind)
+}
+
+fn assert_both_parse_same_with_dialect(program: &str, dialect: &Dialect) -> AstModule {
+    let lalrpop = parse_with_kind(program, dialect, ParserKind::Lalrpop);
+    let rd = parse_with_kind(program, dialect, ParserKind::Rd);
+    match (lalrpop, rd) {
+        (Ok(lalrpop), Ok(rd)) => {
+            assert_eq!(
+                lalrpop.statement.to_string(),
+                rd.statement.to_string(),
+                "AST mismatch between LALRPOP and RD for:\n{program}",
+            );
+            lalrpop
+        }
+        (Ok(_), Err(err)) => {
+            panic!("RD parser rejected a program accepted by LALRPOP:\n{program}\nRD error: {err}")
+        }
+        (Err(err), Ok(ast)) => {
+            let rd_ast = ast.statement.to_string();
+            panic!(
+                "LALRPOP rejected a program accepted by RD:\n{program}\nRD AST: {rd_ast}\nLALRPOP error: {err}"
+            );
+        }
+        (Err(lalrpop_err), Err(rd_err)) => panic!(
+            "Expected parse success, but both parsers failed for:\n{program}\nLALRPOP error: {lalrpop_err}\nRD error: {rd_err}"
+        ),
+    }
+}
+
+fn assert_both_fail_with_dialect(program: &str, dialect: &Dialect) {
+    let lalrpop = parse_with_kind(program, dialect, ParserKind::Lalrpop);
+    let rd = parse_with_kind(program, dialect, ParserKind::Rd);
+    match (lalrpop, rd) {
+        (Err(_), Err(_)) => {}
+        (Ok(ast), Err(err)) => {
+            let lalrpop_ast = ast.statement.to_string();
+            panic!(
+                "LALRPOP accepted a program rejected by RD:\n{program}\nLALRPOP AST: {lalrpop_ast}\nRD error: {err}"
+            );
+        }
+        (Err(err), Ok(ast)) => {
+            let rd_ast = ast.statement.to_string();
+            panic!(
+                "RD accepted a program rejected by LALRPOP:\n{program}\nRD AST: {rd_ast}\nLALRPOP error: {err}"
+            );
+        }
+        (Ok(lalrpop_ast), Ok(rd_ast)) => {
+            let lalrpop_ast = lalrpop_ast.statement.to_string();
+            let rd_ast = rd_ast.statement.to_string();
+            panic!(
+                "Expected parse failure, but both parsers accepted:\n{program}\nLALRPOP AST: {lalrpop_ast}\nRD AST: {rd_ast}"
+            );
+        }
+    }
+}
 
 fn parse_fails_with_dialect(name: &str, dialect: &Dialect, programs: &[&str]) {
     let mut out = String::new();
@@ -33,13 +92,16 @@ fn parse_fails_with_dialect(name: &str, dialect: &Dialect, programs: &[&str]) {
             writeln!(out).unwrap();
         }
 
+        assert_both_fail_with_dialect(program, dialect);
+
         let program = program.trim();
 
         writeln!(out, "Program:").unwrap();
         writeln!(out, "{program}").unwrap();
         writeln!(out).unwrap();
 
-        let err = AstModule::parse(name, program.to_owned(), dialect).unwrap_err();
+        let err =
+            AstModule::parse_with(name, program.to_owned(), dialect, ParserKind::Rd).unwrap_err();
         writeln!(out, "Error:").unwrap();
         writeln!(out, "{err}").unwrap();
     }
@@ -59,34 +121,43 @@ fn parse_fails(name: &str, programs: &[&str]) {
     parse_fails_with_dialect(name, &Dialect::AllOptionsInternal, programs);
 }
 
-fn parse_err(program: &str) -> crate::Error {
-    AstModule::parse(
-        "assert.bzl",
-        program.to_owned(),
-        &Dialect::AllOptionsInternal,
-    )
-    .unwrap_err()
+fn parse_err_with_kind(program: &str, kind: ParserKind) -> crate::Error {
+    parse_with_kind(program, &Dialect::AllOptionsInternal, kind).unwrap_err()
+}
+
+fn assert_parse_fails_program(program: &str) {
+    assert_both_fail_with_dialect(program, &Dialect::AllOptionsInternal);
+}
+
+fn assert_parse_fails_programs(programs: &[&str]) {
+    for program in programs {
+        assert_parse_fails_program(program);
+    }
 }
 
 fn assert_parse_error_span_source(program: &str, expected_source: &str) {
-    let err = parse_err(program);
-    let span = err
-        .span()
-        .unwrap_or_else(|| panic!("Expected parse error with span for:\n{program}\nError: {err}"));
-    assert_eq!(
-        span.source_span(),
-        expected_source,
-        "Expected parse error to point at `{expected_source}` for:\n{program}\nError: {err}",
-    );
+    for kind in [ParserKind::Lalrpop, ParserKind::Rd] {
+        let err = parse_err_with_kind(program, kind);
+        let span = err.span().unwrap_or_else(|| {
+            panic!("Expected parse error with span for:\n{program}\nError: {err}")
+        });
+        assert_eq!(
+            span.source_span(),
+            expected_source,
+            "Expected {kind:?} parse error to point at `{expected_source}` for:\n{program}\nError: {err}",
+        );
+    }
 }
 
 fn assert_parse_error_contains(program: &str, expected: &str) {
-    let err = parse_err(program);
-    let err_text = err.to_string();
-    assert!(
-        err_text.contains(expected),
-        "Expected parse error containing `{expected}` for:\n{program}\nActual error:\n{err_text}",
-    );
+    for kind in [ParserKind::Lalrpop, ParserKind::Rd] {
+        let err = parse_err_with_kind(program, kind);
+        let err_text = err.to_string();
+        assert!(
+            err_text.contains(expected),
+            "Expected {kind:?} parse error containing `{expected}` for:\n{program}\nActual error:\n{err_text}",
+        );
+    }
 }
 
 fn assert_assignment_rhs_is_slice(
@@ -455,10 +526,31 @@ fn test_error_unexpected_token() {
         "error_unexpected_token",
         &[
             "x = = 1",
+            "_ = *x",
             "def foo(,):\n  pass",
+            "f(a=1, *, b=2)",
             "x = [1, , 2]",
+            "_ = a + b not c",
+            "f(1+2 = 3)",
             "x = {,}",
+            "print 1 2",
+            "x[1, 2,:]",
+            "a = max(range(10)))",
             "def foo(x,,y):\n  pass",
+        ],
+    );
+}
+
+#[test]
+fn test_error_unexpected_eof() {
+    parse_fails(
+        "error_unexpected_eof",
+        &[
+            "def f():",
+            "if True:",
+            "if True:\n  pass\nelse:",
+            "if True:\n  pass\nelif x:",
+            "for x in xs:",
         ],
     );
 }
@@ -477,7 +569,15 @@ fn test_error_missing_colon() {
 
 #[test]
 fn test_error_missing_expression() {
-    parse_fails("error_missing_expression", &["x =", "x +=", "return\n1 +"]);
+    parse_fails(
+        "error_missing_expression",
+        &["x =", "x +=", "x = 1 +\n2", "return\n1 +"],
+    );
+}
+
+#[test]
+fn test_assignment_regressions_are_rejected() {
+    assert_parse_fails_programs(&["x, y\n", "x,\n", "x: int y\n", "x: int\n", "x: int += 1\n"]);
 }
 
 #[test]
@@ -486,7 +586,12 @@ fn test_error_bad_def() {
         "error_bad_def",
         &[
             "def :\n  pass",
+            "def pass():\n  pass",
+            "def load():\n  pass",
+            "def f(load):\n  pass",
+            "def f :\n  pass",
             "def foo(x y):\n  pass",
+            "def f(a, *-b, c):\n  pass",
             "def foo(**x, y):\n  pass",
         ],
     );
@@ -496,7 +601,15 @@ fn test_error_bad_def() {
 fn test_error_bad_load() {
     parse_fails(
         "error_bad_load",
-        &["load()", "load(123)", "load(\"foo.bzl\")"],
+        &[
+            "load()",
+            "load(123)",
+            "load(\"foo.bzl\")",
+            "load(\"\", 1)",
+            "load(1, 2)",
+            "load(\"a\", x)",
+            "load(\"a\", x2=x)",
+        ],
     );
 }
 
@@ -509,8 +622,33 @@ fn test_error_bad_for() {
 fn test_error_chained_comparison() {
     parse_fails(
         "error_chained_comparison",
-        &["0 <= 1 < 2", "a == b != c", "a < b > c", "a in b in c"],
+        &[
+            "0 <= 1 < 2",
+            "0 == 1 == 2",
+            "a == b != c",
+            "a < b > c",
+            "a in b in c",
+            "a in b not in c",
+        ],
     );
+}
+
+/// Specific to the recursive-descent parser: `not` only appears at infix
+/// position as part of `not in`. Captures the focused error message
+/// (LALRPOP would print a generic "expected one of ..." token list here).
+#[test]
+fn test_error_rd_not_without_in() {
+    let name = "error_rd_not_without_in";
+    let program = "_ = a not b";
+    let err = AstModule::parse_with(
+        name,
+        program.to_owned(),
+        &Dialect::AllOptionsInternal,
+        ParserKind::Rd,
+    )
+    .unwrap_err();
+    let out = format!("Program:\n{program}\n\nError:\n{err}\n");
+    golden_test_template(&format!("src/syntax/grammar_tests/{name}.golden"), &out);
 }
 
 #[test]
@@ -533,8 +671,86 @@ fn test_error_indentation() {
 fn test_error_reserved_keyword() {
     parse_fails(
         "error_reserved_keyword",
-        &["class Foo:\n  pass", "import os", "raise ValueError"],
+        &[
+            "class Foo:\n  pass",
+            "import os",
+            "raise ValueError",
+            "load = 1",
+            "f(load())",
+        ],
     );
+}
+
+#[test]
+fn test_error_bad_comprehension() {
+    parse_fails(
+        "error_bad_comprehension",
+        &[
+            "_ = {x for y in z}",
+            "_ = [x for x in 1, 2, 3]",
+            "_ = [a for b in c if 1, 2]",
+            "_ = [a for b in lambda: c]",
+            "_ = [x for x in a if b else c]",
+            "[a for b in c else d]",
+        ],
+    );
+}
+
+#[test]
+fn test_error_missing_else() {
+    parse_fails("error_missing_else", &["_ = a if b"]);
+}
+
+#[test]
+fn test_error_string_escape() {
+    parse_fails("error_string_escape", &["raw = r'a\nb'", "s = \"\\x-0\""]);
+}
+
+#[test]
+fn test_error_call_arguments() {
+    parse_fails(
+        "error_call_arguments",
+        &[
+            "f(x = 1, 2)",
+            "f(x = 1, y = 2, 3)",
+            "f(x = 1, x = 2)",
+            "f(x = 1, x = 2, 3)",
+            "f(*args, x = 1)",
+            "f(*args, *more_args)",
+            "f(**kwargs, **more_kwargs)",
+        ],
+    );
+}
+
+#[test]
+fn test_error_precedence() {
+    parse_fails(
+        "error_precedence",
+        &[
+            "f(x = 1, 2",
+            "def f(**x, y",
+            "return 1\n)",
+            "def f():\n  load(\"m.bzl\", \"x\")\n)",
+        ],
+    );
+}
+
+#[test]
+fn test_error_statement_placement() {
+    parse_fails(
+        "error_statement_placement",
+        &[
+            "return 1",
+            "break",
+            "continue",
+            "def f():\n  load(\"m.bzl\", \"x\")",
+        ],
+    );
+}
+
+#[test]
+fn test_error_integer_literal() {
+    parse_fails("error_integer_literal", &["x = 01", "x = 0123"]);
 }
 
 #[test]
@@ -607,6 +823,21 @@ fn test_if_elif_span_covers_full_chain() {
         "if True:\n  a\nelif False:\n  b\nelse:\n  c",
     );
 }
+
+#[test]
+fn test_error_tuple_trailing_comma() {
+    parse_fails(
+        "error_tuple_trailing_comma",
+        &[
+            "_ = 1,",
+            "for k, v, in dict.items():\n  pass",
+            "_ = [(v, k) for k, v, in dict.items()]",
+            "a, b, = 1, 2",
+            "a, b = 1, 2,",
+        ],
+    );
+}
+
 pub fn parse(program: &str) -> String {
     parse_ast(program).statement.to_string()
 }
@@ -622,12 +853,5 @@ fn parse_with_dialect(program: &str, dialect: &Dialect) -> String {
 }
 
 fn parse_ast_with_dialect(program: &str, dialect: &Dialect) -> AstModule {
-    match AstModule::parse("assert.bzl", program.to_owned(), dialect) {
-        Ok(x) => x,
-        Err(e) => {
-            panic!(
-                "starlark::assert::parse_ast, expected parse success but failed\nCode: {program}\nError: {e}"
-            );
-        }
-    }
+    assert_both_parse_same_with_dialect(program, dialect)
 }

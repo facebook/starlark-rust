@@ -45,6 +45,7 @@ use crate::values::Freezer;
 use crate::values::FrozenValue;
 use crate::values::Heap;
 use crate::values::ProvidesStaticType;
+use crate::values::StarlarkPagable;
 use crate::values::StarlarkValue;
 use crate::values::Trace;
 use crate::values::UnpackValue;
@@ -56,7 +57,15 @@ use crate::values::starlark_value;
 use crate::values::type_repr::SetType;
 use crate::values::type_repr::StarlarkTypeRepr;
 
-#[derive(Clone, Default, Trace, Debug, ProvidesStaticType, Allocative)]
+#[derive(
+    Clone,
+    Default,
+    Trace,
+    Debug,
+    ProvidesStaticType,
+    Allocative,
+    StarlarkPagable
+)]
 #[repr(transparent)]
 pub(crate) struct SetGen<T>(pub(crate) T);
 
@@ -103,11 +112,29 @@ impl<'v> SetData<'v> {
     }
 }
 
-#[derive(Clone, Default, Debug, ProvidesStaticType, Allocative)]
+#[derive(Clone, Default, Debug, ProvidesStaticType, Allocative, StarlarkPagable)]
 #[repr(transparent)]
 pub(crate) struct FrozenSetData {
     /// The data stored by the set. The values must all be hashable values.
     content: SmallSet<FrozenValue>,
+}
+
+#[cfg(all(test, feature = "pagable"))]
+impl FrozenSetData {
+    /// Construct a `FrozenSetData` from a pre-built set of frozen values.
+    pub(crate) fn new(content: SmallSet<FrozenValue>) -> Self {
+        Self { content }
+    }
+
+    /// Number of elements in the set.
+    pub(crate) fn len(&self) -> usize {
+        self.content.len()
+    }
+
+    /// Iterate over the frozen values in the set.
+    pub(crate) fn iter(&self) -> impl ExactSizeIterator<Item = FrozenValue> + '_ {
+        self.content.iter().copied()
+    }
 }
 
 pub(crate) type MutableSet<'v> = SetGen<RefCell<SetData<'v>>>;
@@ -206,7 +233,7 @@ impl<'v> SetLike<'v> for FrozenSetData {
 // Register vtable for FrozenSet (special type not handled by #[starlark_value] macro, because V is not ValueLike).
 register_avalue_simple_frozen!(FrozenSet);
 
-#[starlark_value(type = "set")]
+#[starlark_value(type = "set", skip_pagable)]
 impl<'v, T: SetLike<'v> + 'v> StarlarkValue<'v> for SetGen<T>
 where
     Self: ProvidesStaticType<'v>,

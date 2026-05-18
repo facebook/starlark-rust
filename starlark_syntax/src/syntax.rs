@@ -17,13 +17,15 @@
 
 //! The AST of Starlark as [`AstModule`], along with a [`parse`](AstModule::parse) function.
 
+pub use ast_load::AstLoad;
 pub use module::AstModule;
-pub use parser::AstLoad;
+pub use module::ParserKind;
 
 pub use crate::dialect::Dialect;
 pub use crate::dialect::DialectTypes;
 
 pub mod ast;
+pub mod ast_load;
 pub mod call;
 pub mod def;
 #[cfg(test)]
@@ -31,7 +33,6 @@ mod grammar_tests;
 pub mod grammar_util;
 mod lint_suppressions;
 pub mod module;
-pub mod parser;
 pub mod payload_map;
 pub(crate) mod state;
 #[cfg(test)]
@@ -40,6 +41,11 @@ pub mod top_level_stmts;
 pub mod type_expr;
 pub mod uniplate;
 pub mod validate;
+
+pub(crate) mod parse_error;
+pub(crate) mod parser;
+pub(crate) mod parser_lalrpop;
+pub(crate) mod parser_rd;
 
 #[allow(clippy::all)]
 // Things we explicitly turn on need to be explicitly turned off

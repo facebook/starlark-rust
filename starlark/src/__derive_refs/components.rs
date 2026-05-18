@@ -43,7 +43,7 @@ impl NativeCallableComponents {
         fn doc_param(p: &NativeCallableParam) -> DocParam {
             let NativeCallableParam { name, ty, required } = p;
             DocParam {
-                name: (*name).to_owned(),
+                name: name.as_str().to_owned(),
                 docs: None,
                 typ: ty.dupe(),
                 default_value: match required {

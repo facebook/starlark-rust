@@ -16,6 +16,7 @@
  */
 
 use dupe::Dupe;
+use pagable::StaticStr;
 
 use crate::typing::ParamSpec;
 use crate::typing::Ty;
@@ -32,7 +33,7 @@ pub enum NativeCallableParamDefaultValue {
 }
 
 pub struct NativeCallableParam {
-    pub name: &'static str,
+    pub name: StaticStr,
     /// Type of the parameter.
     /// For `*args` is the type of the element, and for `**kwargs` is the type of the value.
     pub ty: Ty,
@@ -41,7 +42,7 @@ pub struct NativeCallableParam {
 }
 
 impl NativeCallableParam {
-    pub fn args(name: &'static str, param_ty: Ty) -> NativeCallableParam {
+    pub fn args(name: StaticStr, param_ty: Ty) -> NativeCallableParam {
         NativeCallableParam {
             name,
             ty: unpack_args_item_ty(param_ty),
@@ -49,7 +50,7 @@ impl NativeCallableParam {
         }
     }
 
-    pub fn kwargs(name: &'static str, param_ty: Ty) -> NativeCallableParam {
+    pub fn kwargs(name: StaticStr, param_ty: Ty) -> NativeCallableParam {
         NativeCallableParam {
             name,
             ty: unpack_kwargs_value_ty(param_ty),
@@ -73,15 +74,18 @@ pub struct NativeCallableParamSpec {
     pub kwargs: Option<NativeCallableParam>,
 }
 
+pagable::static_str!(ARGS_NAME = "args");
+pagable::static_str!(KWARGS_NAME = "kwargs");
+
 impl NativeCallableParamSpec {
     /// For a function accepting raw `&Arguments`.
     pub fn for_arguments() -> NativeCallableParamSpec {
         NativeCallableParamSpec {
             pos_only: Vec::new(),
             pos_or_named: Vec::new(),
-            args: Some(NativeCallableParam::args("args", Ty::any())),
+            args: Some(NativeCallableParam::args(ARGS_NAME, Ty::any())),
             named_only: Vec::new(),
-            kwargs: Some(NativeCallableParam::kwargs("kwargs", Ty::any())),
+            kwargs: Some(NativeCallableParam::kwargs(KWARGS_NAME, Ty::any())),
         }
     }
 

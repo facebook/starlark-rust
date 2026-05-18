@@ -24,8 +24,10 @@ use std::collections::HashMap;
 use std::hash::Hasher;
 use std::sync::LazyLock;
 
+use pagable::Pagable;
+
 use super::registry::StaticValueEntry;
-use super::static_string::STATIC_STRING_ADDR_TO_ID;
+use super::static_string::STATIC_STRING_MAPS;
 use crate::values::FrozenValue;
 
 /// A unique identifier for a statically-allocated Starlark value.
@@ -33,7 +35,7 @@ use crate::values::FrozenValue;
 /// This is a hash-based ID computed from deterministic keys
 /// (e.g., synthetic keys for short strings, or `(file, line)` for
 /// inventory-registered values).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Pagable)]
 pub(crate) struct StaticValueId(u64);
 
 impl StaticValueId {
@@ -69,26 +71,47 @@ pub(crate) fn hash_file_line(file: &str, line: u32) -> StaticValueId {
     StaticValueId::new(hasher.finish())
 }
 
-/// Static map from inventory-registered static value addresses to their IDs.
+/// Bidirectional lookup maps for static values.
 ///
-/// This map is lazily initialized at runtime from inventory-registered entries.
-/// It contains mappings for values registered via `const_frozen_string!`,
-/// `static_starlark_value!`, or manual `inventory::submit!`.
-static INVENTORY_ADDR_TO_ID: LazyLock<HashMap<usize, StaticValueId>> = LazyLock::new(|| {
-    inventory::iter::<StaticValueEntry>()
-        .map(|e| {
-            let addr = (e.get_value)().ptr_value().ptr_value_untagged();
-            let id = hash_file_line(e.file, e.line);
-            (addr, id)
-        })
-        .collect()
+/// Built once from both static strings and inventory-registered entries.
+/// The two maps are inverses of each other:
+/// - `addr_to_id`: pointer address → `StaticValueId` (for serialization)
+/// - `id_to_value`: `StaticValueId` → `FrozenValue` (for deserialization)
+struct StaticValueMaps {
+    addr_to_id: HashMap<usize, StaticValueId>,
+    id_to_value: HashMap<StaticValueId, FrozenValue>,
+}
+
+static STATIC_VALUE_MAPS: LazyLock<StaticValueMaps> = LazyLock::new(|| {
+    let string_maps = &*STATIC_STRING_MAPS;
+    let mut addr_to_id = string_maps.addr_to_id.clone();
+    let mut id_to_value = string_maps.id_to_value.clone();
+
+    for e in inventory::iter::<StaticValueEntry>() {
+        let fv = (e.get_value)();
+        let id = hash_file_line(e.file, e.line);
+        let addr = fv.ptr_value().ptr_value_untagged();
+        addr_to_id.insert(addr, id);
+        id_to_value.insert(id, fv);
+    }
+
+    StaticValueMaps {
+        addr_to_id,
+        id_to_value,
+    }
 });
+
+/// Look up a `FrozenValue` by its `StaticValueId`.
+///
+/// Used during deserialization to resolve static value references.
+pub(crate) fn get_frozen_value_by_static_id(id: StaticValueId) -> Option<FrozenValue> {
+    STATIC_VALUE_MAPS.id_to_value.get(&id).copied()
+}
 
 /// Check if a FrozenValue points to a static value.
 ///
 /// Returns `Some(StaticValueId)` if the value is a registered static value,
 /// `None` otherwise.
-#[allow(dead_code)]
 pub(crate) fn get_static_value_id(fv: FrozenValue) -> Option<StaticValueId> {
     // Only check for pointer values, not inline integers
     if fv.ptr_value().is_int() {
@@ -96,18 +119,7 @@ pub(crate) fn get_static_value_id(fv: FrozenValue) -> Option<StaticValueId> {
     }
 
     let addr = fv.ptr_value().ptr_value_untagged();
-
-    // Check static strings (empty string and single ASCII characters)
-    if let Some(id) = STATIC_STRING_ADDR_TO_ID.get(&addr) {
-        return Some(*id);
-    }
-
-    // Check inventory-registered values (const_frozen_string!, static_starlark_value!, etc.)
-    if let Some(id) = INVENTORY_ADDR_TO_ID.get(&addr) {
-        return Some(*id);
-    }
-
-    None
+    STATIC_VALUE_MAPS.addr_to_id.get(&addr).copied()
 }
 
 #[cfg(test)]

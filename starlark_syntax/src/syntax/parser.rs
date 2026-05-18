@@ -15,17 +15,28 @@
  * limitations under the License.
  */
 
-use starlark_map::small_map::SmallMap;
+//! Parser abstraction for Starlark.
+//!
+//! [`Parser`] is the common interface implemented by each parser backend.
+//! Today the only impl is [`super::parser_lalrpop::LalrpopParser`]; additional
+//! impls (e.g. recursive descent) plug in here.
 
-use crate::codemap::FileSpan;
+use crate::eval_exception::EvalException;
+use crate::lexer::Token;
+use crate::syntax::ast::AstStmt;
+use crate::syntax::parse_error::ParseError;
+use crate::syntax::state::ParserState;
 
-/// A `load` statement loading zero or more symbols from another module.
-#[derive(Debug)]
-pub struct AstLoad<'a> {
-    /// Span where this load is written
-    pub span: FileSpan,
-    /// Module being loaded
-    pub module_id: &'a str,
-    /// Symbols loaded from that module (local ident -> source ident)
-    pub symbols: SmallMap<&'a str, &'a str>,
+pub(crate) type Lexeme = Result<(usize, Token, usize), EvalException>;
+
+/// Parse a Starlark module from a token stream.
+///
+/// Implementors normalize backend-specific errors into [`ParseError`] so
+/// callers can render diagnostics independently of the parser in use.
+pub(crate) trait Parser {
+    fn parse_module<I: Iterator<Item = Lexeme>>(
+        state: &mut ParserState<'_>,
+        tokens: I,
+        eof_pos: usize,
+    ) -> Result<AstStmt, ParseError>;
 }

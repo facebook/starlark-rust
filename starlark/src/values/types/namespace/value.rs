@@ -33,18 +33,21 @@ use crate::any::ProvidesStaticType;
 use crate::coerce::Coerce;
 use crate::docs::DocItem;
 use crate::docs::DocModule;
+use crate::pagable::SmallMapKeyDeserialize;
+use crate::pagable::StarlarkPagable;
 use crate::starlark_complex_value;
 use crate::typing::Ty;
 use crate::util::arc_str::ArcStr;
 use crate::values::FrozenValue;
 use crate::values::Heap;
+use crate::values::StarlarkPagable;
 use crate::values::StarlarkValue;
 use crate::values::StringValueLike;
 use crate::values::Value;
 use crate::values::ValueLike;
 use crate::values::types::namespace::typing::TyNamespace;
 
-#[derive(Clone, Coerce, Debug, Trace, Freeze, Allocative)]
+#[derive(Clone, Coerce, Debug, Trace, Freeze, Allocative, StarlarkPagable)]
 #[repr(C)]
 pub(crate) struct MaybeDocHiddenValue<'v, V: ValueLike<'v>> {
     pub(crate) value: V,
@@ -53,7 +56,18 @@ pub(crate) struct MaybeDocHiddenValue<'v, V: ValueLike<'v>> {
 }
 
 /// The return value of `namespace()`
-#[derive(Clone, Debug, Trace, Freeze, ProvidesStaticType, Allocative)]
+#[derive(
+    Clone,
+    Debug,
+    Trace,
+    Freeze,
+    ProvidesStaticType,
+    Allocative,
+    StarlarkPagable
+)]
+#[starlark_pagable(
+    bound = "V: StarlarkPagable, V::String: StarlarkPagable + SmallMapKeyDeserialize"
+)]
 #[repr(C)]
 pub struct NamespaceGen<'v, V: ValueLike<'v>> {
     fields: SmallMap<V::String, MaybeDocHiddenValue<'v, V>>,
@@ -85,7 +99,7 @@ impl<'v, V: ValueLike<'v>> Display for NamespaceGen<'v, V> {
     }
 }
 
-#[starlark_value(type = "namespace")]
+#[starlark_value(type = "namespace", skip_pagable)]
 impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for NamespaceGen<'v, V>
 where
     Self: ProvidesStaticType<'v>,

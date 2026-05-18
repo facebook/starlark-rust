@@ -22,6 +22,7 @@ pagable = []
 [dependencies]
 anyhow = "1.0.65"
 bumpalo = "3.8"
+dashmap = "6.1.0"
 debugserver-types = "0.5.0"
 derivative = "2.2"
 derive_more.workspace = true
@@ -30,6 +31,7 @@ dupe = { workspace = true }
 either = "1.8"
 erased-serde = "0.3.12"
 hashbrown = { version = "0.16.1" }
+indexmap = "2.2"
 inventory = "0.3.8"
 itertools = "0.14.0"
 maplit = "1.0.2"
@@ -44,7 +46,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["arbitrary_precision"] }
 sled = "0.34"
 starlark_derive = { version = "0.13.0", path = "../starlark_derive" }
-starlark_map = { version = "0.13.0", path = "../starlark_map" }
+starlark_map = { version = "0.13.0", path = "../starlark_map", features = ["pagable_dep"] }
 starlark_syntax = { version = "0.13.0", path = "../starlark_syntax" }
 static_assertions = "1.1.0"
 strsim = "0.10.0"

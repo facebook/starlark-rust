@@ -70,7 +70,7 @@ pub fn derive_pagable_deserialize(input: TokenStream) -> TokenStream {
 /// or `#[pagable_typetag(Trait)]`).
 ///
 /// Generate a `PagableTagged` impl using `type_name`, with
-/// `PagableRegistered<dyn Trait, Self>` bounds on generic params to enforce
+/// `PagableRegisteredFor<dyn Trait, Self>` bounds on generic params to enforce
 /// that concrete instantiations are registered via `register_typetag!`.
 ///
 /// ```ignore

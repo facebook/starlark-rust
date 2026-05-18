@@ -45,7 +45,10 @@ pub(crate) use vtable_registry_stub::DeserTypeId;
 #[cfg(not(feature = "pagable"))]
 pub(crate) use vtable_registry_stub::lookup_vtable;
 
-pub(crate) mod vtable_register;
+/// Runtime-registration marker trait for vtable lookup at deserialize time.
+pub mod vtable_register;
+
+pub use vtable_register::VtableRegistered;
 
 pub(crate) mod static_value;
 pub use static_value::StaticValueEntry;
@@ -57,6 +60,7 @@ pub(crate) mod heap_ref_id;
 pub(crate) mod serialized_frozen_value;
 pub(crate) mod starlark_deserialize;
 pub(crate) mod starlark_deserialize_context;
+pub(crate) mod starlark_pagable;
 pub(crate) mod starlark_serialize;
 pub(crate) mod starlark_serialize_context;
 
@@ -65,8 +69,22 @@ mod starlark_pagable_impls;
 // Re-export public types
 pub use starlark_deserialize::StarlarkDeserialize;
 pub use starlark_deserialize::StarlarkDeserializeContext;
+pub use starlark_deserialize_context::StarlarkDeserializerImpl;
+pub use starlark_pagable::StarlarkPagable;
+pub use starlark_pagable_impls::SmallMapKeyDeserialize;
 pub use starlark_serialize::StarlarkSerialize;
 pub use starlark_serialize::StarlarkSerializeContext;
+pub use starlark_serialize_context::StarlarkSerializerImpl;
+
+/// Sealed marker emitted by `#[starlark_pagable_typetag]` on a trait. The
+/// impl form requires it, pairing the two structurally.
+pub trait StarlarkTypetagTraitMarker: __private::StarlarkTypetagTraitSealed {}
+
+#[doc(hidden)]
+pub mod __private {
+    /// Sealed — do not implement directly.
+    pub trait StarlarkTypetagTraitSealed {}
+}
 
 #[cfg(all(test, feature = "pagable"))]
 mod tests;

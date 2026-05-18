@@ -8,7 +8,7 @@ Program:
 0 <= 1 < 2
 
 Error:
-error: Parse error: unexpected symbol '<' here, expected one of "\n", "%=", "&=", ")", "*=", "+=", ",", "-=", "//=", "/=", ":", ";", "<<=", "=", ">>=", "]", "^=", "and", "else", "for", "if", "or", "|", "|=" or "}"
+error: Parse error: unexpected symbol '<', expected end of expression (comparisons are not associative in Starlark)
  --> error_chained_comparison:1:8
   |
 1 | 0 <= 1 < 2
@@ -17,10 +17,22 @@ error: Parse error: unexpected symbol '<' here, expected one of "\n", "%=", "&="
 
 
 Program:
+0 == 1 == 2
+
+Error:
+error: Parse error: unexpected symbol '==', expected end of expression (comparisons are not associative in Starlark)
+ --> error_chained_comparison:1:8
+  |
+1 | 0 == 1 == 2
+  |        ^^
+  |
+
+
+Program:
 a == b != c
 
 Error:
-error: Parse error: unexpected symbol '!=' here, expected one of "\n", "%=", "&=", ")", "*=", "+=", ",", "-=", "//=", "/=", ":", ";", "<<=", "=", ">>=", "]", "^=", "and", "else", "for", "if", "or", "|", "|=" or "}"
+error: Parse error: unexpected symbol '!=', expected end of expression (comparisons are not associative in Starlark)
  --> error_chained_comparison:1:8
   |
 1 | a == b != c
@@ -32,7 +44,7 @@ Program:
 a < b > c
 
 Error:
-error: Parse error: unexpected symbol '>' here, expected one of "\n", "%=", "&=", ")", "*=", "+=", ",", "-=", "//=", "/=", ":", ";", "<<=", "=", ">>=", "]", "^=", "and", "else", "for", "if", "or", "|", "|=" or "}"
+error: Parse error: unexpected symbol '>', expected end of expression (comparisons are not associative in Starlark)
  --> error_chained_comparison:1:7
   |
 1 | a < b > c
@@ -44,9 +56,21 @@ Program:
 a in b in c
 
 Error:
-error: Parse error: unexpected keyword 'in' here, expected one of "\n", "%=", "&=", ")", "*=", "+=", ",", "-=", "//=", "/=", ":", ";", "<<=", "=", ">>=", "]", "^=", "and", "else", "for", "if", "or", "|", "|=" or "}"
+error: Parse error: unexpected keyword 'in', expected end of expression (comparisons are not associative in Starlark)
  --> error_chained_comparison:1:8
   |
 1 | a in b in c
   |        ^^
+  |
+
+
+Program:
+a in b not in c
+
+Error:
+error: Parse error: unexpected keyword 'not', expected end of expression (comparisons are not associative in Starlark)
+ --> error_chained_comparison:1:8
+  |
+1 | a in b not in c
+  |        ^^^
   |

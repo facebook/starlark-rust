@@ -38,6 +38,7 @@ use crate::environment::MethodsStatic;
 use crate::starlark_complex_value;
 use crate::starlark_complex_values;
 use crate::typing::Ty;
+use crate::values::StarlarkPagable;
 use crate::values::StarlarkValue;
 use crate::values::Value;
 use crate::values::ValueLifetimeless;
@@ -54,7 +55,8 @@ use crate::values::types::type_instance_id::TypeInstanceId;
     Coerce,
     Freeze,
     ProvidesStaticType,
-    Allocative
+    Allocative,
+    StarlarkPagable
 )]
 #[repr(C)]
 #[derivative(Debug)]
@@ -76,7 +78,7 @@ impl<'v, V: ValueLike<'v>> Display for EnumValueGen<V> {
         match ty_enum_data {
             Some(ty_enum_data) => {
                 {
-                    write!(f, "{}", &ty_enum_data.name)?;
+                    write!(f, "{}", ty_enum_data.name)?;
                     write!(f, "(")?;
                     Display::fmt(&self.value, f)?;
                     write!(f, ")")?
@@ -108,7 +110,7 @@ impl<'v, V: ValueLike<'v>> EnumValueGen<V> {
     }
 }
 
-#[starlark_value(type = EnumValue::TYPE)]
+#[starlark_value(type = EnumValue::TYPE, skip_pagable)]
 impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for EnumValueGen<V>
 where
     Self: ProvidesStaticType<'v>,

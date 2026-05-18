@@ -546,10 +546,13 @@ fn render_regular_native_callable_param(
     };
 
     Ok(syn::parse_quote! {
-        starlark::__derive_refs::param_spec::NativeCallableParam {
-            name: #name_str,
-            ty: #ty,
-            required: #required,
+        {
+            starlark::__derive_refs::static_str!(__PARAM_STATIC_NAME = #name_str);
+            starlark::__derive_refs::param_spec::NativeCallableParam {
+                name: __PARAM_STATIC_NAME,
+                ty: #ty,
+                required: #required,
+            }
         }
     })
 }
@@ -592,7 +595,10 @@ fn render_native_callable_components(
                 let name_str = ident_string(&arg.param.ident);
                 let ty = render_starlark_type(&arg.param.ty, generics);
                 syn::parse_quote! {
-                    starlark::__derive_refs::param_spec::NativeCallableParam::args(#name_str, #ty)
+                    {
+                        starlark::__derive_refs::static_str!(__PARAM_STATIC_NAME = #name_str);
+                        starlark::__derive_refs::param_spec::NativeCallableParam::args(__PARAM_STATIC_NAME, #ty)
+                    }
                 }
             });
             let named_only: Vec<syn::Expr> = named_only
@@ -604,7 +610,10 @@ fn render_native_callable_components(
                 let name_str = ident_string(&arg.param.ident);
                 let ty = render_starlark_type(&arg.param.ty, generics);
                 syn::parse_quote! {
-                    starlark::__derive_refs::param_spec::NativeCallableParam::kwargs(#name_str, #ty)
+                    {
+                        starlark::__derive_refs::static_str!(__PARAM_STATIC_NAME = #name_str);
+                        starlark::__derive_refs::param_spec::NativeCallableParam::kwargs(__PARAM_STATIC_NAME, #ty)
+                    }
                 }
             });
 

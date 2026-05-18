@@ -14,8 +14,8 @@ use syn::DeriveInput;
 use syn::parse_macro_input;
 
 /// `#[pagable_tagged(TraitName)]` — generates a `PagableTagged` impl that
-/// requires `PagableRegisteredFor<dyn TraitName, Self>` on all generic
-/// parameters, where `Self` is the full wrapper type (e.g. `Wrapper<F>`).
+/// requires `Self: PagableRegisteredFor<dyn TraitName>`, where `Self` is the
+/// full wrapper type (e.g. `Wrapper<F>`).
 pub fn pagable_tagged_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let trait_path =
         syn::parse::<syn::Path>(attr).expect("pagable_tagged requires a trait path argument");
@@ -24,10 +24,9 @@ pub fn pagable_tagged_impl(attr: TokenStream, item: TokenStream) -> TokenStream 
     let (impl_generics, ty_generics, _) = input.generics.split_for_impl();
 
     let mut generics = input.generics.clone();
-    for tp in input.generics.type_params() {
-        let ident = &tp.ident;
+    if input.generics.type_params().next().is_some() {
         generics.make_where_clause().predicates.push(
-            syn::parse_quote! { #ident: pagable::typetag::PagableRegisteredFor<dyn #trait_path, Self> },
+            syn::parse_quote! { Self: pagable::typetag::PagableRegisteredFor<dyn #trait_path> },
         );
     }
     let where_clause = &generics.where_clause;
@@ -38,6 +37,13 @@ pub fn pagable_tagged_impl(attr: TokenStream, item: TokenStream) -> TokenStream 
         impl #impl_generics pagable::typetag::PagableTagged for #name #ty_generics #where_clause {
             fn pagable_type_tag(&self) -> &'static str {
                 ::std::any::type_name::<Self>()
+            }
+            fn pagable_serialize_body(
+                &self,
+                serializer: &mut dyn pagable::PagableSerializer,
+            ) -> pagable::Result<()> {
+                // Forward to the `PagableSerialize` impl which writes just the body.
+                <Self as pagable::PagableSerialize>::pagable_serialize(self, serializer)
             }
         }
     };

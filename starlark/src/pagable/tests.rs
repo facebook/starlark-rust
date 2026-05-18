@@ -17,6 +17,8 @@
 
 //! Round-trip serialize/deserialize tests for Starlark values.
 
+use std::sync::Arc;
+
 use allocative::Allocative;
 use derive_more::Display;
 use pagable::PagableDeserialize;
@@ -25,8 +27,12 @@ use starlark_derive::NoSerialize;
 use starlark_derive::ProvidesStaticType;
 use starlark_derive::StarlarkPagable;
 use starlark_derive::starlark_value;
+use starlark_syntax::codemap::CodeMap;
+use starlark_syntax::codemap::FileSpan;
+use starlark_syntax::codemap::NativeCodeMap;
 
 use crate as starlark;
+use crate::const_frozen_string;
 use crate::starlark_simple_value;
 use crate::values::FrozenHeap;
 use crate::values::FrozenHeapRef;
@@ -1058,6 +1064,1220 @@ fn test_owned_frozen_value_typed_round_trip() -> crate::Result<()> {
     // Verify the restored value via Deref (OwnedFrozenValueTyped<T> derefs to T).
     assert_eq!(restored.flag, false);
     assert_eq!(restored.count, 99);
+
+    Ok(())
+}
+
+/// Test type mirroring StackFrame: String + Option<FileSpan>.
+#[derive(
+    Debug,
+    Display,
+    Allocative,
+    ProvidesStaticType,
+    NoSerialize,
+    StarlarkPagable
+)]
+#[display("TestStackFrame({}, {:?})", self.name, self.location)]
+struct TestStackFrame {
+    name: String,
+    #[starlark_pagable(pagable)]
+    location: Option<FileSpan>,
+}
+
+starlark_simple_value!(TestStackFrame);
+
+#[starlark_value(type = "TestStackFrame", skip_pagable)]
+impl<'v> StarlarkValue<'v> for TestStackFrame {
+    type Canonical = Self;
+}
+
+#[test]
+fn test_stack_frame_data_round_trip() -> crate::Result<()> {
+    let heap = FrozenHeap::new();
+
+    // With location = None.
+    heap.alloc_simple(TestStackFrame {
+        name: "native_func".to_owned(),
+        location: None,
+    });
+
+    // With location = Some(FileSpan).
+    let codemap = CodeMap::new(
+        "test.bzl".to_owned(),
+        "load('foo')\ndef bar():\n  pass\n".to_owned(),
+    );
+    let span = codemap.full_span();
+    heap.alloc_simple(TestStackFrame {
+        name: "bar".to_owned(),
+        location: Some(FileSpan {
+            file: codemap,
+            span,
+        }),
+    });
+
+    let heap_ref = heap.into_ref_named(TestHeapName::heap_name("test_stack_frame_data"));
+    let restored = round_trip_heap_ref(&heap_ref)?;
+
+    let headers = restored.collect_drop_headers_ordered();
+    assert_eq!(headers.len(), 2);
+
+    // First value: location = None.
+    let data0: &TestStackFrame = headers[0].unpack().downcast_ref().unwrap();
+    assert_eq!(data0.name, "native_func");
+    assert!(data0.location.is_none());
+
+    // Second value: location = Some, with filename and span preserved.
+    let data1: &TestStackFrame = headers[1].unpack().downcast_ref().unwrap();
+    assert_eq!(data1.name, "bar");
+    let loc = data1.location.as_ref().expect("should have location");
+    assert_eq!(loc.file.filename(), "test.bzl");
+    assert_eq!(loc.file.source(), "load('foo')\ndef bar():\n  pass\n");
+
+    Ok(())
+}
+
+#[test]
+fn test_native_codemap_round_trip() -> crate::Result<()> {
+    // Register a static NativeCodeMap via the pagable static value framework.
+    static NATIVE: NativeCodeMap = NativeCodeMap::new("test_native.rs", 42, 10);
+    pagable::static_value!(
+        NATIVE_STATIC: NativeCodeMap = &NATIVE,
+        starlark_syntax::codemap::NativeCodeMapStaticEntry
+    );
+
+    let codemap = NativeCodeMap::to_codemap(NATIVE_STATIC);
+    let file_span = FileSpan {
+        file: codemap,
+        span: NativeCodeMap::FULL_SPAN,
+    };
+
+    let heap = FrozenHeap::new();
+    heap.alloc_simple(TestStackFrame {
+        name: "native_call".to_owned(),
+        location: Some(file_span),
+    });
+
+    let heap_ref = heap.into_ref_named(TestHeapName::heap_name("test_native_codemap"));
+    let restored = round_trip_heap_ref(&heap_ref)?;
+
+    let headers = restored.collect_drop_headers_ordered();
+    assert_eq!(headers.len(), 1);
+    let data: &TestStackFrame = headers[0].unpack().downcast_ref().unwrap();
+    assert_eq!(data.name, "native_call");
+    let loc = data.location.as_ref().expect("should have location");
+    // Verify the NativeCodeMap round-tripped: filename and source preserved.
+    assert_eq!(loc.file.filename(), "test_native.rs");
+    assert_eq!(loc.file.source(), "<native>");
+    // Verify identity: it should be the same static NativeCodeMap,
+    // so CodeMap::id() should match.
+    assert_eq!(loc.file.id(), NativeCodeMap::to_codemap(NATIVE_STATIC).id());
+
+    Ok(())
+}
+
+#[test]
+fn test_frozen_dict_round_trip() -> crate::Result<()> {
+    use crate::values::dict::AllocDict;
+    use crate::values::types::dict::value::FrozenDict;
+
+    let heap = FrozenHeap::new();
+
+    // Dict with entries: {"hello": 1, "world": 2}.
+    heap.alloc(AllocDict([("hello", 1), ("world", 2)]));
+
+    let heap_ref = heap.into_ref_named(TestHeapName::heap_name("test_frozen_dict"));
+    let restored = round_trip_heap_ref(&heap_ref)?;
+
+    // Dict has Drop (SmallMap), so it's in the drop bump.
+    let headers = restored.collect_drop_headers_ordered();
+    assert_eq!(headers.len(), 1);
+    let dict: &FrozenDict = headers[0].unpack().downcast_ref().unwrap();
+    assert_eq!(dict.0.content.len(), 2);
+    // Verify keys and values are present.
+    let keys: Vec<&str> = dict
+        .0
+        .content
+        .keys()
+        .map(|k| k.to_value().unpack_str().unwrap())
+        .collect();
+    assert!(keys.contains(&"hello"));
+    assert!(keys.contains(&"world"));
+
+    Ok(())
+}
+
+#[test]
+fn test_frozen_struct_round_trip() -> crate::Result<()> {
+    use crate::values::structs::AllocStruct;
+
+    let heap = FrozenHeap::new();
+    heap.alloc(AllocStruct([("name", "alice"), ("age", "30")]));
+
+    let heap_ref = heap.into_ref_named(TestHeapName::heap_name("test_frozen_struct"));
+    let restored = round_trip_heap_ref(&heap_ref)?;
+
+    // Struct has Drop (SmallMap), so it's in the drop bump.
+    let headers = restored.collect_drop_headers_ordered();
+    assert_eq!(headers.len(), 1);
+    let attrs = headers[0].unpack().dir_attr();
+    assert_eq!(attrs.len(), 2);
+    assert!(attrs.contains(&"name".to_owned()));
+    assert!(attrs.contains(&"age".to_owned()));
+
+    Ok(())
+}
+
+#[test]
+fn test_frozen_set_round_trip() -> crate::Result<()> {
+    use starlark_map::small_set::SmallSet;
+
+    use crate::values::types::set::value::FrozenSet;
+    use crate::values::types::set::value::FrozenSetData;
+    use crate::values::types::set::value::SetGen;
+
+    let heap = FrozenHeap::new();
+
+    // Build a set with values {1, 2, 3}.
+    let mut content: SmallSet<FrozenValue> = SmallSet::new();
+    content.insert_hashed(FrozenValue::testing_new_int(1).get_hashed()?);
+    content.insert_hashed(FrozenValue::testing_new_int(2).get_hashed()?);
+    content.insert_hashed(FrozenValue::testing_new_int(3).get_hashed()?);
+    heap.alloc_simple(SetGen(FrozenSetData::new(content)));
+
+    let heap_ref = heap.into_ref_named(TestHeapName::heap_name("test_frozen_set"));
+    let restored = round_trip_heap_ref(&heap_ref)?;
+
+    // Set has Drop (SmallSet), so it's in the drop bump.
+    let headers = restored.collect_drop_headers_ordered();
+    assert_eq!(headers.len(), 1);
+    let set: &FrozenSet = headers[0].unpack().downcast_ref().unwrap();
+    assert_eq!(set.0.len(), 3);
+    // Verify values are present.
+    let values: Vec<i32> = set.0.iter().map(|v| v.unpack_i32().unwrap()).collect();
+    assert!(values.contains(&1));
+    assert!(values.contains(&2));
+    assert!(values.contains(&3));
+
+    Ok(())
+}
+
+#[test]
+fn test_frozen_record_type_round_trip() -> crate::Result<()> {
+    use std::sync::Arc;
+
+    use starlark_map::small_map::SmallMap;
+
+    use crate::eval::ParametersSpec;
+    use crate::eval::ParametersSpecParam;
+    use crate::typing::Ty;
+    use crate::values::record::field::FieldGen;
+    use crate::values::record::record_type::FrozenRecordType;
+    use crate::values::record::ty_record_type::TyRecordData;
+    use crate::values::types::type_instance_id::TypeInstanceId;
+    use crate::values::typing::type_compiled::compiled::TypeCompiled;
+
+    let heap = FrozenHeap::new();
+
+    // Build a single Arc<TyRecordData> shared by two FrozenRecordType
+    // allocations — this exercises Arc identity preservation through pagable's
+    // dedup mechanism (TyRecordData routes through `#[starlark_pagable(pagable)]`).
+    let shared = Arc::new(TyRecordData {
+        name: "MyRec".to_owned(),
+        ty_record: Ty::any(),
+        ty_record_type: Ty::any(),
+        parameter_spec: ParametersSpec::<FrozenValue>::new_named_only(
+            "MyRec",
+            [
+                ("x", ParametersSpecParam::Required),
+                ("y", ParametersSpecParam::Required),
+            ],
+        ),
+    });
+
+    let make_fields = || {
+        let mut fields: SmallMap<String, FieldGen<FrozenValue>> = SmallMap::new();
+        fields.insert(
+            "x".to_owned(),
+            FieldGen {
+                typ: TypeCompiled::any(),
+                default: None,
+            },
+        );
+        fields.insert(
+            "y".to_owned(),
+            FieldGen {
+                typ: TypeCompiled::any(),
+                default: None,
+            },
+        );
+        fields
+    };
+
+    let id_a = TypeInstanceId::r#gen();
+    let id_b = TypeInstanceId::r#gen();
+    heap.alloc_simple(FrozenRecordType {
+        id: id_a,
+        ty_record_data: Some(shared.clone()),
+        fields: make_fields(),
+    });
+    heap.alloc_simple(FrozenRecordType {
+        id: id_b,
+        ty_record_data: Some(shared),
+        fields: make_fields(),
+    });
+
+    let heap_ref = heap.into_ref_named(TestHeapName::heap_name("test_frozen_record_type"));
+    let restored = round_trip_heap_ref(&heap_ref)?;
+
+    // RecordTypeGen has Drop (SmallMap + Arc), so it's in the drop bump.
+    let headers = restored.collect_drop_headers_ordered();
+    assert_eq!(headers.len(), 2);
+    let rt_a: &FrozenRecordType = headers[0].unpack().downcast_ref().unwrap();
+    let rt_b: &FrozenRecordType = headers[1].unpack().downcast_ref().unwrap();
+
+    // Per-record state round-trips independently.
+    assert_eq!(rt_a.id, id_a);
+    assert_eq!(rt_b.id, id_b);
+    for rt in [rt_a, rt_b] {
+        let field_names: Vec<&str> = rt.fields.keys().map(String::as_str).collect();
+        assert_eq!(field_names, vec!["x", "y"]);
+        for (_, field) in rt.fields.iter() {
+            assert!(field.default.is_none());
+        }
+    }
+
+    // ty_record_data contents survive the round-trip, including the inline
+    // parameter_spec (which is now serialized through TyRecordData's
+    // StarlarkPagable derive rather than being rebuilt on deserialize).
+    let data_a = rt_a
+        .ty_record_data
+        .as_ref()
+        .expect("ty_record_data restored");
+    let data_b = rt_b
+        .ty_record_data
+        .as_ref()
+        .expect("ty_record_data restored");
+    assert_eq!(data_a.name, "MyRec");
+    assert_eq!(data_a.ty_record, Ty::any());
+    assert_eq!(data_a.ty_record_type, Ty::any());
+    assert_eq!(data_a.parameter_spec.len(), 2);
+
+    // Arc identity preservation: both restored RecordTypeGen point at the
+    // same Arc<TyRecordData> allocation, just like the original.
+    assert!(
+        Arc::ptr_eq(data_a, data_b),
+        "pagable Arc dedup should round-trip the shared Arc<TyRecordData> as a single allocation",
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_static_frozen_value_round_trip() -> crate::Result<()> {
+    // Test that FrozenValues pointing to static values (not on any heap)
+    // survive a round-trip through pagable serialization.
+    //
+    // Static values include: None, True, False, empty tuple, static strings
+    // (const_frozen_string!), and other inventory-registered statics.
+    let heap = FrozenHeap::new();
+
+    // Create RefData values that hold various static FrozenValues.
+    let none_fv = FrozenValue::new_none();
+    let true_fv = FrozenValue::new_bool(true);
+    let false_fv = FrozenValue::new_bool(false);
+    let empty_tuple_fv = FrozenValue::new_empty_tuple();
+    let static_str_fv = const_frozen_string!("static_test_str").to_frozen_value();
+
+    heap.alloc_simple(RefData {
+        label: 1,
+        target: none_fv,
+    });
+    heap.alloc_simple(RefData {
+        label: 2,
+        target: true_fv,
+    });
+    heap.alloc_simple(RefData {
+        label: 3,
+        target: false_fv,
+    });
+    heap.alloc_simple(RefData {
+        label: 4,
+        target: empty_tuple_fv,
+    });
+    heap.alloc_simple(RefData {
+        label: 5,
+        target: static_str_fv,
+    });
+
+    let heap_ref = heap.into_ref_named(TestHeapName::heap_name("test_static"));
+
+    // Round-trip.
+    let restored = round_trip_heap_ref(&heap_ref)?;
+
+    let undrop_headers = restored.collect_undrop_headers_ordered();
+    assert_eq!(undrop_headers.len(), 5);
+
+    // Verify None.
+    let ref0: &RefData = undrop_headers[0].unpack().downcast_ref().unwrap();
+    assert_eq!(ref0.label, 1);
+    assert!(ref0.target.is_none());
+    // Static values should preserve pointer identity (same static address).
+    assert_eq!(
+        ref0.target.ptr_value().ptr_value_untagged(),
+        none_fv.ptr_value().ptr_value_untagged(),
+        "None should point to the same static address"
+    );
+
+    // Verify True.
+    let ref1: &RefData = undrop_headers[1].unpack().downcast_ref().unwrap();
+    assert_eq!(ref1.label, 2);
+    assert_eq!(ref1.target.unpack_bool(), Some(true));
+    assert_eq!(
+        ref1.target.ptr_value().ptr_value_untagged(),
+        true_fv.ptr_value().ptr_value_untagged(),
+        "True should point to the same static address"
+    );
+
+    // Verify False.
+    let ref2: &RefData = undrop_headers[2].unpack().downcast_ref().unwrap();
+    assert_eq!(ref2.label, 3);
+    assert_eq!(ref2.target.unpack_bool(), Some(false));
+    assert_eq!(
+        ref2.target.ptr_value().ptr_value_untagged(),
+        false_fv.ptr_value().ptr_value_untagged(),
+        "False should point to the same static address"
+    );
+
+    // Verify empty tuple.
+    let ref3: &RefData = undrop_headers[3].unpack().downcast_ref().unwrap();
+    assert_eq!(ref3.label, 4);
+    assert_eq!(
+        ref3.target.ptr_value().ptr_value_untagged(),
+        empty_tuple_fv.ptr_value().ptr_value_untagged(),
+        "Empty tuple should point to the same static address"
+    );
+
+    // Verify static string.
+    let ref4: &RefData = undrop_headers[4].unpack().downcast_ref().unwrap();
+    assert_eq!(ref4.label, 5);
+    assert_eq!(ref4.target.unpack_str(), Some("static_test_str"));
+    assert_eq!(
+        ref4.target.ptr_value().ptr_value_untagged(),
+        static_str_fv.ptr_value().ptr_value_untagged(),
+        "Static string should point to the same static address"
+    );
+
+    Ok(())
+}
+
+/// Phantom type used only as the `T` of `StarlarkValueAsType<T>` in the
+/// round-trip test below. Never allocated on a heap.
+#[derive(Debug, Display, Allocative, ProvidesStaticType, NoSerialize)]
+#[display("AsTypeRoundTripTestType")]
+struct AsTypeRoundTripTestType;
+
+#[starlark_value(type = "AsTypeRoundTripTestType")]
+impl<'v> StarlarkValue<'v> for AsTypeRoundTripTestType {}
+
+crate::declare_starlark_value_as_type!(AS_TYPE_RT_STATIC, AsTypeRoundTripTestType);
+
+#[test]
+fn test_starlark_value_as_type_round_trip() -> crate::Result<()> {
+    // A `FrozenValue` pointing at a `StarlarkValueAsTypeStarlarkValue` static
+    // (registered via `declare_starlark_value_as_type!`) must survive a
+    // round-trip with pointer identity preserved — the static lives outside
+    // any heap and is resolved by the inventory-backed static-value registry.
+    let heap = FrozenHeap::new();
+    let static_fv = AS_TYPE_RT_STATIC.to_frozen_value();
+    heap.alloc_simple(RefData {
+        label: 7,
+        target: static_fv,
+    });
+    let heap_ref = heap.into_ref_named(TestHeapName::heap_name(
+        "test_starlark_value_as_type_round_trip",
+    ));
+
+    let restored = round_trip_heap_ref(&heap_ref)?;
+
+    let headers = restored.collect_undrop_headers_ordered();
+    assert_eq!(headers.len(), 1, "only RefData lives on the heap");
+    let ref_data: &RefData = headers[0].unpack().downcast_ref().unwrap();
+    assert_eq!(ref_data.label, 7);
+
+    assert_eq!(
+        ref_data.target.ptr_value().ptr_value_untagged(),
+        static_fv.ptr_value().ptr_value_untagged(),
+        "StarlarkValueAsType static should round-trip to the same static address"
+    );
+    Ok(())
+}
+
+// ============================================================================
+// `StarlarkSerializerImpl::recover_from_pagable` /
+// `StarlarkDeserializerImpl::recover_from_pagable`:
+// pagable Arc<T> dedup combined with starlark FrozenValue resolution.
+//
+// `InnerArcData` is reachable from the starlark layer via a derived
+// `StarlarkPagable` (so its `target: FrozenValue` is resolved against the
+// currently-deserializing heap), but it is also wrapped in `Arc<InnerArcData>`
+// inside `OuterArcValue` and routed through `pagable::PagableSerialize` (with
+// `#[starlark_pagable(pagable)]`) so the pagable Arc-identity dedup mechanism
+// can fire — two `OuterArcValue`s sharing the same `Arc<InnerArcData>`
+// serialize the body once and round-trip to pointer-equal Arcs.
+//
+// To bridge between the two layers, `InnerArcData::pagable_serialize` /
+// `pagable_deserialize` use `StarlarkSerializerImpl::recover_from_pagable`
+// and `StarlarkDeserializerImpl::recover_from_pagable` to recover the
+// starlark heap context inside what is otherwise a pure-pagable
+// (typetag/Arc) dispatch path.
+// ============================================================================
+
+/// Inner type carried inside an `Arc`. Holds a `FrozenValue` that must be
+/// resolved against the currently-(de)serializing heap. Implements:
+///   - `StarlarkPagable` via derive (so the `FrozenValue` field works).
+///   - `pagable::Pagable*` manually, bridging into the starlark context via
+///     `with_starlark_*_context` so the `Arc<InnerArcData>` field on
+///     `OuterArcValue` can be routed through pagable's Arc-dedup mechanism
+///     (which serializes the body using `pagable::PagableSerialize`, not
+///     `StarlarkSerialize`).
+#[derive(Debug, Allocative, ProvidesStaticType, StarlarkPagable)]
+struct InnerArcData {
+    target: FrozenValue,
+    label: u32,
+}
+
+impl pagable::PagableSerialize for InnerArcData {
+    fn pagable_serialize(
+        &self,
+        serializer: &mut dyn pagable::PagableSerializer,
+    ) -> pagable::Result<()> {
+        let mut ctx = crate::pagable::StarlarkSerializerImpl::recover_from_pagable(serializer)
+            .map_err(|e: crate::Error| e.into_anyhow())?;
+        <Self as crate::pagable::StarlarkSerialize>::starlark_serialize(self, &mut ctx)
+            .map_err(|e: crate::Error| e.into_anyhow())
+    }
+}
+
+impl<'de> pagable::PagableDeserialize<'de> for InnerArcData {
+    fn pagable_deserialize<D: pagable::PagableDeserializer<'de> + ?Sized>(
+        deserializer: &mut D,
+    ) -> pagable::Result<Self> {
+        let mut ctx =
+            crate::pagable::StarlarkDeserializerImpl::recover_from_pagable(deserializer.as_dyn())
+                .map_err(|e: crate::Error| e.into_anyhow())?;
+        <Self as crate::pagable::StarlarkDeserialize>::starlark_deserialize(&mut ctx)
+            .map_err(|e: crate::Error| e.into_anyhow())
+    }
+}
+
+/// Outer `StarlarkValue` holding an `Arc<InnerArcData>` plus a `Vec<u32>`.
+/// The `Vec` puts it firmly on the **drop bump**, which is serialized
+/// *first* on the wire (before the non-drop bump). The inner
+/// `target: FrozenValue` then points into the non-drop bump (`SimpleData`),
+/// which is serialized *second*. So when the deserializer is processing
+/// an `OuterArcValue` body, the inner `FrozenValue` is a forward
+/// reference into a not-yet-deserialized non-drop slot — exercising the
+/// `ensure_initialized` work-queue path through the shared
+/// `HeapDeserializationState` that `StarlarkDeserializerImpl::recover_from_pagable`
+/// hands off via the session context.
+///
+/// The `Arc<InnerArcData>` field is routed through `pagable::PagableSerialize`
+/// (via `#[starlark_pagable(pagable)]`) so multiple `OuterArcValue`s sharing
+/// the same Arc dedup on the wire and round-trip to a pointer-equal Arc.
+#[derive(
+    Debug,
+    Display,
+    Allocative,
+    ProvidesStaticType,
+    NoSerialize,
+    StarlarkPagable
+)]
+#[display("OuterArcValue({})", self.outer_label)]
+struct OuterArcValue {
+    #[starlark_pagable(pagable)]
+    inner: Arc<InnerArcData>,
+    outer_label: u32,
+    items: Vec<u32>,
+}
+
+starlark_simple_value!(OuterArcValue);
+
+#[starlark_value(type = "OuterArcValue", skip_pagable)]
+impl<'v> StarlarkValue<'v> for OuterArcValue {
+    type Canonical = Self;
+}
+
+#[test]
+fn test_with_starlark_context_arc_dedup_round_trip() -> crate::Result<()> {
+    let heap = FrozenHeap::new();
+    let target_fv = heap.alloc_simple(SimpleData {
+        flag: true,
+        count: 314,
+    });
+
+    // Build a single Arc shared by the two OuterArcValues.
+    let shared = Arc::new(InnerArcData {
+        target: target_fv,
+        label: 99,
+    });
+
+    heap.alloc_simple(OuterArcValue {
+        inner: shared.clone(),
+        outer_label: 1,
+        items: vec![10, 20, 30],
+    });
+    heap.alloc_simple(OuterArcValue {
+        inner: shared,
+        outer_label: 2,
+        items: vec![40, 50],
+    });
+
+    let heap_ref = heap.into_ref_named(TestHeapName::heap_name("test_with_starlark_context_arc"));
+    let restored = round_trip_heap_ref(&heap_ref)?;
+
+    // SimpleData has no Drop, so it lives in the undrop bump.
+    let undrop = restored.collect_undrop_headers_ordered();
+    assert_eq!(undrop.len(), 1);
+    let target_data: &SimpleData = undrop[0].unpack().downcast_ref().unwrap();
+    assert_eq!(target_data.flag, true);
+    assert_eq!(target_data.count, 314);
+
+    // OuterArcValue has `Vec<u32>` (and `Arc`), so it lives in the drop bump.
+    let drop_headers = restored.collect_drop_headers_ordered();
+    assert_eq!(drop_headers.len(), 2);
+    let outer_a: &OuterArcValue = drop_headers[0].unpack().downcast_ref().unwrap();
+    let outer_b: &OuterArcValue = drop_headers[1].unpack().downcast_ref().unwrap();
+    assert_eq!(outer_a.outer_label, 1);
+    assert_eq!(outer_b.outer_label, 2);
+    assert_eq!(outer_a.items, vec![10, 20, 30]);
+    assert_eq!(outer_b.items, vec![40, 50]);
+
+    // Inner data round-tripped correctly: both Arcs see the same label and a
+    // FrozenValue resolving to the SimpleData target above.
+    assert_eq!(outer_a.inner.label, 99);
+    assert_eq!(outer_b.inner.label, 99);
+    let target_addr = undrop[0] as *const _ as usize;
+    assert_eq!(
+        outer_a.inner.target.ptr_value().ptr_value_untagged(),
+        target_addr,
+    );
+    assert_eq!(
+        outer_b.inner.target.ptr_value().ptr_value_untagged(),
+        target_addr,
+    );
+
+    // Arc dedup: the two restored Arcs must point at the same allocation.
+    assert!(
+        Arc::ptr_eq(&outer_a.inner, &outer_b.inner),
+        "pagable Arc dedup should round-trip the shared Arc as a single allocation",
+    );
+
+    Ok(())
+}
+
+// ============================================================================
+// Arc<T> blanket: starlark-only T, plain `Arc<T>` field — round-trips through
+// the `Arc<T>: StarlarkSerialize` blanket, no manual bridge.
+// ============================================================================
+
+/// Inner type carries inside an `Arc` and h a `FrozenValue`
+#[derive(Debug, Allocative, ProvidesStaticType, StarlarkPagable)]
+struct ArcBlanketInner {
+    target: FrozenValue,
+    label: u32,
+}
+
+/// Outer `StarlarkValue` with a plain `Arc<ArcBlanketInner>` field
+#[derive(
+    Debug,
+    Display,
+    Allocative,
+    ProvidesStaticType,
+    NoSerialize,
+    StarlarkPagable
+)]
+#[display("ArcBlanketOuter({})", self.outer_label)]
+struct ArcBlanketOuter {
+    inner: Arc<ArcBlanketInner>,
+    outer_label: u32,
+    items: Vec<u32>,
+}
+
+starlark_simple_value!(ArcBlanketOuter);
+
+#[starlark_value(type = "ArcBlanketOuter", skip_pagable)]
+impl<'v> StarlarkValue<'v> for ArcBlanketOuter {
+    type Canonical = Self;
+}
+
+#[test]
+fn test_arc_blanket_round_trip() -> crate::Result<()> {
+    let heap = FrozenHeap::new();
+    let target_fv = heap.alloc_simple(SimpleData {
+        flag: true,
+        count: 271,
+    });
+
+    let shared = Arc::new(ArcBlanketInner {
+        target: target_fv,
+        label: 7,
+    });
+
+    heap.alloc_simple(ArcBlanketOuter {
+        inner: shared.clone(),
+        outer_label: 1,
+        items: vec![1, 2, 3],
+    });
+    heap.alloc_simple(ArcBlanketOuter {
+        inner: shared,
+        outer_label: 2,
+        items: vec![4, 5],
+    });
+
+    let heap_ref = heap.into_ref_named(TestHeapName::heap_name("test_arc_blanket"));
+    let restored = round_trip_heap_ref(&heap_ref)?;
+
+    let undrop = restored.collect_undrop_headers_ordered();
+    assert_eq!(undrop.len(), 1);
+    let target_data: &SimpleData = undrop[0].unpack().downcast_ref().unwrap();
+    assert_eq!(target_data.flag, true);
+    assert_eq!(target_data.count, 271);
+
+    let drop_headers = restored.collect_drop_headers_ordered();
+    assert_eq!(drop_headers.len(), 2);
+    let outer_a: &ArcBlanketOuter = drop_headers[0].unpack().downcast_ref().unwrap();
+    let outer_b: &ArcBlanketOuter = drop_headers[1].unpack().downcast_ref().unwrap();
+    assert_eq!(outer_a.outer_label, 1);
+    assert_eq!(outer_b.outer_label, 2);
+    assert_eq!(outer_a.items, vec![1, 2, 3]);
+    assert_eq!(outer_b.items, vec![4, 5]);
+
+    // Inner data round-tripped, including the FrozenValue resolved against
+    // the same heap.
+    assert_eq!(outer_a.inner.label, 7);
+    assert_eq!(outer_b.inner.label, 7);
+    let target_addr = undrop[0] as *const _ as usize;
+    assert_eq!(
+        outer_a.inner.target.ptr_value().ptr_value_untagged(),
+        target_addr,
+    );
+    assert_eq!(
+        outer_b.inner.target.ptr_value().ptr_value_untagged(),
+        target_addr,
+    );
+
+    // Arc dedup via the blanket: both restored Arcs must be pointer-equal.
+    assert!(
+        Arc::ptr_eq(&outer_a.inner, &outer_b.inner),
+        "Arc<T> blanket should preserve Arc identity across round-trip",
+    );
+
+    Ok(())
+}
+
+// ============================================================================
+// StarlarkAny<T> / FrozenAnyValue<T> round-trip
+// ============================================================================
+
+/// Pure-data payload for `StarlarkAny` tests. `StarlarkPagable` derive so the
+/// inner data round-trips; `register_starlark_any!` registers the typing
+/// vtable entry needed for `StarlarkAny<AnyPayload>` to participate in ser/de.
+#[derive(Debug, Clone, PartialEq, Eq, StarlarkPagable)]
+struct AnyPayload {
+    name: String,
+    count: u32,
+}
+
+crate::register_starlark_any!(AnyPayload);
+crate::register_any_array!(AnyPayload);
+
+#[test]
+fn test_starlark_any_round_trip() -> crate::Result<()> {
+    // 1. Allocate a `StarlarkAny<AnyPayload>` via `alloc_any_value`.
+    let heap = FrozenHeap::new();
+    let payload = AnyPayload {
+        name: "hello".to_owned(),
+        count: 7,
+    };
+    heap.alloc_any_value(payload.clone());
+    let heap_ref = heap.into_ref_named(TestHeapName::heap_name("test_starlark_any"));
+
+    // 2. Round-trip via pagable serialize/deserialize.
+    let restored = round_trip_heap_ref(&heap_ref)?;
+
+    // 3. Verify: downcast to typed value and check fields.
+    //    `StarlarkAny<AnyPayload>` lives in the drop bump because `AnyPayload`
+    //    owns `String` (needs Drop).
+    let headers = restored.collect_drop_headers_ordered();
+    assert_eq!(headers.len(), 1);
+    let avalue = headers[0].unpack();
+    let any_payload: &crate::values::any::StarlarkAny<AnyPayload> = avalue.downcast_ref().unwrap();
+    assert_eq!(any_payload.0, payload);
+
+    Ok(())
+}
+
+#[test]
+fn test_starlark_any_multiple_values_round_trip() -> crate::Result<()> {
+    // Two independent `StarlarkAny<AnyPayload>` on the same heap.
+    let heap = FrozenHeap::new();
+    let a = AnyPayload {
+        name: "first".to_owned(),
+        count: 1,
+    };
+    let b = AnyPayload {
+        name: "second".to_owned(),
+        count: 2,
+    };
+    heap.alloc_any_value(a.clone());
+    heap.alloc_any_value(b.clone());
+    let heap_ref = heap.into_ref_named(TestHeapName::heap_name("test_starlark_any_multi"));
+
+    let restored = round_trip_heap_ref(&heap_ref)?;
+
+    let headers = restored.collect_drop_headers_ordered();
+    assert_eq!(headers.len(), 2);
+    let got_a: &crate::values::any::StarlarkAny<AnyPayload> =
+        headers[0].unpack().downcast_ref().unwrap();
+    let got_b: &crate::values::any::StarlarkAny<AnyPayload> =
+        headers[1].unpack().downcast_ref().unwrap();
+    assert_eq!(got_a.0, a);
+    assert_eq!(got_b.0, b);
+
+    Ok(())
+}
+
+// ============================================================================
+// FrozenAnyArray<T> round-trip
+//
+// `AnyArray<T>` uses `alloc_raw_extra` for a trailing elements array — the
+// elements live beyond the struct bounds. Its `AValue` impl
+// (`AValueAnyArray<T>`) provides `starlark_serialize`/`starlark_deserialize`
+// that walk `as_slice()` on the way out and reconstruct elements in-place on
+// the way in (same pattern as `AValueList`).
+// ============================================================================
+
+#[test]
+fn test_frozen_any_array_round_trip() -> crate::Result<()> {
+    let heap = FrozenHeap::new();
+    let items = vec![
+        AnyPayload {
+            name: "alpha".to_owned(),
+            count: 10,
+        },
+        AnyPayload {
+            name: "beta".to_owned(),
+            count: 20,
+        },
+        AnyPayload {
+            name: "gamma".to_owned(),
+            count: 30,
+        },
+    ];
+    heap.alloc_any_array_value(&items);
+    let heap_ref = heap.into_ref_named(TestHeapName::heap_name("test_frozen_any_array"));
+
+    let restored = round_trip_heap_ref(&heap_ref)?;
+
+    // `AnyPayload` owns a `String` → the array lives in the drop bump.
+    let headers = restored.collect_drop_headers_ordered();
+    assert_eq!(headers.len(), 1);
+    let avalue = headers[0].unpack();
+    let any_array: &crate::values::types::any_array::AnyArray<AnyPayload> =
+        avalue.downcast_ref().unwrap();
+    assert_eq!(any_array.as_slice().len(), 3);
+    assert_eq!(any_array.as_slice()[0], items[0]);
+    assert_eq!(any_array.as_slice()[1], items[1]);
+    assert_eq!(any_array.as_slice()[2], items[2]);
+
+    Ok(())
+}
+
+#[test]
+fn test_frozen_any_array_empty_round_trip() -> crate::Result<()> {
+    let heap = FrozenHeap::new();
+    heap.alloc_any_array_value::<AnyPayload>(&[]);
+    let heap_ref = heap.into_ref_named(TestHeapName::heap_name("test_frozen_any_array_empty"));
+
+    let restored = round_trip_heap_ref(&heap_ref)?;
+
+    let headers = restored.collect_drop_headers_ordered();
+    assert_eq!(headers.len(), 1);
+    let avalue = headers[0].unpack();
+    let any_array: &crate::values::types::any_array::AnyArray<AnyPayload> =
+        avalue.downcast_ref().unwrap();
+    assert_eq!(any_array.as_slice().len(), 0);
+
+    Ok(())
+}
+
+/// Host type holding an `AtomicFrozenAnyValueOption<AnyPayload>` field.
+#[derive(Display, Allocative, ProvidesStaticType, NoSerialize, StarlarkPagable)]
+#[display("AtomicHost({})", self.label)]
+struct AtomicHost {
+    label: String,
+    #[allocative(skip)]
+    option: crate::values::any::AtomicFrozenAnyValueOption<AnyPayload>,
+}
+
+impl std::fmt::Debug for AtomicHost {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AtomicHost")
+            .field("label", &self.label)
+            .field("option_is_some", &self.option.load_relaxed().is_some())
+            .finish()
+    }
+}
+
+starlark_simple_value!(AtomicHost);
+
+#[starlark_value(type = "AtomicHost", skip_pagable)]
+impl<'v> StarlarkValue<'v> for AtomicHost {
+    type Canonical = Self;
+}
+
+#[test]
+fn test_atomic_frozen_any_value_option_some_round_trip() -> crate::Result<()> {
+    let heap = FrozenHeap::new();
+    let payload_fv = heap.alloc_any_value(AnyPayload {
+        name: "target".to_owned(),
+        count: 42,
+    });
+    heap.alloc_simple(AtomicHost {
+        label: "host_with_some".to_owned(),
+        option: crate::values::any::AtomicFrozenAnyValueOption::new(Some(payload_fv)),
+    });
+    let heap_ref = heap.into_ref_named(TestHeapName::heap_name(
+        "test_atomic_frozen_any_value_option_some",
+    ));
+
+    let restored = round_trip_heap_ref(&heap_ref)?;
+
+    // StarlarkAny<AnyPayload> goes to drop bump (AnyPayload owns String);
+    // AtomicHost also owns a String so it lives in the drop bump too.
+    let drop_headers = restored.collect_drop_headers_ordered();
+    assert_eq!(drop_headers.len(), 2);
+
+    // Find which header is which (order is alloc order).
+    let host: &AtomicHost = drop_headers[1].unpack().downcast_ref().unwrap();
+    assert_eq!(host.label, "host_with_some");
+
+    // Load and verify the Option<FrozenAnyValue<AnyPayload>>.
+    let loaded = host.option.load_relaxed();
+    let fv = loaded.expect("option should be Some after round-trip");
+    assert_eq!(
+        *fv.as_ref(),
+        AnyPayload {
+            name: "target".to_owned(),
+            count: 42,
+        }
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_atomic_frozen_any_value_option_none_round_trip() -> crate::Result<()> {
+    let heap = FrozenHeap::new();
+    heap.alloc_simple(AtomicHost {
+        label: "host_with_none".to_owned(),
+        option: crate::values::any::AtomicFrozenAnyValueOption::new(None),
+    });
+    let heap_ref = heap.into_ref_named(TestHeapName::heap_name(
+        "test_atomic_frozen_any_value_option_none",
+    ));
+
+    let restored = round_trip_heap_ref(&heap_ref)?;
+
+    let drop_headers = restored.collect_drop_headers_ordered();
+    assert_eq!(drop_headers.len(), 1);
+    let host: &AtomicHost = drop_headers[0].unpack().downcast_ref().unwrap();
+    assert_eq!(host.label, "host_with_none");
+
+    // After round-trip, option should still be None.
+    assert!(
+        host.option.load_relaxed().is_none(),
+        "option should be None after round-trip"
+    );
+
+    Ok(())
+}
+
+// ============================================================================
+// StarlarkAnyComplex<T> round-trip
+//
+// `StarlarkAnyComplex<T>` is the GC-traceable sibling of `StarlarkAny<T>`.
+// For pagable, we exercise the frozen-heap side: allocate
+// `StarlarkAnyComplex<FrozenComplexPayload>` directly on a `FrozenHeap` via
+// `alloc_simple` and round-trip.
+// ============================================================================
+
+#[derive(Debug, Allocative, ProvidesStaticType, StarlarkPagable)]
+struct FrozenComplexPayload {
+    label: String,
+    numbers: Vec<u32>,
+}
+
+crate::register_starlark_any_complex!(frozen FrozenComplexPayload);
+
+#[test]
+fn test_starlark_any_complex_round_trip() -> crate::Result<()> {
+    let heap = FrozenHeap::new();
+    heap.alloc_simple(crate::values::any_complex::StarlarkAnyComplex::new(
+        FrozenComplexPayload {
+            label: "complex".to_owned(),
+            numbers: vec![1, 2, 3],
+        },
+    ));
+    let heap_ref = heap.into_ref_named(TestHeapName::heap_name("test_starlark_any_complex"));
+
+    let restored = round_trip_heap_ref(&heap_ref)?;
+
+    // FrozenComplexPayload owns String/Vec → needs Drop → drop bump.
+    let drop_headers = restored.collect_drop_headers_ordered();
+    assert_eq!(drop_headers.len(), 1);
+    let got: &crate::values::any_complex::StarlarkAnyComplex<FrozenComplexPayload> =
+        drop_headers[0].unpack().downcast_ref().unwrap();
+    assert_eq!(got.value.label, "complex");
+    assert_eq!(got.value.numbers, vec![1, 2, 3]);
+
+    Ok(())
+}
+// ============================================================================
+// `#[starlark_pagable_typetag]` round-trip: `Box<dyn Trait>` with a
+// concrete impl that holds a `FrozenValue`.
+// ============================================================================
+
+#[crate::starlark_pagable_typetag]
+trait TypetagPayload:
+    pagable::PagableTagged + std::fmt::Debug + Allocative + Send + Sync + 'static
+{
+    fn label(&self) -> u32;
+    fn target(&self) -> FrozenValue;
+}
+
+#[derive(Debug, Allocative, ProvidesStaticType, StarlarkPagable)]
+struct TypetagImpl {
+    target: FrozenValue,
+    label: u32,
+}
+
+#[crate::starlark_pagable_typetag]
+impl TypetagPayload for TypetagImpl {
+    fn label(&self) -> u32 {
+        self.label
+    }
+    fn target(&self) -> FrozenValue {
+        self.target
+    }
+}
+
+#[derive(
+    Debug,
+    Display,
+    Allocative,
+    ProvidesStaticType,
+    NoSerialize,
+    StarlarkPagable
+)]
+#[display("TypetagOuter({})", self.outer)]
+struct TypetagOuter {
+    #[starlark_pagable(pagable)]
+    inner: Box<dyn TypetagPayload>,
+    outer: u32,
+}
+
+starlark_simple_value!(TypetagOuter);
+
+#[starlark_value(type = "TypetagOuter", skip_pagable)]
+impl<'v> StarlarkValue<'v> for TypetagOuter {
+    type Canonical = Self;
+}
+
+#[test]
+fn test_starlark_pagable_typetag_round_trip() -> crate::Result<()> {
+    let heap = FrozenHeap::new();
+    let target_fv = heap.alloc_simple(SimpleData {
+        flag: true,
+        count: 161,
+    });
+
+    heap.alloc_simple(TypetagOuter {
+        inner: Box::new(TypetagImpl {
+            target: target_fv,
+            label: 11,
+        }),
+        outer: 1,
+    });
+
+    let heap_ref = heap.into_ref_named(TestHeapName::heap_name("test_typetag"));
+    let restored = round_trip_heap_ref(&heap_ref)?;
+
+    let undrop = restored.collect_undrop_headers_ordered();
+    assert_eq!(undrop.len(), 1);
+    let target_data: &SimpleData = undrop[0].unpack().downcast_ref().unwrap();
+    assert_eq!(target_data.count, 161);
+
+    let drop_headers = restored.collect_drop_headers_ordered();
+    assert_eq!(drop_headers.len(), 1);
+    let outer: &TypetagOuter = drop_headers[0].unpack().downcast_ref().unwrap();
+    assert_eq!(outer.outer, 1);
+    assert_eq!(outer.inner.label(), 11);
+
+    // Inner FrozenValue resolves to the same heap target.
+    let target_addr = undrop[0] as *const _ as usize;
+    assert_eq!(
+        outer.inner.target().ptr_value().ptr_value_untagged(),
+        target_addr,
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_type_compiled_impl_as_starlark_value_round_trip() -> crate::Result<()> {
+    use crate::typing::Ty;
+    use crate::values::typing::type_compiled::compiled::DummyTypeMatcher;
+    use crate::values::typing::type_compiled::compiled::TypeCompiledImplAsStarlarkValue;
+
+    let heap = FrozenHeap::new();
+    let original_ty = Ty::any();
+    heap.alloc_simple(
+        TypeCompiledImplAsStarlarkValue::<DummyTypeMatcher>::new_for_test(
+            DummyTypeMatcher,
+            original_ty.clone(),
+        ),
+    );
+    let heap_ref = heap.into_ref_named(TestHeapName::heap_name(
+        "test_type_compiled_impl_round_trip",
+    ));
+
+    let restored = round_trip_heap_ref(&heap_ref)?;
+
+    // `Ty` owns heap-allocated state → drop bump.
+    let drop_headers = restored.collect_drop_headers_ordered();
+    assert_eq!(drop_headers.len(), 1);
+    let got: &TypeCompiledImplAsStarlarkValue<DummyTypeMatcher> =
+        drop_headers[0].unpack().downcast_ref().unwrap();
+    assert_eq!(got.ty_for_test(), &original_ty);
+    // `DummyTypeMatcher` is a ZST; the only observable thing is that the type matched.
+    let _: &DummyTypeMatcher = got.impl_for_test();
+
+    Ok(())
+}
+
+#[test]
+fn test_type_compiled_impl_with_is_str_round_trip() -> crate::Result<()> {
+    use crate::typing::Ty;
+    use crate::values::typing::type_compiled::compiled::TypeCompiledImplAsStarlarkValue;
+    use crate::values::typing::type_compiled::matcher::TypeMatcher;
+    use crate::values::typing::type_compiled::matchers::IsStr;
+
+    let heap = FrozenHeap::new();
+    let original_ty = Ty::string();
+    heap.alloc_simple(TypeCompiledImplAsStarlarkValue::<IsStr>::new_for_test(
+        IsStr,
+        original_ty.clone(),
+    ));
+    let heap_ref = heap.into_ref_named(TestHeapName::heap_name("test_type_compiled_is_str"));
+
+    let restored = round_trip_heap_ref(&heap_ref)?;
+
+    let drop_headers = restored.collect_drop_headers_ordered();
+    assert_eq!(drop_headers.len(), 1);
+    let got: &TypeCompiledImplAsStarlarkValue<IsStr> =
+        drop_headers[0].unpack().downcast_ref().unwrap();
+    assert_eq!(got.ty_for_test(), &original_ty);
+
+    // `IsStr` matches string values — confirm behaviour survives round-trip.
+    assert!(
+        got.impl_for_test()
+            .matches(const_frozen_string!("hi").to_value())
+    );
+    assert!(
+        !got.impl_for_test()
+            .matches(FrozenValue::new_bool(true).to_value())
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_type_compiled_impl_with_is_int_round_trip() -> crate::Result<()> {
+    use crate::typing::Ty;
+    use crate::values::typing::type_compiled::compiled::TypeCompiledImplAsStarlarkValue;
+    use crate::values::typing::type_compiled::matcher::TypeMatcher;
+    use crate::values::typing::type_compiled::matchers::IsInt;
+
+    let heap = FrozenHeap::new();
+    let original_ty = Ty::int();
+    heap.alloc_simple(TypeCompiledImplAsStarlarkValue::<IsInt>::new_for_test(
+        IsInt,
+        original_ty.clone(),
+    ));
+    let heap_ref = heap.into_ref_named(TestHeapName::heap_name("test_type_compiled_is_int"));
+
+    let restored = round_trip_heap_ref(&heap_ref)?;
+
+    let drop_headers = restored.collect_drop_headers_ordered();
+    assert_eq!(drop_headers.len(), 1);
+    let got: &TypeCompiledImplAsStarlarkValue<IsInt> =
+        drop_headers[0].unpack().downcast_ref().unwrap();
+    assert_eq!(got.ty_for_test(), &original_ty);
+    assert!(
+        got.impl_for_test()
+            .matches(FrozenValue::testing_new_int(42).to_value())
+    );
+    assert!(
+        !got.impl_for_test()
+            .matches(const_frozen_string!("x").to_value())
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_type_compiled_impl_with_is_any_of_round_trip() -> crate::Result<()> {
+    use crate::typing::Ty;
+    use crate::values::typing::type_compiled::compiled::TypeCompiledImplAsStarlarkValue;
+    use crate::values::typing::type_compiled::matcher::TypeMatcher;
+    use crate::values::typing::type_compiled::matcher::TypeMatcherBox;
+    use crate::values::typing::type_compiled::matchers::IsAnyOf;
+    use crate::values::typing::type_compiled::matchers::IsInt;
+    use crate::values::typing::type_compiled::matchers::IsStr;
+
+    // `IsAnyOf` wraps a `Vec<TypeMatcherBox>` of typetag-routed matchers.
+    let inners = vec![TypeMatcherBox::new(IsStr), TypeMatcherBox::new(IsInt)];
+    let heap = FrozenHeap::new();
+    let original_ty = Ty::union2(Ty::string(), Ty::int());
+    heap.alloc_simple(TypeCompiledImplAsStarlarkValue::<IsAnyOf>::new_for_test(
+        IsAnyOf(inners),
+        original_ty.clone(),
+    ));
+    let heap_ref = heap.into_ref_named(TestHeapName::heap_name("test_type_compiled_is_any_of"));
+
+    let restored = round_trip_heap_ref(&heap_ref)?;
+
+    let drop_headers = restored.collect_drop_headers_ordered();
+    assert_eq!(drop_headers.len(), 1);
+    let got: &TypeCompiledImplAsStarlarkValue<IsAnyOf> =
+        drop_headers[0].unpack().downcast_ref().unwrap();
+    assert_eq!(got.ty_for_test(), &original_ty);
+    // Vec length preserved through the typetag path.
+    assert_eq!(got.impl_for_test().0.len(), 2);
+    // Functional round-trip: both variants still match.
+    assert!(
+        got.impl_for_test()
+            .matches(const_frozen_string!("s").to_value())
+    );
+    assert!(
+        got.impl_for_test()
+            .matches(FrozenValue::testing_new_int(1).to_value())
+    );
+    assert!(
+        !got.impl_for_test()
+            .matches(FrozenValue::new_bool(true).to_value())
+    );
 
     Ok(())
 }

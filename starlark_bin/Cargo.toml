@@ -34,5 +34,6 @@ thiserror = "2.0.18"
 walkdir = "2.3"
 
 [[bin]]
+doc = false
 name = "starlark"
 path = "bin/main.rs"

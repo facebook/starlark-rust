@@ -301,7 +301,7 @@ impl DapAdapter for DapAdapterImpl {
             let frame = eval.call_stack_top_frame();
             let name = frame.map_or("".to_owned(), |v| v.name);
             Ok(Some(convert_frame(0, name, Some(span.to_file_span()))))
-        }))
+        }))?
     }
 
     fn stack_trace(&self, _: StackTraceArguments) -> anyhow::Result<StackTraceResponseBody> {
@@ -321,7 +321,7 @@ impl DapAdapter for DapAdapterImpl {
                 total_frames: Some(res.len() as i64),
                 stack_frames: res,
             })
-        }))
+        }))?
     }
 
     fn scopes(&self, frame_id: usize) -> anyhow::Result<ScopesInfo> {
@@ -330,7 +330,7 @@ impl DapAdapter for DapAdapterImpl {
             Ok(ScopesInfo {
                 num_locals: vars.len(),
             })
-        }))
+        }))?
     }
 
     fn variables(&self, frame_id: usize) -> anyhow::Result<VariablesInfo> {
@@ -342,7 +342,7 @@ impl DapAdapter for DapAdapterImpl {
                     .map(|(name, value)| Variable::from_value(PathSegment::Attr(name), value))
                     .collect(),
             })
-        }))
+        }))?
     }
 
     fn inspect_variable(
@@ -376,17 +376,15 @@ impl DapAdapter for DapAdapterImpl {
                 value = p.get(&value, eval.heap()).into_anyhow_result()?;
             }
             InspectVariableInfo::try_from_value(value, eval.heap()).into_anyhow_result()
-        }))
+        }))?
     }
 
     fn continue_(&self) -> anyhow::Result<()> {
-        self.inject_next(Next::Continue);
-        Ok(())
+        self.inject_next(Next::Continue)
     }
 
     fn step(&self, kind: StepKind) -> anyhow::Result<()> {
-        self.inject_next(Next::Step(kind));
-        Ok(())
+        self.inject_next(Next::Step(kind))
     }
 
     fn evaluate(&self, expr: &str) -> anyhow::Result<EvaluateExprInfo> {
@@ -397,7 +395,7 @@ impl DapAdapter for DapAdapterImpl {
                 Err(e) => Err(e),
                 Ok(v) => Ok(EvaluateExprInfo::from_value(&v)),
             }
-        }))
+        }))?
     }
 }
 
@@ -405,26 +403,34 @@ impl DapAdapterImpl {
     fn inject<T: 'static + Send>(
         &self,
         f: Box<dyn Fn(FileSpanRef, &mut Evaluator) -> (Next, T) + Send>,
-    ) -> T {
+    ) -> anyhow::Result<T> {
         let (sender, receiver) = channel();
         self.sender
             .send(Box::new(move |span, eval| {
                 let (next, res) = f(span, eval);
-                sender.send(res).unwrap();
+                // If the receiver was dropped (e.g. the caller gave up), the send fails;
+                // discard the resulting SendError so the eval loop still proceeds normally.
+                drop(sender.send(res));
                 next
             }))
-            .unwrap();
-        receiver.recv().unwrap()
+            .map_err(|_| {
+                anyhow::anyhow!("Starlark debug session is no longer active (eval loop ended)")
+            })?;
+        receiver.recv().map_err(|_| {
+            anyhow::anyhow!(
+                "Starlark debug session ended before responding (eval loop dropped without invoking command)"
+            )
+        })
     }
 
-    fn inject_next(&self, next: Next) {
+    fn inject_next(&self, next: Next) -> anyhow::Result<()> {
         self.inject(Box::new(move |_, _| (next, ())))
     }
 
     fn with_ctx<T: 'static + Send>(
         &self,
         f: Box<dyn Fn(FileSpanRef, &mut Evaluator) -> T + Send>,
-    ) -> T {
+    ) -> anyhow::Result<T> {
         self.inject(Box::new(move |span, eval| {
             (Next::RemainPaused, f(span, eval))
         }))

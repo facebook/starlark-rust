@@ -21,19 +21,39 @@
 //! This allows these types to be used directly in `#[derive(StarlarkPagable)]`
 //! without needing `#[starlark_pagable(pagable)]`.
 
+use std::hash::BuildHasher;
+use std::hash::Hash;
+use std::marker::PhantomData;
 use std::num::NonZeroI32;
+use std::sync::Arc;
+use std::sync::Weak;
 
+use dupe::Dupe;
+use indexmap::IndexMap;
 use pagable::PagableDeserialize;
+use pagable::PagableDeserializer;
 use pagable::PagableSerialize;
+use pagable::PagableSerializer;
+use pagable::arc_erase::ArcErase;
+use pagable::arc_erase::ArcEraseDyn;
+use pagable::arc_erase::ArcEraseType;
+use pagable::arc_erase::StdArcEraseType;
+use pagable::arc_erase::WeakErase;
+use pagable::arc_erase::deserialize_arc;
 use starlark_map::Hashed;
 use starlark_map::small_map::SmallMap;
+use starlark_map::small_set::SmallSet;
+use starlark_syntax::syntax::ast::AssignOp;
 
 use crate::pagable::starlark_deserialize::StarlarkDeserialize;
 use crate::pagable::starlark_deserialize::StarlarkDeserializeContext;
+use crate::pagable::starlark_deserialize_context::StarlarkDeserializerImpl;
 use crate::pagable::starlark_serialize::StarlarkSerialize;
 use crate::pagable::starlark_serialize::StarlarkSerializeContext;
+use crate::pagable::starlark_serialize_context::StarlarkSerializerImpl;
 use crate::values::FrozenStringValue;
 use crate::values::FrozenValue;
+use crate::values::ThinBoxSliceFrozenValue;
 use crate::values::ValueLike;
 
 /// Implement `StarlarkSerialize` and `StarlarkDeserialize` for a type
@@ -121,6 +141,73 @@ impl<T: StarlarkDeserialize> StarlarkDeserialize for Option<T> {
 }
 
 // ============================================================================
+// Tuples (A, B) — composes with `Vec<T>: StarlarkSerialize` to give
+// `Vec<(A, B)>: StarlarkSerialize` for free.
+// ============================================================================
+
+impl<A: StarlarkSerialize, B: StarlarkSerialize> StarlarkSerialize for (A, B) {
+    fn starlark_serialize(&self, ctx: &mut dyn StarlarkSerializeContext) -> crate::Result<()> {
+        self.0.starlark_serialize(ctx)?;
+        self.1.starlark_serialize(ctx)?;
+        Ok(())
+    }
+}
+
+impl<A: StarlarkDeserialize, B: StarlarkDeserialize> StarlarkDeserialize for (A, B) {
+    fn starlark_deserialize(ctx: &mut dyn StarlarkDeserializeContext<'_>) -> crate::Result<Self> {
+        let a = A::starlark_deserialize(ctx)?;
+        let b = B::starlark_deserialize(ctx)?;
+        Ok((a, b))
+    }
+}
+
+impl<A: StarlarkSerialize, B: StarlarkSerialize, C: StarlarkSerialize> StarlarkSerialize
+    for (A, B, C)
+{
+    fn starlark_serialize(&self, ctx: &mut dyn StarlarkSerializeContext) -> crate::Result<()> {
+        self.0.starlark_serialize(ctx)?;
+        self.1.starlark_serialize(ctx)?;
+        self.2.starlark_serialize(ctx)?;
+        Ok(())
+    }
+}
+
+impl<A: StarlarkDeserialize, B: StarlarkDeserialize, C: StarlarkDeserialize> StarlarkDeserialize
+    for (A, B, C)
+{
+    fn starlark_deserialize(ctx: &mut dyn StarlarkDeserializeContext<'_>) -> crate::Result<Self> {
+        let a = A::starlark_deserialize(ctx)?;
+        let b = B::starlark_deserialize(ctx)?;
+        let c = C::starlark_deserialize(ctx)?;
+        Ok((a, b, c))
+    }
+}
+
+impl<A: StarlarkSerialize, B: StarlarkSerialize, C: StarlarkSerialize, D: StarlarkSerialize>
+    StarlarkSerialize for (A, B, C, D)
+{
+    fn starlark_serialize(&self, ctx: &mut dyn StarlarkSerializeContext) -> crate::Result<()> {
+        self.0.starlark_serialize(ctx)?;
+        self.1.starlark_serialize(ctx)?;
+        self.2.starlark_serialize(ctx)?;
+        self.3.starlark_serialize(ctx)?;
+        Ok(())
+    }
+}
+
+impl<A: StarlarkDeserialize, B: StarlarkDeserialize, C: StarlarkDeserialize, D: StarlarkDeserialize>
+    StarlarkDeserialize for (A, B, C, D)
+{
+    fn starlark_deserialize(ctx: &mut dyn StarlarkDeserializeContext<'_>) -> crate::Result<Self> {
+        let a = A::starlark_deserialize(ctx)?;
+        let b = B::starlark_deserialize(ctx)?;
+        let c = C::starlark_deserialize(ctx)?;
+        let d = D::starlark_deserialize(ctx)?;
+        Ok((a, b, c, d))
+    }
+}
+
+// ============================================================================
 // SmallMap
 // ============================================================================
 
@@ -148,10 +235,37 @@ impl<K: SmallMapKeyDeserialize, V: StarlarkDeserialize> StarlarkDeserialize for 
     }
 }
 
+// ============================================================================
+// SmallSet
+// ============================================================================
+
+impl<T: StarlarkSerialize> StarlarkSerialize for SmallSet<T> {
+    fn starlark_serialize(&self, ctx: &mut dyn StarlarkSerializeContext) -> crate::Result<()> {
+        self.len().pagable_serialize(ctx.pagable())?;
+        for v in self.iter() {
+            v.starlark_serialize(ctx)?;
+        }
+        Ok(())
+    }
+}
+
+impl<T: SmallMapKeyDeserialize> StarlarkDeserialize for SmallSet<T> {
+    fn starlark_deserialize(ctx: &mut dyn StarlarkDeserializeContext<'_>) -> crate::Result<Self> {
+        let len = usize::pagable_deserialize(ctx.pagable())?;
+        let mut set = SmallSet::with_capacity(len);
+        for _ in 0..len {
+            let hashed = T::starlark_deserialize_hashed(ctx)?;
+            set.insert_hashed(hashed);
+        }
+        Ok(set)
+    }
+}
+
 /// Trait for types that can be deserialized as SmallMap keys.
 /// Bridges the gap between types with `Hash` (use `Hashed::new`) and
 /// starlark value types (use `get_hashed()`).
-pub(crate) trait SmallMapKeyDeserialize: StarlarkDeserialize + Eq + Sized {
+pub trait SmallMapKeyDeserialize: StarlarkDeserialize + Eq + Sized {
+    /// Deserialize `Self` and compute its `Hashed` representation.
     fn starlark_deserialize_hashed(
         ctx: &mut dyn StarlarkDeserializeContext<'_>,
     ) -> crate::Result<Hashed<Self>>;
@@ -175,6 +289,18 @@ macro_rules! impl_small_map_key_hash {
 
 impl_small_map_key_hash!(String, bool, u8, u16, u32, u64, usize, i8, i16, i32, i64);
 
+impl<T> SmallMapKeyDeserialize for Arc<T>
+where
+    Arc<T>: StarlarkDeserialize + Hash + Eq,
+{
+    fn starlark_deserialize_hashed(
+        ctx: &mut dyn StarlarkDeserializeContext<'_>,
+    ) -> crate::Result<Hashed<Self>> {
+        let k = Self::starlark_deserialize(ctx)?;
+        Ok(Hashed::new(k))
+    }
+}
+
 /// FrozenValue: no `Hash` trait, use `get_hashed()` from `ValueLike`.
 /// The value is already ensure_initialized by `deserialize_frozen_value`.
 impl SmallMapKeyDeserialize for FrozenValue {
@@ -196,6 +322,115 @@ impl SmallMapKeyDeserialize for FrozenStringValue {
     }
 }
 
+// ============================================================================
+// Box<[T]> (boxed slice)
+// ============================================================================
+
+impl<T: StarlarkSerialize> StarlarkSerialize for Box<[T]> {
+    fn starlark_serialize(&self, ctx: &mut dyn StarlarkSerializeContext) -> crate::Result<()> {
+        self.len().pagable_serialize(ctx.pagable())?;
+        for elem in self.iter() {
+            elem.starlark_serialize(ctx)?;
+        }
+        Ok(())
+    }
+}
+
+impl<T: StarlarkDeserialize> StarlarkDeserialize for Box<[T]> {
+    fn starlark_deserialize(ctx: &mut dyn StarlarkDeserializeContext<'_>) -> crate::Result<Self> {
+        let len = usize::pagable_deserialize(ctx.pagable())?;
+        let mut v = Vec::with_capacity(len);
+        for _ in 0..len {
+            v.push(T::starlark_deserialize(ctx)?);
+        }
+        Ok(v.into_boxed_slice())
+    }
+}
+
+impl<'v> StarlarkSerialize for ThinBoxSliceFrozenValue<'v> {
+    fn starlark_serialize(&self, ctx: &mut dyn StarlarkSerializeContext) -> crate::Result<()> {
+        self.len().pagable_serialize(ctx.pagable())?;
+        for value in self.iter() {
+            value.starlark_serialize(ctx)?;
+        }
+        Ok(())
+    }
+}
+
+impl<'v> StarlarkDeserialize for ThinBoxSliceFrozenValue<'v> {
+    fn starlark_deserialize(ctx: &mut dyn StarlarkDeserializeContext<'_>) -> crate::Result<Self> {
+        let len = usize::pagable_deserialize(ctx.pagable())?;
+        let mut values = Vec::with_capacity(len);
+        for _ in 0..len {
+            values.push(FrozenValue::starlark_deserialize(ctx)?);
+        }
+        Ok(Self::from_iter(values))
+    }
+}
+
+// ============================================================================
+// PhantomData (zero-size, no-op ser/de)
+// ============================================================================
+
+impl<T: ?Sized> StarlarkSerialize for PhantomData<T> {
+    fn starlark_serialize(&self, _ctx: &mut dyn StarlarkSerializeContext) -> crate::Result<()> {
+        Ok(())
+    }
+}
+
+impl<T: ?Sized> StarlarkDeserialize for PhantomData<T> {
+    fn starlark_deserialize(_ctx: &mut dyn StarlarkDeserializeContext<'_>) -> crate::Result<Self> {
+        Ok(PhantomData)
+    }
+}
+
+// ============================================================================
+// CodeMap (from starlark_syntax) — bridges its `pagable::Pagable` impl into the
+// starlark ser/de layer. Manual impl because we can't add `StarlarkPagableViaPagable`
+// derive on a foreign type from outside its crate.
+// ============================================================================
+
+impl StarlarkSerialize for starlark_syntax::codemap::CodeMap {
+    fn starlark_serialize(&self, ctx: &mut dyn StarlarkSerializeContext) -> crate::Result<()> {
+        PagableSerialize::pagable_serialize(self, ctx.pagable())?;
+        Ok(())
+    }
+}
+
+impl StarlarkDeserialize for starlark_syntax::codemap::CodeMap {
+    fn starlark_deserialize(ctx: &mut dyn StarlarkDeserializeContext<'_>) -> crate::Result<Self> {
+        Ok(PagableDeserialize::pagable_deserialize(ctx.pagable())?)
+    }
+}
+
+// `AssignOp` lives in `starlark_syntax`, we bridge its `Pagable` impl into
+// the starlark layer here.
+impl StarlarkSerialize for AssignOp {
+    fn starlark_serialize(&self, ctx: &mut dyn StarlarkSerializeContext) -> crate::Result<()> {
+        PagableSerialize::pagable_serialize(self, ctx.pagable())?;
+        Ok(())
+    }
+}
+
+impl StarlarkDeserialize for AssignOp {
+    fn starlark_deserialize(ctx: &mut dyn StarlarkDeserializeContext<'_>) -> crate::Result<Self> {
+        Ok(PagableDeserialize::pagable_deserialize(ctx.pagable())?)
+    }
+}
+
+impl StarlarkSerialize for starlark_syntax::syntax::ast::Visibility {
+    fn starlark_serialize(&self, ctx: &mut dyn StarlarkSerializeContext) -> crate::Result<()> {
+        PagableSerialize::pagable_serialize(self, ctx.pagable())?;
+        Ok(())
+    }
+}
+
+impl StarlarkDeserialize for starlark_syntax::syntax::ast::Visibility {
+    fn starlark_deserialize(ctx: &mut dyn StarlarkDeserializeContext<'_>) -> crate::Result<Self> {
+        Ok(PagableDeserialize::pagable_deserialize(ctx.pagable())?)
+    }
+}
+
 impl StarlarkSerialize for NonZeroI32 {
     fn starlark_serialize(&self, ctx: &mut dyn StarlarkSerializeContext) -> crate::Result<()> {
         self.get().pagable_serialize(ctx.pagable())?;
@@ -208,5 +443,175 @@ impl StarlarkDeserialize for NonZeroI32 {
         let v = i32::pagable_deserialize(ctx.pagable())?;
         NonZeroI32::new(v)
             .ok_or_else(|| crate::Error::new_other(anyhow::anyhow!("expected non-zero i32, got 0")))
+    }
+}
+
+// ============================================================================
+// Arc<T> — Arc-identity dedup for `T: StarlarkSerialize + StarlarkDeserialize`.
+//
+// Pagable's `ArcErase` blanket requires `T: PagableSerialize`, which
+// starlark-only types don't have. `StarlarkArcBridge<T>` wraps `Arc<T>` and
+// impls `ArcErase` itself — recovering the starlark context inside ser/de.
+// ============================================================================
+
+/// Wrapper that lets `Arc<T: StarlarkSerialize + StarlarkDeserialize>` plug
+/// into pagable's `Arc` dedup machinery via starlark-context recovery.
+struct StarlarkArcBridge<T: 'static>(Arc<T>);
+
+impl<T: 'static> Clone for StarlarkArcBridge<T> {
+    fn clone(&self) -> Self {
+        Self(self.0.dupe())
+    }
+}
+impl<T: 'static> Dupe for StarlarkArcBridge<T> {}
+
+/// Weak counterpart of [`StarlarkArcBridge`]. Wraps `Weak<T>` so its
+/// `WeakErase::upgrade_weak` produces a boxed `StarlarkArcBridge<T>` rather
+/// than the pagable-flavored Arc that pagable's blanket would produce.
+struct StarlarkArcBridgeWeak<T: 'static>(Weak<T>);
+
+impl<T: StarlarkSerialize + StarlarkDeserialize + Send + Sync + 'static> WeakErase
+    for StarlarkArcBridgeWeak<T>
+{
+    fn is_expired(&self) -> bool {
+        self.0.strong_count() == 0
+    }
+
+    fn upgrade_weak(&self) -> Option<Box<dyn ArcEraseDyn>> {
+        self.0
+            .upgrade()
+            .map(|arc| Box::new(StarlarkArcBridge(arc)) as _)
+    }
+}
+
+impl<T: StarlarkSerialize + StarlarkDeserialize + Send + Sync + 'static> ArcErase
+    for StarlarkArcBridge<T>
+{
+    type Weak = StarlarkArcBridgeWeak<T>;
+
+    fn dupe_strong(&self) -> Self {
+        self.dupe()
+    }
+
+    fn erase_type() -> impl ArcEraseType {
+        StdArcEraseType::<Self>::new()
+    }
+
+    fn identity(&self) -> usize {
+        Arc::as_ptr(&self.0) as *const () as usize
+    }
+
+    fn downgrade(&self) -> Option<Self::Weak> {
+        Some(StarlarkArcBridgeWeak(Arc::downgrade(&self.0)))
+    }
+
+    fn upgrade_weak(weak: &Self::Weak) -> Option<Self> {
+        weak.0.upgrade().map(Self)
+    }
+
+    fn serialize_inner(&self, ser: &mut dyn PagableSerializer) -> pagable::Result<()> {
+        let mut ctx = StarlarkSerializerImpl::recover_from_pagable(ser)
+            .map_err(|e: crate::Error| e.into_anyhow())?;
+        <T as StarlarkSerialize>::starlark_serialize(&self.0, &mut ctx)
+            .map_err(|e: crate::Error| e.into_anyhow())
+    }
+
+    fn deserialize_inner<'de, D: PagableDeserializer<'de> + ?Sized>(
+        deser: &mut D,
+    ) -> pagable::Result<Self> {
+        let mut ctx = StarlarkDeserializerImpl::recover_from_pagable(deser.as_dyn())
+            .map_err(|e: crate::Error| e.into_anyhow())?;
+        let inner = T::starlark_deserialize(&mut ctx).map_err(|e: crate::Error| e.into_anyhow())?;
+        Ok(Self(Arc::new(inner)))
+    }
+}
+
+impl<T: StarlarkSerialize + StarlarkDeserialize + Send + Sync + 'static> StarlarkSerialize
+    for Arc<T>
+{
+    fn starlark_serialize(&self, ctx: &mut dyn StarlarkSerializeContext) -> crate::Result<()> {
+        let bridge = StarlarkArcBridge(self.clone());
+        ctx.pagable().serialize_arc(&bridge)?;
+        Ok(())
+    }
+}
+
+impl<T: StarlarkSerialize + StarlarkDeserialize + Send + Sync + 'static> StarlarkDeserialize
+    for Arc<T>
+{
+    fn starlark_deserialize(ctx: &mut dyn StarlarkDeserializeContext<'_>) -> crate::Result<Self> {
+        let bridge: StarlarkArcBridge<T> = deserialize_arc(ctx.pagable())?;
+        Ok(bridge.0)
+    }
+}
+
+// ============================================================================
+// IndexMap — insertion-order-preserving hash map. Mirrors `pagable::impls`'s
+// `IndexMap` impl: the hasher is not serialized; deserialize constructs a
+// default-hasher map and inserts entries in order.
+// ============================================================================
+
+impl<K: StarlarkSerialize, V: StarlarkSerialize, S> StarlarkSerialize for IndexMap<K, V, S> {
+    fn starlark_serialize(&self, ctx: &mut dyn StarlarkSerializeContext) -> crate::Result<()> {
+        self.len().pagable_serialize(ctx.pagable())?;
+        for (k, v) in self.iter() {
+            k.starlark_serialize(ctx)?;
+            v.starlark_serialize(ctx)?;
+        }
+        Ok(())
+    }
+}
+
+impl<K, V, S> StarlarkDeserialize for IndexMap<K, V, S>
+where
+    K: StarlarkDeserialize + Hash + Eq,
+    V: StarlarkDeserialize,
+    S: Default + BuildHasher,
+{
+    fn starlark_deserialize(ctx: &mut dyn StarlarkDeserializeContext<'_>) -> crate::Result<Self> {
+        let len = usize::pagable_deserialize(ctx.pagable())?;
+        let mut map: IndexMap<K, V, S> = IndexMap::default();
+        for _ in 0..len {
+            let k = K::starlark_deserialize(ctx)?;
+            let v = V::starlark_deserialize(ctx)?;
+            map.insert(k, v);
+        }
+        Ok(map)
+    }
+}
+
+// ============================================================================
+// Either<A, B>
+//
+// Wire format: one u8 tag (0 = Left, 1 = Right) followed by the chosen variant.
+// ============================================================================
+
+impl<A: StarlarkSerialize, B: StarlarkSerialize> StarlarkSerialize for either::Either<A, B> {
+    fn starlark_serialize(&self, ctx: &mut dyn StarlarkSerializeContext) -> crate::Result<()> {
+        match self {
+            either::Either::Left(a) => {
+                0u8.pagable_serialize(ctx.pagable())?;
+                a.starlark_serialize(ctx)?;
+            }
+            either::Either::Right(b) => {
+                1u8.pagable_serialize(ctx.pagable())?;
+                b.starlark_serialize(ctx)?;
+            }
+        }
+        Ok(())
+    }
+}
+
+impl<A: StarlarkDeserialize, B: StarlarkDeserialize> StarlarkDeserialize for either::Either<A, B> {
+    fn starlark_deserialize(ctx: &mut dyn StarlarkDeserializeContext<'_>) -> crate::Result<Self> {
+        let tag = u8::pagable_deserialize(ctx.pagable())?;
+        match tag {
+            0 => Ok(either::Either::Left(A::starlark_deserialize(ctx)?)),
+            1 => Ok(either::Either::Right(B::starlark_deserialize(ctx)?)),
+            _ => Err(crate::Error::new_other(anyhow::anyhow!(
+                "invalid Either tag: {}",
+                tag
+            ))),
+        }
     }
 }

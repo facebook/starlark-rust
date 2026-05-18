@@ -38,6 +38,7 @@ pub use crate::values::typing::never::StarlarkNever;
 pub use crate::values::typing::type_compiled::compiled::TypeCompiled;
 pub use crate::values::typing::type_compiled::compiled::TypeCompiledImplAsStarlarkValue;
 pub use crate::values::typing::type_compiled::matcher::TypeMatcher;
+pub use crate::values::typing::type_compiled::matcher::TypeMatcherDyn;
 pub use crate::values::typing::type_compiled::matcher::TypeMatcherRegistered;
 pub use crate::values::typing::type_compiled::type_matcher_factory::TypeMatcherFactory;
 pub use crate::values::typing::type_type::TypeType;

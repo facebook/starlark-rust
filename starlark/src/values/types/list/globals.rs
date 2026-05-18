@@ -18,6 +18,7 @@
 use allocative::Allocative;
 use dupe::Dupe;
 use once_cell::sync::Lazy;
+use pagable::Pagable;
 use starlark_derive::starlark_module;
 
 use crate as starlark;
@@ -43,7 +44,9 @@ use crate::values::list::ListRef;
 use crate::values::list::value::FrozenList;
 use crate::values::typing::StarlarkIter;
 
-#[derive(Allocative, Hash, Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
+#[derive(
+    Allocative, Hash, Eq, PartialEq, Ord, PartialOrd, Clone, Debug, Pagable
+)]
 struct ListType;
 
 static LIST: Lazy<TyFunction> = Lazy::new(|| {

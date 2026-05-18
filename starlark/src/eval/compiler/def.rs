@@ -28,6 +28,7 @@ use derivative::Derivative;
 use derive_more::Display;
 use dupe::Dupe;
 use starlark_derive::NoSerialize;
+use starlark_derive::StarlarkPagable;
 use starlark_derive::VisitSpanMut;
 use starlark_derive::starlark_value;
 use starlark_map::StarlarkHasher;
@@ -80,6 +81,7 @@ use crate::eval::runtime::params::spec::ParametersSpec;
 use crate::eval::runtime::profile::instant::ProfilerInstant;
 use crate::eval::runtime::slots::LocalSlotId;
 use crate::eval::runtime::slots::LocalSlotIdCapturedOrNot;
+use crate::pagable::StarlarkPagable;
 use crate::register_starlark_any;
 use crate::starlark_complex_values;
 use crate::static_starlark_value;
@@ -149,13 +151,14 @@ impl StmtCompiledCell {
     }
 }
 
-#[derive(Clone, Debug, VisitSpanMut)]
+#[derive(Clone, Debug, VisitSpanMut, StarlarkPagable)]
 pub(crate) struct ParameterName {
     pub(crate) name: String,
     captured: Captured,
 }
 
-#[derive(Clone, Debug, VisitSpanMut)]
+#[derive(Clone, Debug, VisitSpanMut, StarlarkPagable)]
+#[starlark_pagable(bound = "T: StarlarkPagable")]
 pub(crate) enum ParameterCompiled<T> {
     Normal(
         /// Name.
@@ -230,9 +233,11 @@ impl<T> ParameterCompiled<T> {
     }
 }
 
-#[derive(Debug, Clone, VisitSpanMut)]
+#[derive(Debug, Clone, VisitSpanMut, StarlarkPagable)]
+#[starlark_pagable(bound = "T: StarlarkPagable")]
 pub(crate) struct ParametersCompiled<T> {
     pub(crate) params: Vec<IrSpanned<ParameterCompiled<T>>>,
+    #[starlark_pagable(pagable)]
     pub(crate) indices: DefParamIndices,
 }
 
@@ -317,7 +322,13 @@ impl<T> ParametersCompiled<T> {
 }
 
 /// Copy local variable slot to nested function.
-#[derive(Debug, Clone, Dupe)]
+#[derive(
+    Debug,
+    Clone,
+    Dupe,
+    pagable::Pagable,
+    starlark_derive::StarlarkPagableViaPagable
+)]
 pub(crate) struct CopySlotFromParent {
     /// Slot in the outer function.
     pub(crate) parent: LocalSlotIdCapturedOrNot,
@@ -326,7 +337,7 @@ pub(crate) struct CopySlotFromParent {
 }
 
 /// Static info for `def`, `lambda` or module.
-#[derive(Derivative, Display)]
+#[derive(Derivative, Display, StarlarkPagable)]
 #[derivative(Debug)]
 #[display("DefInfo")]
 pub(crate) struct DefInfo {
@@ -336,6 +347,7 @@ pub(crate) struct DefInfo {
     /// Indices of parameters, which are captured in nested defs.
     parameter_captures: FrozenAnyArray<LocalSlotId>,
     /// Type of this function, for the typechecker.
+    #[starlark_pagable(pagable)]
     ty: Ty,
     /// Codemap of the file where the function is declared.
     pub(crate) codemap: FrozenAnyValue<CodeMap>,
@@ -388,7 +400,7 @@ impl DefInfo {
     }
 }
 
-#[derive(Clone, Debug, VisitSpanMut)]
+#[derive(Clone, Debug, VisitSpanMut, StarlarkPagable)]
 pub(crate) struct DefCompiled {
     pub(crate) function_name: String,
     pub(crate) params: ParametersCompiled<IrSpanned<ExprCompiled>>,
@@ -524,7 +536,14 @@ impl Compiler<'_, '_, '_, '_> {
 
 /// Starlark function internal representation and implementation of
 /// [`StarlarkValue`].
-#[derive(Derivative, NoSerialize, ProvidesStaticType, Trace, Allocative)]
+#[derive(
+    Derivative,
+    NoSerialize,
+    ProvidesStaticType,
+    Trace,
+    Allocative,
+    starlark_derive::StarlarkPagable
+)]
 #[derivative(Debug)]
 pub(crate) struct DefGen<V> {
     pub(crate) parameters: ParametersSpec<V>, // The parameters, **kwargs etc including defaults (which are evaluated afresh each time)
@@ -553,7 +572,33 @@ pub(crate) struct DefGen<V> {
     /// This field is only used in `FrozenDef`. It is populated in `post_freeze`.
     #[derivative(Debug = "ignore")]
     #[allocative(skip)]
+    #[starlark_pagable(
+        serialize_with = "serialize_optimized_on_freeze_stmt",
+        deserialize_with = "deserialize_optimized_on_freeze_stmt"
+    )]
     optimized_on_freeze_stmt: StmtCompiledCell,
+}
+
+fn serialize_optimized_on_freeze_stmt(
+    cell: &StmtCompiledCell,
+    ctx: &mut dyn crate::pagable::StarlarkSerializeContext,
+) -> crate::Result<()> {
+    // SAFETY: `StmtCompiledCell::set` is only called from `DefGen::post_freeze`,
+    // which runs as part of the freeze pipeline before the frozen def is
+    // exposed to any caller. Pagable serialization is downstream of freeze,
+    // so the cell is stable here.
+    let bc: &Bc = unsafe { &*cell.cell.get() };
+    <Bc as crate::pagable::StarlarkSerialize>::starlark_serialize(bc, ctx)
+}
+
+fn deserialize_optimized_on_freeze_stmt(
+    ctx: &mut dyn crate::pagable::StarlarkDeserializeContext<'_>,
+) -> crate::Result<StmtCompiledCell> {
+    Ok(StmtCompiledCell {
+        cell: UnsafeCell::new(
+            <Bc as crate::pagable::StarlarkDeserialize>::starlark_deserialize(ctx)?,
+        ),
+    })
 }
 
 impl<V> Display for DefGen<V> {
@@ -626,7 +671,7 @@ impl<'v> DefLike<'v> for DefGen<FrozenValue> {
     const FROZEN: bool = true;
 }
 
-#[starlark_value(type = FUNCTION_TYPE)]
+#[starlark_value(type = FUNCTION_TYPE, skip_pagable)]
 impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for DefGen<V>
 where
     Self: ProvidesStaticType<'v> + DefLike<'v>,

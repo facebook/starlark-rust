@@ -201,10 +201,9 @@ impl TryFrom<Url> for LspUrl {
     fn try_from(url: Url) -> Result<Self, Self::Error> {
         match url.scheme() {
             "file" => {
-                let file_path = PathBuf::from(
-                    url.to_file_path()
-                        .map_err(|_| LspUrlError::InvalidFileUrl(url.clone()))?,
-                );
+                let file_path = url
+                    .to_file_path()
+                    .map_err(|_| LspUrlError::InvalidFileUrl(url.clone()))?;
                 if file_path.is_absolute() {
                     Ok(Self::File(file_path))
                 } else {
@@ -879,7 +878,7 @@ impl<T: LspContext> Backend<T> {
                 .into_iter()
                 .filter(|symbol| !symbols.contains_key(&symbol.name))
             {
-                seen.insert(format!("{load_path}:{}", &symbol.name));
+                seen.insert(format!("{load_path}:{}", symbol.name));
 
                 let text_edits = Some(vec![format_text_edit(&load_path, &symbol.name)]);
                 let mut completion_item: CompletionItem = symbol.into();
@@ -916,10 +915,10 @@ impl<T: LspContext> Backend<T> {
                 continue;
             };
 
-            if seen.insert(format!("{}:{}", &load_path, symbol.name)) {
+            if seen.insert(format!("{}:{}", load_path, symbol.name)) {
                 result.push(CompletionItem {
                     label: symbol.name.to_owned(),
-                    detail: Some(format!("Load from {}", &load_path)),
+                    detail: Some(format!("Load from {}", load_path)),
                     kind: Some(CompletionItemKind::CONSTANT),
                     additional_text_edits: Some(vec![format_text_edit(&load_path, symbol.name)]),
                     ..Default::default()
@@ -975,7 +974,7 @@ impl<T: LspContext> Backend<T> {
                     })
                     .collect();
                 load_args.push((symbol, symbol));
-                load_args.sort_by(|(_, a), (_, b)| a.cmp(b));
+                load_args.sort_by_key(|(_, a)| *a);
 
                 TextEdit::new(
                     load_span.into(),

@@ -8,7 +8,7 @@ Program:
 x =
 
 Error:
-error: Parse error: unexpected new line here, expected one of "(", "+", "-", "...", "FLOAT", "FSTRING", "IDENTIFIER", "INTEGER", "STRING", "[", "lambda", "not", "{" or "~"
+error: Parse error: unexpected new line, expected expression
  --> error_missing_expression:1:4
   |
 1 | x =
@@ -20,7 +20,7 @@ Program:
 x +=
 
 Error:
-error: Parse error: unexpected new line here, expected one of "(", "+", "-", "...", "FLOAT", "FSTRING", "IDENTIFIER", "INTEGER", "STRING", "[", "lambda", "not", "{" or "~"
+error: Parse error: unexpected new line, expected expression
  --> error_missing_expression:1:5
   |
 1 | x +=
@@ -29,11 +29,25 @@ error: Parse error: unexpected new line here, expected one of "(", "+", "-", "..
 
 
 Program:
+x = 1 +
+2
+
+Error:
+error: Parse error: unexpected new line, expected expression
+ --> error_missing_expression:1:8
+  |
+1 | x = 1 +
+  |        ^
+2 | 2
+  |
+
+
+Program:
 return
 1 +
 
 Error:
-error: Parse error: unexpected new line here, expected one of "(", "+", "-", "...", "FLOAT", "FSTRING", "IDENTIFIER", "INTEGER", "STRING", "[", "{" or "~"
+error: Parse error: unexpected new line, expected expression
  --> error_missing_expression:2:4
   |
 2 | 1 +

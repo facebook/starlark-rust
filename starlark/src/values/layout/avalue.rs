@@ -42,6 +42,37 @@ use crate::values::layout::heap::repr::ForwardPtr;
 use crate::values::layout::heap::send::HeapSyncable;
 use crate::values::layout::value_alloc_size::ValueAllocSize;
 
+/// Bound for the payload type `T` of `AValueSimple<T>`.
+///
+/// Bundles `StarlarkValue` + send/sync (always required), plus
+/// `StarlarkPagable` and `VtableRegistered` under the `pagable` feature.
+#[cfg(feature = "pagable")]
+pub trait AValueSimpleBound<'v>:
+    StarlarkValue<'v>
+    + HeapSendable<'v>
+    + HeapSyncable<'v>
+    + crate::pagable::StarlarkPagable
+    + crate::pagable::vtable_register::VtableRegistered
+{
+}
+#[cfg(feature = "pagable")]
+impl<'v, T> AValueSimpleBound<'v> for T where
+    T: StarlarkValue<'v>
+        + HeapSendable<'v>
+        + HeapSyncable<'v>
+        + crate::pagable::StarlarkPagable
+        + crate::pagable::vtable_register::VtableRegistered
+{
+}
+
+#[cfg(not(feature = "pagable"))]
+pub trait AValueSimpleBound<'v>: StarlarkValue<'v> + HeapSendable<'v> + HeapSyncable<'v> {}
+#[cfg(not(feature = "pagable"))]
+impl<'v, T> AValueSimpleBound<'v> for T where
+    T: StarlarkValue<'v> + HeapSendable<'v> + HeapSyncable<'v>
+{
+}
+
 /// Extended vtable methods (those not covered by `StarlarkValue`).
 pub(crate) trait AValue<'v>: Sized + 'v {
     /// Unwrapped type.

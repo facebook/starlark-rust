@@ -40,6 +40,7 @@ use std::hash::DefaultHasher;
 use std::hash::Hash;
 use std::hash::Hasher;
 
+use dupe::Dupe;
 use pagable::PagableDeserialize;
 use pagable::PagableSerialize;
 
@@ -55,6 +56,7 @@ use crate::values::FrozenHeapName;
     Debug,
     Clone,
     Copy,
+    Dupe,
     PartialEq,
     Eq,
     Hash,

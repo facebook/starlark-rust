@@ -26,21 +26,17 @@ use crate::values::FrozenHeap;
 use crate::values::FrozenValue;
 use crate::values::FrozenValueTyped;
 use crate::values::Heap;
-use crate::values::HeapSendable;
-use crate::values::StarlarkValue;
 use crate::values::Tracer;
 use crate::values::Value;
 use crate::values::layout::avalue::AValue;
 use crate::values::layout::avalue::AValueImpl;
+use crate::values::layout::avalue::AValueSimpleBound;
 use crate::values::layout::avalue::heap_copy_impl;
 use crate::values::layout::avalue::heap_freeze_simple_impl;
 use crate::values::layout::avalue::try_freeze_directly;
 use crate::values::layout::heap::repr::AValueRepr;
-use crate::values::layout::heap::send::HeapSyncable;
 
-pub(crate) fn simple<'v, T: StarlarkValue<'v> + HeapSendable<'v> + HeapSyncable<'v> + 'v>(
-    x: T,
-) -> AValueImpl<'v, AValueSimple<T>> {
+pub(crate) fn simple<'v, T: AValueSimpleBound<'v> + 'v>(x: T) -> AValueImpl<'v, AValueSimple<T>> {
     assert!(!T::is_special(Private));
     AValueImpl::<AValueSimple<T>>::new(x)
 }
@@ -48,9 +44,7 @@ pub(crate) fn simple<'v, T: StarlarkValue<'v> + HeapSendable<'v> + HeapSyncable<
 /// AValue implementation for simple Starlark values.
 pub struct AValueSimple<T>(PhantomData<T>);
 
-impl<'v, T: StarlarkValue<'v> + HeapSendable<'v> + HeapSyncable<'v>> AValue<'v>
-    for AValueSimple<T>
-{
+impl<'v, T: AValueSimpleBound<'v>> AValue<'v> for AValueSimple<T> {
     type StarlarkValue = T;
 
     type ExtraElem = ();
@@ -83,6 +77,7 @@ impl<'v, T: StarlarkValue<'v> + HeapSendable<'v> + HeapSyncable<'v>> AValue<'v>
         unsafe { heap_copy_impl::<Self>(me, tracer, |_v, _tracer| {}) }
     }
 
+    #[cfg(feature = "pagable")]
     fn starlark_serialize(
         me: *const AValueRepr<Self::StarlarkValue>,
         ctx: &mut dyn crate::pagable::StarlarkSerializeContext,
@@ -91,6 +86,7 @@ impl<'v, T: StarlarkValue<'v> + HeapSendable<'v> + HeapSyncable<'v>> AValue<'v>
         value.starlark_serialize(ctx)
     }
 
+    #[cfg(feature = "pagable")]
     fn starlark_deserialize(
         me: *mut AValueRepr<Self::StarlarkValue>,
         ctx: &mut dyn crate::pagable::StarlarkDeserializeContext<'_>,
@@ -104,27 +100,7 @@ impl<'v, T: StarlarkValue<'v> + HeapSendable<'v> + HeapSyncable<'v>> AValue<'v>
 }
 
 impl FrozenHeap {
-    #[cfg(feature = "pagable")]
-    pub(crate) fn alloc_simple_typed_static<
-        T: StarlarkValue<'static>
-            + HeapSendable<'static>
-            + HeapSyncable<'static>
-            + Send
-            + Sync
-            + crate::pagable::vtable_register::VtableRegistered,
-    >(
-        &self,
-        val: T,
-    ) -> FrozenValueTyped<'static, T> {
-        // SAFETY: Not.
-        let this: &'static FrozenHeap = unsafe { cast::ptr_lifetime(self) };
-        this.alloc_raw(simple(val))
-    }
-
-    #[cfg(not(feature = "pagable"))]
-    pub(crate) fn alloc_simple_typed_static<
-        T: StarlarkValue<'static> + HeapSendable<'static> + HeapSyncable<'static> + Send + Sync,
-    >(
+    pub(crate) fn alloc_simple_typed_static<T: AValueSimpleBound<'static> + Send + Sync>(
         &self,
         val: T,
     ) -> FrozenValueTyped<'static, T> {
@@ -134,69 +110,36 @@ impl FrozenHeap {
     }
 
     /// Allocate a value on the heap
-    pub fn alloc_simple_typed<
-        'fv,
-        T: StarlarkValue<'fv> + HeapSendable<'fv> + HeapSyncable<'fv>,
-    >(
+    pub fn alloc_simple_typed<'fv, T: AValueSimpleBound<'fv>>(
         &'fv self,
         val: T,
     ) -> FrozenValueTyped<'fv, T> {
         self.alloc_raw(simple(val))
     }
 
-    /// Allocate a simple [`StarlarkValue`] on this heap.
+    /// Allocate a simple [`StarlarkValue`](crate::values::StarlarkValue) on this heap.
     ///
     /// Simple value is any starlark value which:
     /// * bound by `'static` lifetime (in particular, it cannot contain references to other `Value`s)
     /// * is not special builtin (e.g. `None`)
     ///
-    /// When `pagable` feature is enabled, this also requires [`VtableRegistered`]
-    /// to ensure the type can be deserialized.
-    #[cfg(feature = "pagable")]
-    pub fn alloc_simple<
-        T: StarlarkValue<'static>
-            + HeapSendable<'static>
-            + HeapSyncable<'static>
-            + Send
-            + Sync
-            + crate::pagable::vtable_register::VtableRegistered,
-    >(
-        &self,
-        val: T,
-    ) -> FrozenValue {
-        self.alloc_simple_typed_static(val).to_frozen_value()
-    }
-
-    /// Allocate a simple [`StarlarkValue`] on this heap.
-    ///
-    /// Simple value is any starlark value which:
-    /// * bound by `'static` lifetime (in particular, it cannot contain references to other `Value`s)
-    /// * is not special builtin (e.g. `None`)
-    #[cfg(not(feature = "pagable"))]
-    pub fn alloc_simple<
-        T: StarlarkValue<'static> + HeapSendable<'static> + HeapSyncable<'static> + Send + Sync,
-    >(
-        &self,
-        val: T,
-    ) -> FrozenValue {
+    /// Under the `pagable` feature, `T` must also be registered via
+    /// [`register_avalue_simple_frozen!`](crate::register_avalue_simple_frozen)
+    /// (bundled into `AValueSimpleBound`).
+    pub fn alloc_simple<T: AValueSimpleBound<'static> + Send + Sync>(&self, val: T) -> FrozenValue {
         self.alloc_simple_typed_static(val).to_frozen_value()
     }
 }
 
 impl<'v> Heap<'v> {
-    /// Allocate a simple [`StarlarkValue`] on this heap.
+    /// Allocate a simple [`StarlarkValue`](crate::values::StarlarkValue) on this heap.
     ///
     /// Simple value is any starlark value which:
     /// * bound by `'static` lifetime (in particular, it cannot contain references to other `Value`s)
     /// * is not special builtin (e.g. `None`)
     ///
     /// Must be [`Send`] and [`Sync`] because it will be reused in frozen values.
-    pub fn alloc_simple<
-        T: StarlarkValue<'v> + HeapSendable<'v> + HeapSyncable<'v> + Send + Sync + 'static,
-    >(
-        self,
-        x: T,
-    ) -> Value<'v> {
+    pub fn alloc_simple<T: AValueSimpleBound<'v> + Send + Sync + 'static>(self, x: T) -> Value<'v> {
         self.alloc_raw(simple(x)).to_value()
     }
 }

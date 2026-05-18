@@ -1,5 +1,6 @@
 [package]
-edition = "2021"
+description = "Serialization framework with content-addressed `Arc` deduplication and runtime polymorphism via typetag"
+edition = "2024"
 license = { workspace = true }
 name = "pagable"
 repository = { workspace = true }
@@ -15,7 +16,6 @@ dashmap = { workspace = true }
 dupe = { workspace = true }
 either = { workspace = true }
 erased-serde = { workspace = true }
-gazebo = { workspace = true }
 indexmap = { workspace = true }
 inventory = { workspace = true }
 num-bigint = { workspace = true }
@@ -23,7 +23,8 @@ once_cell = { workspace = true }
 pagable_derive = { path = "../pagable_derive" }
 parking_lot = { workspace = true }
 postcard = { workspace = true }
-relative-path = { workspace = true }
+regex = { workspace = true }
+rusqlite = { version = "0.37.0", features = ["bundled"] }
 sequence_trie = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -31,6 +32,7 @@ sled = { workspace = true }
 smallvec = { workspace = true }
 sorted_vector_map = { workspace = true }
 static_assertions = { workspace = true }
+static_interner = { workspace = true }
 strong_hash = { workspace = true }
 take_mut = { workspace = true }
 tokio = { workspace = true, optional = true }

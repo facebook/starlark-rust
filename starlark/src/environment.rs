@@ -20,7 +20,8 @@
 //! Global functions and values are stored in [`Globals`], which are typically
 //! built using [`GlobalsBuilder`].
 //! User executions store their values in a [`Module`], which have to be converted to a
-//! [`FrozenModule`] using [`freeze`](Module::freeze) before they can be `load()`'d as a dependency.
+//! [`FrozenModule`] using [`freeze_named`](Module::freeze_named) before they can be `load()`'d as
+//! a dependency.
 
 mod globals;
 mod methods;

@@ -81,6 +81,21 @@ pub fn typetag_trait(item: ItemTrait) -> syn::Result<TokenStream> {
                     .deserialize_tagged(deserializer.as_dyn())
             }
         }
+
+        // Write `tag + body` for `dyn Trait`.
+        // So the blanket impl `Box<dyn Trait>` / `Arc<dyn Trait>` go through this.
+        //
+        // Allowed because `PagableTagged` doesn't have `PagableSerialize` as
+        // a supertrait — otherwise Rust would auto-synthesize this impl and
+        // hit E0371.
+        impl pagable::PagableSerialize for dyn #trait_name {
+            fn pagable_serialize(
+                &self,
+                serializer: &mut dyn pagable::PagableSerializer,
+            ) -> pagable::Result<()> {
+                pagable::typetag::PagableTagged::serialize_tagged(self, serializer)
+            }
+        }
     })
 }
 
@@ -103,6 +118,14 @@ fn typetag_struct(
         impl pagable::typetag::PagableTagged for #self_ty {
             fn pagable_type_tag(&self) -> &'static str {
                 #type_tag
+            }
+            fn pagable_serialize_body(
+                &self,
+                serializer: &mut dyn pagable::PagableSerializer,
+            ) -> pagable::Result<()> {
+                // Forward to the `PagableSerialize` impl (typically from
+                // `#[derive(Pagable)]`) which writes just the body.
+                <Self as pagable::PagableSerialize>::pagable_serialize(self, serializer)
             }
         }
 

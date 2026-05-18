@@ -31,26 +31,9 @@ use crate::assert;
 use crate::assert::Assert;
 use crate::environment::GlobalsBuilder;
 use crate::eval::Evaluator;
-use crate::register_starlark_any;
 use crate::values::FrozenHeap;
 use crate::values::Heap;
 use crate::values::any::StarlarkAny;
-
-// Type used for deallocation test - must be at module level for registration.
-#[derive(Default, Debug, Display)]
-struct Dealloc;
-
-// Register Dealloc for use with StarlarkAny in pagable mode.
-register_starlark_any!(Dealloc);
-
-// Check that we really do deallocate values we create
-static DEALLOC_COUNT: Lazy<AtomicUsize> = Lazy::new(|| AtomicUsize::new(0));
-
-impl Drop for Dealloc {
-    fn drop(&mut self) {
-        DEALLOC_COUNT.fetch_add(1, Ordering::SeqCst);
-    }
-}
 
 #[test]
 fn test_garbage_collect() {
@@ -63,6 +46,25 @@ assert_eq(y, str(x))
     "#,
     );
 }
+
+#[derive(
+    Default,
+    Debug,
+    Display,
+    starlark::any::ProvidesStaticType,
+    starlark_derive::StarlarkPagablePanic
+)]
+struct Dealloc;
+
+impl Drop for Dealloc {
+    fn drop(&mut self) {
+        DEALLOC_COUNT.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
+crate::register_starlark_any!(Dealloc);
+
+static DEALLOC_COUNT: Lazy<AtomicUsize> = Lazy::new(|| AtomicUsize::new(0));
 
 #[test]
 fn test_deallocation() {

@@ -9,7 +9,7 @@ if True
   pass
 
 Error:
-error: Parse error: unexpected new line here, expected one of ":"
+error: Parse error: unexpected new line, expected symbol ':'
  --> error_missing_colon:1:8
   |
 1 | if True
@@ -23,7 +23,7 @@ def foo()
   pass
 
 Error:
-error: Parse error: unexpected new line here, expected one of "->" or ":"
+error: Parse error: unexpected new line, expected symbol ':'
  --> error_missing_colon:1:10
   |
 1 | def foo()
@@ -37,7 +37,7 @@ for x in []
   pass
 
 Error:
-error: Parse error: unexpected new line here, expected one of ":"
+error: Parse error: unexpected new line, expected symbol ':'
  --> error_missing_colon:1:12
   |
 1 | for x in []

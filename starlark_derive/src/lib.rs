@@ -31,6 +31,9 @@ mod freeze;
 mod module;
 mod serde;
 mod starlark_pagable;
+mod starlark_pagable_panic;
+mod starlark_pagable_typetag;
+mod starlark_pagable_via_pagable;
 mod starlark_type_repr;
 mod starlark_value;
 mod trace;
@@ -232,6 +235,29 @@ pub fn derive_starlark_pagable(input: proc_macro::TokenStream) -> proc_macro::To
     starlark_pagable::derive_starlark_pagable(input)
 }
 
+/// Derive panicking `StarlarkSerialize` and `StarlarkDeserialize` impls.
+///
+/// Use on types that must satisfy the `StarlarkSerialize + StarlarkDeserialize` trait
+/// bounds (e.g. via `ValueLifetimeless`) but are never actually round-tripped.
+/// Any call to the generated methods triggers `unimplemented!()`.
+#[proc_macro_derive(StarlarkPagablePanic)]
+pub fn derive_starlark_pagable_panic(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    starlark_pagable_panic::derive_starlark_pagable_panic(input)
+}
+
+/// Derive `StarlarkSerialize` / `StarlarkDeserialize` impls that bridge to the
+/// type's `pagable::PagableSerialize` / `pagable::PagableDeserialize` impls.
+///
+/// Use on types that are `pagable::Pagable` and don't reference Starlark values.
+/// The type must already implement `PagableSerialize` and `PagableDeserialize`
+/// (typically via `#[derive(pagable::Pagable)]`).
+#[proc_macro_derive(StarlarkPagableViaPagable)]
+pub fn derive_starlark_pagable_via_pagable(
+    input: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    starlark_pagable_via_pagable::derive_starlark_pagable_via_pagable(input)
+}
+
 /// Derive the `StarlarkSerialize` trait.
 ///
 /// By default, each field is serialized via `StarlarkSerialize::starlark_serialize`.
@@ -271,4 +297,14 @@ pub fn type_matcher(
     input: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
     type_matcher::derive_type_matcher(attr, input)
+}
+
+/// Starlark-flavored `#[pagable_typetag]`. On a trait: emits a sealed marker.
+/// On `impl Trait for Foo`: emits the recovery bridge and asserts the marker.
+#[proc_macro_attribute]
+pub fn starlark_pagable_typetag(
+    attr: proc_macro::TokenStream,
+    input: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    starlark_pagable_typetag::starlark_pagable_typetag_impl(attr, input)
 }

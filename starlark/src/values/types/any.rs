@@ -33,10 +33,11 @@
 //!
 //! use starlark::assert::Assert;
 //! use starlark::environment::GlobalsBuilder;
+//! use starlark::values::StarlarkPagablePanic;
 //! use starlark::values::Value;
 //! use starlark::values::any::StarlarkAny;
 //!
-//! #[derive(Debug)]
+//! #[derive(Debug, StarlarkPagablePanic)]
 //! struct MyInstant(Instant);
 //!
 //! starlark::register_starlark_any!(MyInstant);
@@ -79,11 +80,13 @@ use dupe::Clone_;
 use dupe::Copy_;
 use dupe::Dupe_;
 use starlark_derive::NoSerialize;
+use starlark_derive::StarlarkPagable;
 use starlark_derive::starlark_value;
 
 use crate as starlark;
 use crate::any::ProvidesStaticType;
 use crate::pagable::vtable_register::VtableRegistered;
+use crate::typing::starlark_value::TyStarlarkValueVTable;
 use crate::values::AllocValue;
 use crate::values::Freeze;
 use crate::values::FreezeResult;
@@ -114,12 +117,89 @@ pub struct StarlarkAny<T: Debug + Send + Sync + 'static>(
     pub  T,
 );
 
-#[starlark_value(type = "any")]
-impl<'v, T: Debug + Send + Sync + 'static> StarlarkValue<'v> for StarlarkAny<T> {
+impl<T: StarlarkAnyRegistered> crate::pagable::StarlarkSerialize for StarlarkAny<T> {
+    fn starlark_serialize(
+        &self,
+        ctx: &mut dyn crate::pagable::StarlarkSerializeContext,
+    ) -> crate::Result<()> {
+        <T as crate::pagable::StarlarkSerialize>::starlark_serialize(&self.0, ctx)
+    }
+}
+
+impl<T: StarlarkAnyRegistered> crate::pagable::StarlarkDeserialize for StarlarkAny<T> {
+    fn starlark_deserialize(
+        ctx: &mut dyn crate::pagable::StarlarkDeserializeContext<'_>,
+    ) -> crate::Result<Self> {
+        Ok(StarlarkAny(
+            <T as crate::pagable::StarlarkDeserialize>::starlark_deserialize(ctx)?,
+        ))
+    }
+}
+
+/// Marker trait certifying that `T` has been registered for both the
+/// heap vtable (`StarlarkAny<T>` usable as a `Value`) and the typing
+/// vtable (`HasTyVTable` for `StarlarkAny<T>`).
+///
+/// This indirection exists to work around the orphan rule: downstream
+/// crates can't `impl HasTyVTable for StarlarkAny<LocalT>` directly (both
+/// trait and outer type are foreign), but they can impl this marker on
+/// their local `T`.
+///
+/// # Safety
+///
+/// Implementors must also register the heap vtable entry for
+/// `StarlarkAny<Self>` via
+/// [`register_simple_vtable_entry!`](macro@crate::register_simple_vtable_entry).
+/// Use the [`register_starlark_any!`](macro@crate::register_starlark_any) macro
+/// instead of implementing this trait manually — it handles both the trait
+/// impl and the vtable registration.
+pub unsafe trait StarlarkAnyRegistered:
+    Debug + Send + Sync + 'static + crate::pagable::StarlarkPagable
+{
+    /// Typing vtable entry for `StarlarkAny<Self>`.
+    const TY_VTABLE_STATIC: pagable::StaticValue<TyStarlarkValueVTable>;
+}
+
+#[cfg(feature = "pagable")]
+impl<T> crate::typing::HasTyVTable for StarlarkAny<T>
+where
+    T: StarlarkAnyRegistered,
+{
+    const TY_VTABLE_STATIC: pagable::StaticValue<TyStarlarkValueVTable> =
+        <T as StarlarkAnyRegistered>::TY_VTABLE_STATIC;
+}
+
+#[starlark_value(type = "any", skip_pagable)]
+impl<'v, T: StarlarkAnyRegistered> StarlarkValue<'v> for StarlarkAny<T> {
     type Canonical = Self;
 }
 
-impl<'v, T: StarlarkAnyBound> AllocValue<'v> for StarlarkAny<T> {
+/// Register a type for use with [`StarlarkAny`].
+///
+/// Call once per concrete `T` that is wrapped in `StarlarkAny`. This macro:
+/// 1. Implements [`StarlarkAnyRegistered`] for `T`, providing the typing
+///    vtable entry for `StarlarkAny<T>`.
+/// 2. Registers the heap vtable entry for `StarlarkAny<T>` via
+///    [`register_simple_vtable_entry!`](macro@crate::register_simple_vtable_entry).
+#[macro_export]
+macro_rules! register_starlark_any {
+    ($t:ty) => {
+        const _: () = {
+            $crate::__declare_ty_vtable_static!($crate::values::any::StarlarkAny<$t>);
+            // SAFETY: the heap vtable entry is registered below via
+            // `register_simple_vtable_entry!`.
+            unsafe impl $crate::values::any::StarlarkAnyRegistered for $t {
+                const TY_VTABLE_STATIC: pagable::StaticValue<
+                    $crate::__derive_refs::TyStarlarkValueVTable,
+                > = VTABLE_STATIC;
+            }
+        };
+
+        $crate::register_simple_vtable_entry!($crate::values::any::StarlarkAny<$t>);
+    };
+}
+
+impl<'v, T: StarlarkAnyRegistered> AllocValue<'v> for StarlarkAny<T> {
     fn alloc_value(self, heap: Heap<'v>) -> Value<'v> {
         heap.alloc_simple(self)
     }
@@ -146,7 +226,9 @@ impl<T: Debug + Send + Sync + 'static> StarlarkAny<T> {
     pub const fn new(x: T) -> Self {
         StarlarkAny(x)
     }
+}
 
+impl<T: StarlarkAnyRegistered> StarlarkAny<T> {
     /// Extract from a [`Value`] that contains a [`StarlarkAny`] underneath. Returns [`None`] if
     /// the value does not match the expected type.
     pub fn get<'v>(x: Value<'v>) -> Option<&'v T> {
@@ -155,26 +237,15 @@ impl<T: Debug + Send + Sync + 'static> StarlarkAny<T> {
     }
 }
 
-/// Marker trait for types that can be wrapped in `StarlarkAny`
-/// and are registered for vtable lookup.
-///
-/// # Safety
-///
-/// Implementors must also register the vtable entry for `StarlarkAny<Self>`
-/// using [`register_simple_vtable_entry!`](macro@crate::register_simple_vtable_entry). Use the
-/// [`register_starlark_any!`](macro@crate::register_starlark_any)
-/// macro instead of implementing this trait manually, as it handles both the trait
-/// implementation and vtable registration.
-pub unsafe trait StarlarkAnyRegistered {}
-
 /// Trait alias that captures the bounds required for types wrapped in `StarlarkAny`.
 ///
-/// When the `pagable` feature is enabled, this includes `StarlarkAnyRegistered`.
+/// When the `pagable` feature is enabled, this requires `StarlarkAnyRegistered`
+/// (the type must be registered via [`register_starlark_any!`]).
 #[cfg(feature = "pagable")]
-pub trait StarlarkAnyBound: Debug + Send + Sync + 'static + StarlarkAnyRegistered {}
+pub trait StarlarkAnyBound: StarlarkAnyRegistered {}
 
 #[cfg(feature = "pagable")]
-impl<T: Debug + Send + Sync + 'static + StarlarkAnyRegistered> StarlarkAnyBound for T {}
+impl<T: StarlarkAnyRegistered> StarlarkAnyBound for T {}
 
 /// Trait alias that captures the bounds required for types wrapped in `StarlarkAny`.
 #[cfg(not(feature = "pagable"))]
@@ -250,25 +321,23 @@ macro_rules! static_starlark_any {
 /// - `Deref` trait with `Target = T` directly to the inner value (skipping `StarlarkAny`)
 /// - `Display` trait delegating to `T::Display` (not the Starlark `<any>` repr)
 /// - `Debug` trait delegating to `T::Debug`
-#[derive(Allocative, Copy_, Clone_, Dupe_)]
+#[derive(Allocative, StarlarkPagable, Copy_, Clone_, Dupe_)]
 #[allocative(skip)]
-pub struct FrozenAnyValue<T: Debug + Send + Sync + 'static>(
-    FrozenValueTyped<'static, StarlarkAny<T>>,
-);
+pub struct FrozenAnyValue<T: StarlarkAnyRegistered>(FrozenValueTyped<'static, StarlarkAny<T>>);
 
-impl<T: Debug + Send + Sync + 'static> Debug for FrozenAnyValue<T> {
+impl<T: StarlarkAnyRegistered> Debug for FrozenAnyValue<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         Debug::fmt(self.as_ref(), f)
     }
 }
 
-impl<T: Debug + Display + Send + Sync + 'static> Display for FrozenAnyValue<T> {
+impl<T: Display + StarlarkAnyRegistered> Display for FrozenAnyValue<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         Display::fmt(self.as_ref(), f)
     }
 }
 
-impl<T: Debug + Send + Sync + 'static> Deref for FrozenAnyValue<T> {
+impl<T: StarlarkAnyRegistered> Deref for FrozenAnyValue<T> {
     type Target = T;
 
     #[inline]
@@ -277,18 +346,19 @@ impl<T: Debug + Send + Sync + 'static> Deref for FrozenAnyValue<T> {
     }
 }
 
-impl<T: Debug + Send + Sync + 'static + PartialEq> PartialEq for FrozenAnyValue<T> {
+impl<T: StarlarkAnyRegistered + PartialEq> PartialEq for FrozenAnyValue<T> {
     fn eq(&self, other: &Self) -> bool {
         self.as_ref() == other.as_ref()
     }
 }
-impl<T: Debug + Send + Sync + 'static + Eq> Eq for FrozenAnyValue<T> {}
 
-unsafe impl<'v, T: Debug + Send + Sync + 'static> Trace<'v> for FrozenAnyValue<T> {
+impl<T: StarlarkAnyRegistered + Eq> Eq for FrozenAnyValue<T> {}
+
+unsafe impl<'v, T: StarlarkAnyRegistered> Trace<'v> for FrozenAnyValue<T> {
     fn trace(&mut self, _: &Tracer<'v>) {}
 }
 
-impl<T: Debug + Send + Sync + 'static> Freeze for FrozenAnyValue<T> {
+impl<T: StarlarkAnyRegistered> Freeze for FrozenAnyValue<T> {
     type Frozen = Self;
 
     fn freeze(self, _freezer: &Freezer) -> FreezeResult<Self::Frozen> {
@@ -296,7 +366,7 @@ impl<T: Debug + Send + Sync + 'static> Freeze for FrozenAnyValue<T> {
     }
 }
 
-impl<T: Debug + Send + Sync + 'static> FrozenAnyValue<T> {
+impl<T: StarlarkAnyRegistered> FrozenAnyValue<T> {
     /// Get a reference to the inner value with `'static` lifetime.
     #[inline]
     pub fn as_ref(&self) -> &'static T {
@@ -330,7 +400,7 @@ impl<T: Debug + Send + Sync + 'static> FrozenAnyValue<T> {
 ///
 /// Used to lazily store a `FrozenAnyValue` reference (e.g., for module back-references
 /// that are populated after freezing).
-pub(crate) struct AtomicFrozenAnyValueOption<T: Debug + Send + Sync + 'static>(
+pub(crate) struct AtomicFrozenAnyValueOption<T: StarlarkAnyRegistered>(
     atomic::AtomicPtr<()>,
     std::marker::PhantomData<T>,
 );
@@ -339,13 +409,13 @@ pub(crate) struct AtomicFrozenAnyValueOption<T: Debug + Send + Sync + 'static>(
 // maps `None` to null.
 const _: () = assert!(std::mem::size_of::<Option<FrozenValue>>() == std::mem::size_of::<*mut ()>());
 
-unsafe impl<'v, T: Debug + Send + Sync + 'static> Trace<'v> for AtomicFrozenAnyValueOption<T> {
+unsafe impl<'v, T: StarlarkAnyRegistered> Trace<'v> for AtomicFrozenAnyValueOption<T> {
     fn trace(&mut self, _: &Tracer<'v>) {
         // No-op: points to frozen data.
     }
 }
 
-impl<T: Debug + Send + Sync + 'static> AtomicFrozenAnyValueOption<T> {
+impl<T: StarlarkAnyRegistered> AtomicFrozenAnyValueOption<T> {
     fn encode(value: Option<FrozenAnyValue<T>>) -> *mut () {
         let opt: Option<FrozenValue> = value.map(FrozenAnyValue::to_frozen_value);
         // SAFETY: const_assert above guarantees the sizes match; the only other way this could be wrong is if `Option<FrozenValue>` had internal padding (uninit memory) but that's clearly not possible, so this is justified
@@ -376,9 +446,38 @@ impl<T: Debug + Send + Sync + 'static> AtomicFrozenAnyValueOption<T> {
     }
 }
 
+impl<T: StarlarkAnyRegistered> crate::pagable::StarlarkSerialize for AtomicFrozenAnyValueOption<T> {
+    fn starlark_serialize(
+        &self,
+        ctx: &mut dyn crate::pagable::StarlarkSerializeContext,
+    ) -> crate::Result<()> {
+        let value = self.load_relaxed();
+        value.starlark_serialize(ctx)
+    }
+}
+
+impl<T: StarlarkAnyRegistered> crate::pagable::StarlarkDeserialize
+    for AtomicFrozenAnyValueOption<T>
+{
+    fn starlark_deserialize(
+        ctx: &mut dyn crate::pagable::StarlarkDeserializeContext<'_>,
+    ) -> crate::Result<Self> {
+        let value: Option<FrozenAnyValue<T>> =
+            <Option<FrozenAnyValue<T>> as crate::pagable::StarlarkDeserialize>::starlark_deserialize(ctx)?;
+        Ok(AtomicFrozenAnyValueOption::new(value))
+    }
+}
+
 impl FrozenHeap {
     /// Allocate any value on the frozen heap, returning a [`FrozenAnyValue`].
-    pub fn alloc_any_value<T: StarlarkAnyBound>(&self, value: T) -> FrozenAnyValue<T> {
+    pub fn alloc_any_value<T: StarlarkAnyRegistered>(&self, value: T) -> FrozenAnyValue<T> {
         FrozenAnyValue::from_typed(self.alloc_simple_typed_static(StarlarkAny::new(value)))
     }
 }
+
+// Note: `register_starlark_any!(T)` for concrete starlark-internal types lives
+// alongside each type's definition (e.g. `DefInfo` in `eval/compiler/def.rs`,
+// `LocalSlotId` in `eval/runtime/slots.rs`). External users register their own
+// `T` the same way.
+#[cfg(test)]
+crate::register_starlark_any!(String);

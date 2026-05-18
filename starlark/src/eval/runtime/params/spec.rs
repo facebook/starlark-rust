@@ -23,6 +23,7 @@ use allocative::Allocative;
 use dupe::Dupe;
 use starlark_derive::Coerce;
 use starlark_derive::Freeze;
+use starlark_derive::StarlarkPagable;
 use starlark_derive::Trace;
 use starlark_map::Hashed;
 use starlark_map::small_map::SmallMap;
@@ -48,6 +49,7 @@ use crate::eval::runtime::params::display::PARAM_FMT_OPTIONAL;
 use crate::eval::runtime::params::display::ParamFmt;
 use crate::eval::runtime::params::display::fmt_param_spec;
 use crate::hint::unlikely;
+use crate::pagable::StarlarkPagable;
 use crate::typing::ParamIsRequired;
 use crate::typing::Ty;
 use crate::values::Heap;
@@ -81,8 +83,20 @@ impl<V> ParametersSpecParam<V> {
     }
 }
 
-#[derive(Debug, Copy, Clone, Dupe, Coerce, PartialEq, Trace, Freeze, Allocative)]
+#[derive(
+    Debug,
+    Copy,
+    Clone,
+    Dupe,
+    Coerce,
+    PartialEq,
+    Trace,
+    Freeze,
+    Allocative,
+    StarlarkPagable
+)]
 #[repr(C)]
+#[starlark_pagable(bound = "V: StarlarkPagable")]
 pub(crate) enum ParameterKind<V> {
     Required,
     /// When optional parameter is not supplied, there's no error,
@@ -127,8 +141,9 @@ pub(crate) struct ParametersSpecBuilder<V> {
 /// Define a list of parameters. This code assumes that all names are distinct and that
 /// `*args`/`**kwargs` occur in well-formed locations.
 // V = Value, or FrozenValue
-#[derive(Debug, Clone, Trace, Freeze, Allocative)]
+#[derive(Debug, Clone, Trace, Freeze, Allocative, StarlarkPagable)]
 #[repr(C)]
+#[starlark_pagable(bound = "V: StarlarkPagable")]
 pub struct ParametersSpec<V> {
     /// Only used in error messages
     function_name: String,
@@ -139,8 +154,10 @@ pub struct ParametersSpec<V> {
     param_names: Box<[String]>,
     /// Mapping from name to index where the argument lives.
     #[freeze(identity)]
+    #[starlark_pagable(pagable)]
     pub(crate) names: SymbolMap<u32>,
     #[freeze(identity)]
+    #[starlark_pagable(pagable)]
     indices: DefParamIndices,
 }
 

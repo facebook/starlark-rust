@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 
+use pagable::typetag::PagableRegisteredFor;
 use starlark_syntax::slice_vec_ext::SliceExt;
 
 use crate::typing::Ty;
@@ -23,6 +24,7 @@ use crate::typing::custom::TyCustom;
 use crate::typing::starlark_value::TyStarlarkValue;
 use crate::values::typing::type_compiled::matcher::TypeMatcher;
 use crate::values::typing::type_compiled::matcher::TypeMatcherBoxAlloc;
+use crate::values::typing::type_compiled::matcher::TypeMatcherDyn;
 use crate::values::typing::type_compiled::matchers::IsAny;
 use crate::values::typing::type_compiled::matchers::IsAnyOf;
 use crate::values::typing::type_compiled::matchers::IsAnyOfTwo;
@@ -127,7 +129,13 @@ pub trait TypeMatcherAlloc: Sized {
     }
 
     /// `A | B`.
-    fn any_of_two_matcher(self, m0: impl TypeMatcher, m1: impl TypeMatcher) -> Self::Result {
+    #[allow(private_bounds)] // `IsAnyOfTwo` is pub(crate), leaks into bound.
+    fn any_of_two_matcher<M0, M1>(self, m0: M0, m1: M1) -> Self::Result
+    where
+        M0: TypeMatcher,
+        M1: TypeMatcher,
+        IsAnyOfTwo<M0, M1>: PagableRegisteredFor<dyn TypeMatcherDyn>,
+    {
         if m0.is_wildcard() {
             self.alloc(m1)
         } else if m1.is_wildcard() {
@@ -202,7 +210,12 @@ pub trait TypeMatcherAlloc: Sized {
     }
 
     /// `list[Item]`.
-    fn list_of_matcher(self, item: impl TypeMatcher) -> Self::Result {
+    #[allow(private_bounds)] // `IsListOf` is pub(crate), leaks into bound.
+    fn list_of_matcher<I>(self, item: I) -> Self::Result
+    where
+        I: TypeMatcher,
+        IsListOf<I>: PagableRegisteredFor<dyn TypeMatcherDyn>,
+    {
         if item.is_wildcard() {
             self.list()
         } else {
@@ -246,7 +259,15 @@ pub trait TypeMatcherAlloc: Sized {
     }
 
     /// `dict[Key, Value]`.
-    fn dict_of_matcher(self, k: impl TypeMatcher, v: impl TypeMatcher) -> Self::Result {
+    #[allow(private_bounds)] // `IsDictOf`, `IsAny` are pub(crate), leak into bounds.
+    fn dict_of_matcher<K, V>(self, k: K, v: V) -> Self::Result
+    where
+        K: TypeMatcher,
+        V: TypeMatcher,
+        IsDictOf<K, V>: PagableRegisteredFor<dyn TypeMatcherDyn>,
+        IsDictOf<K, IsAny>: PagableRegisteredFor<dyn TypeMatcherDyn>,
+        IsDictOf<IsAny, V>: PagableRegisteredFor<dyn TypeMatcherDyn>,
+    {
         match (k.is_wildcard(), v.is_wildcard()) {
             (true, true) => self.dict(),
             (true, false) => self.alloc(IsDictOf(IsAny, v)),
@@ -284,7 +305,12 @@ pub trait TypeMatcherAlloc: Sized {
     }
 
     /// `set[Item]`.
-    fn set_of_matcher(self, item: impl TypeMatcher) -> Self::Result {
+    #[allow(private_bounds)] // `IsSetOf` is pub(crate), leaks into bound.
+    fn set_of_matcher<I>(self, item: I) -> Self::Result
+    where
+        I: TypeMatcher,
+        IsSetOf<I>: PagableRegisteredFor<dyn TypeMatcherDyn>,
+    {
         if item.is_wildcard() {
             self.set()
         } else {

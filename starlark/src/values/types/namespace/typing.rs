@@ -21,7 +21,7 @@ use std::fmt::Formatter;
 
 use allocative::Allocative;
 use dupe::Dupe;
-use pagable::PagablePanic;
+use pagable::Pagable;
 use pagable::pagable_typetag;
 use starlark_derive::type_matcher;
 use starlark_map::sorted_map::SortedMap;
@@ -45,8 +45,10 @@ use crate::values::starlark_type_id::StarlarkTypeId;
 use crate::values::types::namespace::value::Namespace;
 use crate::values::typing::type_compiled::alloc::TypeMatcherAlloc;
 use crate::values::typing::type_compiled::matcher::TypeMatcher;
+use crate::values::typing::type_compiled::matcher::TypeMatcherDyn;
 
-#[derive(Allocative, Eq, PartialEq, Hash, Debug, Clone, Copy, Dupe)]
+#[derive(Allocative, Eq, PartialEq, Hash, Debug, Clone, Copy, Dupe, Pagable)]
+#[pagable_typetag(TypeMatcherDyn)]
 struct NamespaceMatcher;
 
 #[type_matcher]
@@ -57,17 +59,7 @@ impl TypeMatcher for NamespaceMatcher {
 }
 
 #[derive(
-    Allocative,
-    Clone,
-    Copy,
-    Dupe,
-    Debug,
-    Eq,
-    PartialEq,
-    Hash,
-    Ord,
-    PartialOrd,
-    PagablePanic
+    Allocative, Clone, Copy, Dupe, Debug, Eq, PartialEq, Hash, Ord, PartialOrd, Pagable
 )]
 pub(super) struct TyNamespaceFunction;
 
@@ -108,15 +100,7 @@ impl TyCustomFunctionImpl for TyNamespaceFunction {
 }
 
 #[derive(
-    Debug,
-    Clone,
-    PartialEq,
-    Eq,
-    Hash,
-    PartialOrd,
-    Ord,
-    Allocative,
-    PagablePanic
+    Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Allocative, Pagable
 )]
 #[pagable_typetag(TyCustomDyn)]
 pub(super) struct TyNamespace {

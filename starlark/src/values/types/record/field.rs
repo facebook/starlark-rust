@@ -23,6 +23,7 @@ use allocative::Allocative;
 use dupe::Dupe;
 use starlark_derive::Freeze;
 use starlark_derive::NoSerialize;
+use starlark_derive::StarlarkPagable;
 use starlark_derive::Trace;
 use starlark_derive::starlark_value;
 use starlark_map::StarlarkHasher;
@@ -46,7 +47,8 @@ use crate::values::typing::type_compiled::compiled::TypeCompiled;
     Freeze,
     NoSerialize,
     ProvidesStaticType,
-    Allocative
+    Allocative,
+    StarlarkPagable
 )]
 pub struct FieldGen<V: ValueLifetimeless> {
     pub(crate) typ: TypeCompiled<V>,
@@ -85,7 +87,7 @@ impl<'v, V: ValueLike<'v>> FieldGen<V> {
     }
 }
 
-#[starlark_value(type = "field")]
+#[starlark_value(type = "field", skip_pagable)]
 impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for FieldGen<V>
 where
     Self: ProvidesStaticType<'v>,

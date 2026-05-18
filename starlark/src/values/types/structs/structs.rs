@@ -19,6 +19,7 @@
 
 use allocative::Allocative;
 use dupe::Dupe;
+use pagable::Pagable;
 use starlark_derive::starlark_module;
 use starlark_map::sorted_map::SortedMap;
 
@@ -42,7 +43,7 @@ use crate::values::structs::value::FrozenStruct;
 use crate::values::structs::value::Struct;
 
 #[derive(
-    Allocative, Clone, Copy, Dupe, Debug, Eq, PartialEq, Hash, Ord, PartialOrd
+    Allocative, Clone, Copy, Dupe, Debug, Eq, PartialEq, Hash, Ord, PartialOrd, Pagable
 )]
 struct StructType;
 

@@ -37,12 +37,12 @@ use crate::values::Tracer;
 use crate::values::Value;
 use crate::values::layout::avalue::AValue;
 use crate::values::layout::avalue::AValueImpl;
+use crate::values::layout::avalue::AValueSimpleBound;
 use crate::values::layout::avalue::heap_copy_impl;
 use crate::values::layout::avalue::try_freeze_directly;
 use crate::values::layout::heap::repr::AValueHeader;
 use crate::values::layout::heap::repr::AValueRepr;
 use crate::values::layout::heap::repr::ForwardPtr;
-use crate::values::layout::heap::send::HeapSyncable;
 
 #[derive(Debug, thiserror::Error)]
 enum AValueError {
@@ -55,7 +55,7 @@ struct AValueComplex<T>(PhantomData<T>);
 impl<'v, T> AValue<'v> for AValueComplex<T>
 where
     T: ComplexValue<'v>,
-    T::Frozen: StarlarkValue<'static> + HeapSendable<'static> + HeapSyncable<'static>,
+    T::Frozen: AValueSimpleBound<'static>,
 {
     type StarlarkValue = T;
 
@@ -138,27 +138,10 @@ where
 
 impl<'v> Heap<'v> {
     /// Allocate a [`ComplexValue`] on the [`Heap`].
-    #[cfg(feature = "pagable")]
     pub fn alloc_complex<T>(self, x: T) -> Value<'v>
     where
         T: ComplexValue<'v>,
-        T::Frozen: StarlarkValue<'static>
-            + HeapSendable<'static>
-            + HeapSyncable<'static>
-            + crate::pagable::vtable_register::VtableRegistered,
-        T: HeapSendable<'v>,
-    {
-        assert!(!T::is_special(Private));
-        self.alloc_raw(AValueImpl::<AValueComplex<T>>::new(x))
-            .to_value()
-    }
-
-    /// Allocate a [`ComplexValue`] on the [`Heap`].
-    #[cfg(not(feature = "pagable"))]
-    pub fn alloc_complex<T>(self, x: T) -> Value<'v>
-    where
-        T: ComplexValue<'v>,
-        T::Frozen: StarlarkValue<'static> + HeapSendable<'static> + HeapSyncable<'static>,
+        T::Frozen: AValueSimpleBound<'static>,
         T: HeapSendable<'v>,
     {
         assert!(!T::is_special(Private));

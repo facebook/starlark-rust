@@ -17,8 +17,8 @@
 
 //! Static string value registry.
 //!
-//! This module provides a mapping from static string value addresses
-//! (empty string and single ASCII characters) to their hash-based identifiers.
+//! This module provides bidirectional mappings between static string value
+//! addresses/IDs (empty string and single ASCII characters).
 
 use std::collections::HashMap;
 use std::sync::LazyLock;
@@ -26,27 +26,40 @@ use std::sync::LazyLock;
 use super::get_static_value_id::StaticValueId;
 use super::get_static_value_id::hash_empty_string;
 use super::get_static_value_id::hash_short_string;
+use crate::values::FrozenValue;
 use crate::values::layout::static_string::VALUE_BYTE_STRINGS;
 use crate::values::layout::static_string::VALUE_EMPTY_STRING;
 
-/// Static map from untagged static string addresses to their identifiers.
+/// Bidirectional lookup maps for static strings.
 ///
-/// This map is lazily initialized at runtime and contains mappings for:
-/// - Empty string (`""`) -> hash_empty_string()
-/// - Single ASCII characters (`"\x00"` to `"\x7F"`) -> hash_short_string(0..128)
-pub(super) static STATIC_STRING_ADDR_TO_ID: LazyLock<HashMap<usize, StaticValueId>> =
-    LazyLock::new(|| {
-        let mut map = HashMap::new();
+/// The two maps are inverses of each other:
+/// - `addr_to_id`: pointer address → `StaticValueId` (for serialization)
+/// - `id_to_value`: `StaticValueId` → `FrozenValue` (for deserialization)
+pub(super) struct StaticStringMaps {
+    pub(super) addr_to_id: HashMap<usize, StaticValueId>,
+    pub(super) id_to_value: HashMap<StaticValueId, FrozenValue>,
+}
 
-        // Register empty string
-        let empty_addr = VALUE_EMPTY_STRING.unpack().ptr_value().ptr_value_untagged();
-        map.insert(empty_addr, hash_empty_string());
+pub(super) static STATIC_STRING_MAPS: LazyLock<StaticStringMaps> = LazyLock::new(|| {
+    let mut addr_to_id = HashMap::new();
+    let mut id_to_value = HashMap::new();
 
-        // Register single ASCII character strings (0x00 to 0x7F)
-        for (i, repr) in VALUE_BYTE_STRINGS.iter().enumerate() {
-            let addr = repr.unpack().ptr_value().ptr_value_untagged();
-            map.insert(addr, hash_short_string(i as u8));
-        }
+    // Register empty string
+    let empty_fv = VALUE_EMPTY_STRING.unpack();
+    let empty_id = hash_empty_string();
+    addr_to_id.insert(empty_fv.ptr_value().ptr_value_untagged(), empty_id);
+    id_to_value.insert(empty_id, empty_fv);
 
-        map
-    });
+    // Register single ASCII character strings (0x00 to 0x7F)
+    for (i, repr) in VALUE_BYTE_STRINGS.iter().enumerate() {
+        let fv = repr.unpack();
+        let id = hash_short_string(i as u8);
+        addr_to_id.insert(fv.ptr_value().ptr_value_untagged(), id);
+        id_to_value.insert(id, fv);
+    }
+
+    StaticStringMaps {
+        addr_to_id,
+        id_to_value,
+    }
+});

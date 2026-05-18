@@ -16,19 +16,23 @@
  */
 
 use allocative::Allocative;
+use starlark_derive::StarlarkPagable;
 
+use crate as starlark;
 use crate::eval::ParametersSpec;
 use crate::typing::Ty;
 use crate::values::FrozenValue;
 
-#[derive(Allocative, Debug)]
+#[derive(Allocative, Debug, StarlarkPagable)]
 #[doc(hidden)]
 pub struct TyRecordData {
     /// Name of the record type.
     pub(crate) name: String,
     /// Type of record instance.
+    #[starlark_pagable(pagable)]
     pub(crate) ty_record: Ty,
     /// Type of record type.
+    #[starlark_pagable(pagable)]
     pub(crate) ty_record_type: Ty,
     /// Creating these on every invoke is pretty expensive (profiling shows)
     /// so compute them in advance and cache.

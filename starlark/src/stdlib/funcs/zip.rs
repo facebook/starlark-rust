@@ -16,6 +16,7 @@
  */
 
 use allocative::Allocative;
+use pagable::Pagable;
 use starlark_derive::starlark_module;
 
 use crate as starlark;
@@ -37,7 +38,9 @@ use crate::values::ValueOfUnchecked;
 use crate::values::tuple::UnpackTuple;
 use crate::values::typing::StarlarkIter;
 
-#[derive(Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd, Allocative)]
+#[derive(
+    Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd, Allocative, Pagable
+)]
 struct ZipType;
 
 pagable::register_typetag!(TyCustomFunction<ZipType> as dyn TyCustomDyn);

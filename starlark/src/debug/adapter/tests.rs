@@ -221,6 +221,22 @@ mod t {
     }
 
     #[test]
+    fn test_continue_after_eval_hook_drop_returns_error() -> crate::Result<()> {
+        let controller = BreakpointController::new();
+        let (adapter, eval_hook) = prepare_dap_adapter(controller.get_client());
+
+        drop(eval_hook);
+
+        let err = adapter.continue_().unwrap_err().to_string();
+        assert!(
+            err.contains("no longer active"),
+            "Expected error to indicate session is no longer active, got: {err}"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn test_breakpoint() -> crate::Result<()> {
         if is_wasm() {
             // `thread::scope` doesn't work in wasm.

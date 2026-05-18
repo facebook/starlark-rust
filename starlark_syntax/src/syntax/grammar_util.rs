@@ -68,6 +68,8 @@ enum GrammarUtilError {
     TypeAnnotationOnTupleAssign,
     #[error("`load` statement requires at least two arguments")]
     LoadRequiresAtLeastTwoArguments,
+    #[error("unparenthesized tuple with trailing comma")]
+    UnparenthesizedTupleTrailingComma,
 }
 
 /// Ensure we produce normalised Statements, rather than singleton Statements
@@ -144,6 +146,18 @@ pub fn check_assignment(
         }),
         Some(op) => Stmt::AssignModify(lhs, op, Box::new(rhs)),
     })
+}
+
+pub(crate) fn reject_unparenthesized_tuple_trailing_comma<T>(
+    codemap: &CodeMap,
+    begin: usize,
+    end: usize,
+) -> Result<T, EvalException> {
+    Err(EvalException::new_anyhow(
+        GrammarUtilError::UnparenthesizedTupleTrailingComma.into(),
+        Span::new(Pos::new(begin as _), Pos::new(end as _)),
+        codemap,
+    ))
 }
 
 pub(crate) fn check_load_0(module: AstString, parser_state: &mut ParserState) -> Stmt {

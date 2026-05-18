@@ -20,6 +20,7 @@ use std::fmt::Display;
 
 use allocative::Allocative;
 use dupe::Dupe;
+use pagable::Pagable;
 
 use crate::typing::Ty;
 use crate::typing::TyFunction;
@@ -36,7 +37,9 @@ use crate::values::string::str_type::StarlarkStr;
 use crate::values::typing::any::TypingAny;
 
 /// Type that is not a union.
-#[derive(Eq, PartialEq, Hash, Clone, Dupe, Debug, Ord, PartialOrd, Allocative)]
+#[derive(
+    Eq, PartialEq, Hash, Clone, Dupe, Debug, Ord, PartialOrd, Allocative, Pagable
+)]
 pub enum TyBasic {
     /// Type that contain anything
     Any,

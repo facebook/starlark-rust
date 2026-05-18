@@ -43,6 +43,7 @@ use crate::eval::Arguments;
 use crate::eval::Evaluator;
 use crate::eval::ParametersSpec;
 use crate::eval::ParametersSpecParam;
+use crate::pagable::StarlarkPagable;
 use crate::starlark_complex_values;
 use crate::typing::ParamIsRequired;
 use crate::typing::ParamSpec;
@@ -122,7 +123,15 @@ enum RecordTypeError {
 }
 
 /// The result of `record()`, being the type of records.
-#[derive(Debug, Trace, NoSerialize, ProvidesStaticType, Allocative)]
+#[derive(
+    Debug,
+    Trace,
+    NoSerialize,
+    ProvidesStaticType,
+    Allocative,
+    starlark_derive::StarlarkPagable
+)]
+#[starlark_pagable(bound = "V: StarlarkPagable, V::TyRecordDataOpt: StarlarkPagable")]
 pub struct RecordTypeGen<V: RecordCell> {
     pub(crate) id: TypeInstanceId,
     #[allocative(skip)] // TODO(nga): do not skip.
@@ -130,7 +139,7 @@ pub struct RecordTypeGen<V: RecordCell> {
     #[trace(unsafe_ignore)]
     pub(crate) ty_record_data: V::TyRecordDataOpt,
     /// The V is the type the field must satisfy (e.g. `"string"`)
-    fields: SmallMap<String, FieldGen<V>>,
+    pub(crate) fields: SmallMap<String, FieldGen<V>>,
 }
 
 impl<'v, V: ValueLike<'v> + RecordCell> Display for RecordTypeGen<V> {
@@ -189,7 +198,7 @@ where
             .dupe()
     }
 
-    fn make_parameter_spec(
+    pub(crate) fn make_parameter_spec(
         name: &str,
         fields: &SmallMap<String, FieldGen<V>>,
     ) -> ParametersSpec<FrozenValue> {
@@ -208,7 +217,7 @@ where
     }
 }
 
-#[starlark_value(type = FUNCTION_TYPE)]
+#[starlark_value(type = FUNCTION_TYPE, skip_pagable)]
 impl<'v, V: ValueLike<'v> + RecordCell + 'v> StarlarkValue<'v> for RecordTypeGen<V>
 where
     Self: ProvidesStaticType<'v>,
@@ -269,7 +278,6 @@ where
                     values: values.into_boxed_slice(),
                 }))
             })
-            .map_err(Into::into)
     }
 
     fn get_methods() -> Option<&'static Methods>

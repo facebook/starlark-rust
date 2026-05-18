@@ -9,7 +9,7 @@ def :
   pass
 
 Error:
-error: Parse error: unexpected symbol ':' here, expected one of "IDENTIFIER"
+error: Parse error: unexpected symbol ':', expected identifier
  --> error_bad_def:1:5
   |
 1 | def :
@@ -18,14 +18,79 @@ error: Parse error: unexpected symbol ':' here, expected one of "IDENTIFIER"
 
 
 Program:
+def pass():
+  pass
+
+Error:
+error: Parse error: unexpected keyword 'pass', expected identifier
+ --> error_bad_def:1:5
+  |
+1 | def pass():
+  |     ^^^^
+  |
+
+
+Program:
+def load():
+  pass
+
+Error:
+error: Parse error: unexpected keyword 'load', expected identifier
+ --> error_bad_def:1:5
+  |
+1 | def load():
+  |     ^^^^
+  |
+
+
+Program:
+def f(load):
+  pass
+
+Error:
+error: Parse error: unexpected keyword 'load', expected identifier
+ --> error_bad_def:1:7
+  |
+1 | def f(load):
+  |       ^^^^
+  |
+
+
+Program:
+def f :
+  pass
+
+Error:
+error: Parse error: unexpected symbol ':', expected symbol '('
+ --> error_bad_def:1:7
+  |
+1 | def f :
+  |       ^
+  |
+
+
+Program:
 def foo(x y):
   pass
 
 Error:
-error: Parse error: unexpected identifier 'y' here, expected one of "(", ")", ",", ":" or "="
+error: Parse error: unexpected identifier 'y', expected symbol ')'
  --> error_bad_def:1:11
   |
 1 | def foo(x y):
+  |           ^
+  |
+
+
+Program:
+def f(a, *-b, c):
+  pass
+
+Error:
+error: Parse error: unexpected symbol '-', expected symbol ')'
+ --> error_bad_def:1:11
+  |
+1 | def f(a, *-b, c):
   |           ^
   |
 

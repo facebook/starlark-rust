@@ -54,6 +54,7 @@ use crate::values::FrozenValue;
 use crate::values::FrozenValueTyped;
 use crate::values::StarlarkValue;
 use crate::values::any::FrozenAnyValue;
+use crate::values::any::StarlarkAnyRegistered;
 use crate::values::layout::value_not_special::FrozenValueNotSpecial;
 use crate::values::types::known_methods::KnownMethod;
 use crate::values::typing::type_compiled::compiled::TypeCompiled;
@@ -364,7 +365,7 @@ impl BcInstrArg for String {
     fn visit_jump_addr(_param: &Self, _ip: BcAddr, _consumer: &mut dyn FnMut(BcAddr)) {}
 }
 
-impl<T: Display + fmt::Debug + Send + Sync + 'static> BcInstrArg for FrozenAnyValue<T> {
+impl<T: Display + StarlarkAnyRegistered> BcInstrArg for FrozenAnyValue<T> {
     fn fmt_append(
         param: &Self,
         _ip: BcAddr,

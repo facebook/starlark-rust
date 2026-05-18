@@ -27,6 +27,10 @@ use crate::values::layout::heap::profile::alloc_counts::AllocCounts;
 use crate::values::layout::heap::profile::string_index::StringId;
 use crate::values::layout::heap::profile::string_index::StringIndex;
 
+pagable::static_str!(ROOT_STR = "(root)");
+pagable::static_str!(TOTALS_STR = "TOTALS");
+pagable::static_str!(BLANK_STR = "");
+
 /// Information relating to a function.
 #[derive(Default, Debug, Clone)]
 pub(crate) struct FuncInfo {
@@ -84,7 +88,7 @@ impl HeapSummaryByFunction {
         let mut info = HeapSummaryByFunction {
             info: SmallMap::new(),
         };
-        info.init_children(&stacks.root, &ArcStr::new_static("(root)"), &stacks.strings);
+        info.init_children(&stacks.root, &ArcStr::new_static(ROOT_STR), &stacks.strings);
         info
     }
 
@@ -157,7 +161,7 @@ impl HeapSummaryByFunction {
             Func,
         }
 
-        let totals_str = ArcStr::new_static("TOTALS");
+        let totals_str = ArcStr::new_static(TOTALS_STR);
         let info = [(&totals_str, &totals, RowKind::Total)]
             .into_iter()
             .chain(info.into_iter().map(|(k, v)| (k, v, RowKind::Func)));
@@ -179,7 +183,7 @@ impl HeapSummaryByFunction {
             .chain(columns.iter().map(|c| c.0)),
         );
         for (rowname, info, _row_kind) in info {
-            let blank = ArcStr::new_static("");
+            let blank = ArcStr::new_static(BLANK_STR);
             let callers = info
                 .callers
                 .iter()

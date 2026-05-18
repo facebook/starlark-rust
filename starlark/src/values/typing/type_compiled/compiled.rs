@@ -24,6 +24,9 @@ use std::hash::Hasher;
 
 use allocative::Allocative;
 use dupe::Dupe;
+use pagable::Pagable;
+use pagable::pagable_typetag;
+use starlark_derive::StarlarkPagable;
 use starlark_derive::starlark_module;
 use starlark_derive::starlark_value;
 use starlark_derive::type_matcher;
@@ -64,6 +67,7 @@ use crate::values::type_repr::StarlarkTypeRepr;
 use crate::values::types::tuple::value::Tuple;
 use crate::values::typing::type_compiled::factory::TypeCompiledFactory;
 use crate::values::typing::type_compiled::matcher::TypeMatcher;
+use crate::values::typing::type_compiled::matcher::TypeMatcherDyn;
 
 // Static type-compiled value for `typing.Any`.
 static_type_compiled!(TYPE_COMPILED_ANY: IsAny, Ty::any());
@@ -123,11 +127,15 @@ where
     Debug,
     Allocative,
     ProvidesStaticType,
-    NoSerialize
+    NoSerialize,
+    StarlarkPagable
 )]
+#[starlark_pagable(bound = "T: TypeMatcher")]
 /// A compiled type expression wrapped as a Starlark value with a type matcher.
 pub struct TypeCompiledImplAsStarlarkValue<T: 'static> {
+    #[starlark_pagable(pagable)]
     type_compiled_impl: T,
+    #[starlark_pagable(pagable)]
     ty: Ty,
 }
 
@@ -143,6 +151,27 @@ unsafe impl<T: crate::values::typing::type_compiled::matcher::TypeMatcherRegiste
 unsafe impl<T: TypeCompiledStaticRegistered> StaticValueRegistered
     for TypeCompiledImplAsStarlarkValue<T>
 {
+}
+
+#[cfg(all(test, feature = "pagable"))]
+impl<T> TypeCompiledImplAsStarlarkValue<T> {
+    pub(crate) fn new_for_test(
+        type_compiled_impl: T,
+        ty: Ty,
+    ) -> TypeCompiledImplAsStarlarkValue<T> {
+        TypeCompiledImplAsStarlarkValue {
+            type_compiled_impl,
+            ty,
+        }
+    }
+
+    pub(crate) fn ty_for_test(&self) -> &Ty {
+        &self.ty
+    }
+
+    pub(crate) fn impl_for_test(&self) -> &T {
+        &self.type_compiled_impl
+    }
 }
 
 impl<T> TypeCompiledImplAsStarlarkValue<T>
@@ -164,7 +193,8 @@ where
 }
 
 #[doc(hidden)]
-#[derive(Hash, Eq, PartialEq, Debug, Clone, Allocative)]
+#[derive(Hash, Eq, PartialEq, Debug, Clone, Allocative, Pagable)]
+#[pagable_typetag(TypeMatcherDyn)]
 pub struct DummyTypeMatcher;
 
 #[type_matcher]
@@ -174,7 +204,11 @@ impl TypeMatcher for DummyTypeMatcher {
     }
 }
 
-#[starlark_value(type = "type")]
+// Register the canonical (`DummyTypeMatcher`) variant. Other matchers'
+// `Canonical` points here.
+crate::register_ty_starlark_value!(TypeCompiledImplAsStarlarkValue<DummyTypeMatcher>);
+
+#[starlark_value(type = "type", skip_pagable)]
 impl<'v, T: 'static> StarlarkValue<'v> for TypeCompiledImplAsStarlarkValue<T>
 where
     T: TypeMatcher,
@@ -254,7 +288,8 @@ fn type_compiled_methods(methods: &mut MethodsBuilder) {
     Copy,
     Dupe,
     Coerce,
-    ProvidesStaticType
+    ProvidesStaticType,
+    StarlarkPagable
 )]
 #[repr(transparent)]
 pub struct TypeCompiled<V: ValueLifetimeless>(

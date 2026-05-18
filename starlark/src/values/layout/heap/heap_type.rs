@@ -32,6 +32,7 @@ use std::mem::MaybeUninit;
 use std::ops::Deref;
 use std::ptr;
 use std::sync::Arc;
+use std::sync::Mutex;
 
 use allocative::Allocative;
 use bumpalo::Bump;
@@ -482,14 +483,10 @@ impl FrozenFrozenHeap {
         // dependencies have offset maps registered before we serialize arena
         // values (which may contain cross-heap FrozenValue pointers).
         let state = StarlarkSerializerImpl::get_or_create_state(serializer);
-        state
-            .lock()
-            .expect("ser state lock poisoned")
-            .ensure_offset_maps_registered_inner(heap_id, &self.refs, || {
-                self.arena.build_ptr_to_offset_map()
-            });
-        // Create local StarlarkSerializerImpl with shared state.
-        let mut ctx = StarlarkSerializerImpl::new(serializer, state, heap_id);
+        state.ensure_offset_maps_registered_inner(heap_id, &self.refs, || {
+            self.arena.build_ptr_to_offset_map()
+        });
+        let mut ctx = StarlarkSerializerImpl::new(serializer, state);
 
         // Serialize value data, recording start cursor per value.
         let mut entry_cursors: Vec<(u32, u32)> = Vec::with_capacity(table_entry_count);
@@ -540,15 +537,11 @@ impl FrozenFrozenHeap {
         let mut ctx = StarlarkDeserializerImpl::new(
             deserializer.as_dyn(),
             state.dupe(),
-            heap_id,
-            deser_state,
+            Arc::new(Mutex::new(deser_state)),
         );
 
         // Register bases in shared state.
-        state
-            .lock()
-            .expect("deser state lock poisoned")
-            .register_bases(heap_id, drop_base, non_drop_base);
+        state.register_bases(heap_id, drop_base, non_drop_base);
 
         let heap = Self::deserialize_phase2(arena, refs, &mut ctx)?;
 
@@ -666,7 +659,7 @@ impl FrozenFrozenHeap {
     ) -> crate::Result<FrozenFrozenHeap> {
         let count = ctx.current_heap_deser_state().value_count();
         for i in 0..count {
-            let target = ctx.current_heap_deser_state_mut().try_claim(i);
+            let target = ctx.current_heap_deser_state().try_claim(i);
             if let Some(target) = target {
                 // SAFETY: abs_pos is computed from the offset table written during
                 // serialization — it points to the start of this value's data.

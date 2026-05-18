@@ -31,6 +31,7 @@ use allocative::Allocative;
 use display_container::fmt_keyed_container;
 use serde::Serialize;
 use starlark::register_avalue_simple_frozen;
+use starlark_derive::StarlarkPagable;
 use starlark_derive::starlark_value;
 use starlark_map::Equivalent;
 
@@ -68,7 +69,15 @@ use crate::values::string::str_type::hash_string_value;
 use crate::values::type_repr::StarlarkTypeRepr;
 use crate::values::types::dict::dict_type::DictType;
 
-#[derive(Clone, Default, Trace, Debug, ProvidesStaticType, Allocative)]
+#[derive(
+    Clone,
+    Default,
+    Trace,
+    Debug,
+    ProvidesStaticType,
+    Allocative,
+    StarlarkPagable
+)]
 pub(crate) struct DictGen<T>(pub(crate) T);
 
 impl<'v, T: DictLike<'v>> Display for DictGen<T> {
@@ -99,7 +108,7 @@ impl<'v> StarlarkTypeRepr for Dict<'v> {
     }
 }
 
-#[derive(Clone, Default, Debug, ProvidesStaticType, Allocative)]
+#[derive(Clone, Default, Debug, ProvidesStaticType, Allocative, StarlarkPagable)]
 #[repr(transparent)]
 pub(crate) struct FrozenDictData {
     /// The data stored by the dictionary. The keys must all be hashable values.
@@ -401,7 +410,7 @@ impl<'v> DictLike<'v> for FrozenDictData {
 // Register vtable for FrozenDict (special type not handled by #[starlark_value] macro, because V is not ValueLike).
 register_avalue_simple_frozen!(FrozenDict);
 
-#[starlark_value(type = Dict::TYPE)]
+#[starlark_value(type = Dict::TYPE, skip_pagable)]
 impl<'v, T: DictLike<'v> + 'v> StarlarkValue<'v> for DictGen<T>
 where
     Self: ProvidesStaticType<'v>,

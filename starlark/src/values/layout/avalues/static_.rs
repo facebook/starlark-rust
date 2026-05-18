@@ -26,6 +26,7 @@ use crate::values::StarlarkValue;
 use crate::values::Tracer;
 use crate::values::Value;
 use crate::values::any::FrozenAnyValue;
+use crate::values::any::StarlarkAnyRegistered;
 use crate::values::layout::avalue::AValue;
 use crate::values::layout::avalue::AValueImpl;
 use crate::values::layout::heap::repr::AValueRepr;
@@ -106,7 +107,7 @@ impl<T: StarlarkValue<'static>> AllocStaticSimple<T> {
     }
 }
 
-impl<T: std::fmt::Debug + Send + Sync + 'static> AllocStaticSimple<StarlarkAny<T>> {
+impl<T: StarlarkAnyRegistered> AllocStaticSimple<StarlarkAny<T>> {
     /// Unpack as a [`FrozenAnyValue`], providing direct access to the inner `T`.
     pub fn unpack_any(&'static self) -> FrozenAnyValue<T> {
         FrozenAnyValue::from_typed(self.unpack())
@@ -118,6 +119,7 @@ mod tests {
     use allocative::Allocative;
     use starlark_derive::NoSerialize;
     use starlark_derive::ProvidesStaticType;
+    use starlark_derive::StarlarkPagable;
     use starlark_derive::starlark_value;
 
     use crate as starlark;
@@ -132,7 +134,8 @@ mod tests {
             derive_more::Display,
             ProvidesStaticType,
             NoSerialize,
-            Allocative
+            Allocative,
+            StarlarkPagable
         )]
         #[display("MySimpleValue")]
         struct MySimpleValue(u32);
@@ -140,7 +143,7 @@ mod tests {
         // SAFETY: For testing purposes only.
         unsafe impl StaticValueRegistered for MySimpleValue {}
 
-        #[starlark_value(type = "MySimpleValue")]
+        #[starlark_value(type = "MySimpleValue", skip_pagable)]
         impl<'v> StarlarkValue<'v> for MySimpleValue {}
 
         static VALUE: AllocStaticSimple<MySimpleValue> =

@@ -100,6 +100,9 @@ pub(crate) type List<'v> = ListGen<ListData<'v>>;
 
 static_starlark_value!(pub(crate) VALUE_EMPTY_FROZEN_LIST: ListGen<FrozenListData> = unsafe { ListGen(FrozenListData::new(0)) });
 
+// ListGen's Canonical is FrozenList;
+crate::register_ty_starlark_value!(FrozenList);
+
 impl ListGen<FrozenListData> {
     pub(crate) fn offset_of_content() -> usize {
         memoffset::offset_of!(FrozenListData, content)

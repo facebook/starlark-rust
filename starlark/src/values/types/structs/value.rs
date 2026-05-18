@@ -38,6 +38,8 @@ use crate::coerce::coerce;
 use crate::docs::DocItem;
 use crate::docs::DocMember;
 use crate::docs::DocProperty;
+use crate::pagable::SmallMapKeyDeserialize;
+use crate::pagable::StarlarkPagable;
 use crate::starlark_complex_value;
 use crate::typing::Ty;
 use crate::typing::TyStruct;
@@ -45,6 +47,7 @@ use crate::util::arc_str::ArcStr;
 use crate::values::FrozenStringValue;
 use crate::values::FrozenValue;
 use crate::values::Heap;
+use crate::values::StarlarkPagable;
 use crate::values::StarlarkValue;
 use crate::values::StringValue;
 use crate::values::StringValueLike;
@@ -97,7 +100,19 @@ impl StructGen<'static, FrozenValue> {
 starlark_complex_value!(pub(crate) Struct<'v>);
 
 /// The result of calling `struct()`.
-#[derive(Clone, Default, Debug, Trace, Freeze, ProvidesStaticType, Allocative)]
+#[derive(
+    Clone,
+    Default,
+    Debug,
+    Trace,
+    Freeze,
+    ProvidesStaticType,
+    Allocative,
+    StarlarkPagable
+)]
+#[starlark_pagable(
+    bound = "V: StarlarkPagable, V::String: StarlarkPagable + SmallMapKeyDeserialize"
+)]
 #[repr(C)]
 pub(crate) struct StructGen<'v, V: ValueLike<'v>> {
     /// The fields in a struct.
@@ -118,7 +133,7 @@ impl<'v, V: ValueLike<'v>> Display for StructGen<'v, V> {
     }
 }
 
-#[starlark_value(type = Struct::TYPE)]
+#[starlark_value(type = Struct::TYPE, skip_pagable)]
 impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for StructGen<'v, V>
 where
     Self: ProvidesStaticType<'v>,

@@ -99,9 +99,17 @@ impl<T: Debug + 'static> Drop for AnyArray<T> {
 // This struct has zero length array of `T`, so check it actually declares it has drop.
 const _: () = assert!(mem::needs_drop::<AnyArray<String>>());
 
-#[starlark_value(type = "AnyArray")]
-impl<'v, T: Debug + 'static> StarlarkValue<'v> for AnyArray<T> {
-    type Canonical = Self;
+/// Marker trait certifying that `T` has a registered typing vtable entry
+/// for `AnyArray<T>`. Implemented per-`T` by
+/// [`register_any_array!`][crate::register_any_array].
+///
+/// Same orphan-rule workaround as `StarlarkAnyRegistered`.
+pub(crate) trait AnyArrayRegistered: Debug + 'static {
+    /// Typing vtable entry for `AnyArray<Self>`.
+    #[allow(dead_code)] // Only read by the `pagable`-gated `HasTyVTable` impl below.
+    const TY_VTABLE_STATIC: pagable::StaticValue<
+        crate::typing::starlark_value::TyStarlarkValueVTable,
+    >;
 }
 
 /// Type alias for `FrozenValueTyped<'static, AnyArray<T>>`.
@@ -111,6 +119,58 @@ impl<'v, T: Debug + 'static> StarlarkValue<'v> for AnyArray<T> {
 /// through `AnyArray<T>` to reach `[T]`.
 pub type FrozenAnyArray<T> = FrozenValueTyped<'static, AnyArray<T>>;
 
+#[cfg(feature = "pagable")]
+impl<T> crate::typing::HasTyVTable for AnyArray<T>
+where
+    T: AnyArrayRegistered,
+{
+    const TY_VTABLE_STATIC: pagable::StaticValue<
+        crate::typing::starlark_value::TyStarlarkValueVTable,
+    > = <T as AnyArrayRegistered>::TY_VTABLE_STATIC;
+}
+
+#[starlark_value(type = "AnyArray")]
+impl<'v, T: AnyArrayRegistered> StarlarkValue<'v> for AnyArray<T> {
+    type Canonical = Self;
+}
+
+/// Register a typing vtable entry for `AnyArray<T>`.
+#[macro_export]
+macro_rules! register_any_array {
+    ($t:ty) => {
+        const _: () = {
+            $crate::__declare_ty_vtable_static!($crate::values::types::any_array::AnyArray<$t>);
+            impl $crate::values::types::any_array::AnyArrayRegistered for $t {
+                const TY_VTABLE_STATIC: pagable::StaticValue<
+                    $crate::__derive_refs::TyStarlarkValueVTable,
+                > = VTABLE_STATIC;
+            }
+
+            $crate::__starlark_pagable_only! {
+                // Register the deserialization vtable so heap-level ser/de of
+                // `FrozenAnyArray<T>` can look up `AValueAnyArray<T>`.
+                $crate::__derive_refs::inventory::submit! {
+                    $crate::__derive_refs::VTableRegistryEntry {
+                        deser_type_id: $crate::__derive_refs::DeserTypeId::of::<
+                            $crate::values::types::any_array::AnyArray<$t>
+                        >(),
+                        vtable: $crate::__derive_refs::AValueVTable::new::<
+                            $crate::__derive_refs::AValueAnyArray<$t>
+                        >(),
+                    }
+                }
+            }
+        };
+    };
+}
+
+// Registrations for types used with `FrozenHeap::alloc_any_slice` inside
+// starlark. External users register their own `T` via `register_any_array!`.
+crate::register_any_array!(crate::values::FrozenStringValue);
+crate::register_any_array!(crate::eval::compiler::def::CopySlotFromParent);
+crate::register_any_array!(crate::eval::runtime::slots::LocalSlotId);
+crate::register_any_array!(crate::eval::bc::stack_ptr::BcSlotOut);
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -119,21 +179,23 @@ mod tests {
 
     use dupe::Dupe;
 
+    use crate as starlark;
     use crate::register_starlark_any;
     use crate::values::FrozenHeap;
 
     // Type used for drop test - must be at module level for registration.
-    #[derive(Debug, Clone, Dupe)]
+    #[derive(Debug, Clone, Dupe, starlark_derive::StarlarkPagablePanic)]
     struct IncrementOnDrop(Arc<AtomicU32>);
-
-    // Register IncrementOnDrop for use with alloc_any_slice in pagable mode.
-    register_starlark_any!(IncrementOnDrop);
 
     impl Drop for IncrementOnDrop {
         fn drop(&mut self) {
             self.0.fetch_add(1, Ordering::SeqCst);
         }
     }
+
+    register_starlark_any!(IncrementOnDrop);
+    register_any_array!(IncrementOnDrop);
+    register_any_array!(i32);
 
     #[test]
     fn test_drop() {

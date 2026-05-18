@@ -32,14 +32,14 @@ use crate::traits::SessionContext;
 /// - Serialized data storage indexed by content-addressable `DataKey`
 /// - Arc caching to avoid redundant deserialization
 /// - Background serialization queue via mpsc channel
-///                                                                                                               
+///
 /// This is primarily useful for testing the pagable framework.
 pub struct SledBackedPagableStorage {
     sender: mpsc::Sender<Box<dyn ArcEraseDyn>>,
     db: sled::Db,
     arcs: DashMap<(TypeId, DataKey), Box<dyn ArcEraseDyn>>,
     pending: Mutex<SledPendingPageOut>,
-    session_context: Mutex<SessionContext>,
+    session_context: SessionContext,
 }
 
 /// Internal state for tracking pending paging operations.
@@ -49,9 +49,13 @@ struct SledPendingPageOut {
 }
 
 impl SledBackedPagableStorage {
-    pub fn new(db: sled::Db) -> Self {
+    pub fn try_new(path: &std::path::Path) -> anyhow::Result<Self> {
+        let db = sled::Config::new()
+            .cache_capacity(1024 * 1024 * 2) // 2mb
+            .path(path)
+            .open()?;
         let (sender, receiver) = mpsc::channel();
-        Self {
+        Ok(Self {
             sender,
             db,
             arcs: DashMap::new(),
@@ -59,8 +63,8 @@ impl SledBackedPagableStorage {
                 pending_messages: receiver,
                 pending: Vec::new(),
             }),
-            session_context: Mutex::new(SessionContext::new()),
-        }
+            session_context: SessionContext::new(),
+        })
     }
 
     /// Returns the number of arcs queued for paging but not yet serialized.
@@ -75,33 +79,6 @@ impl SledBackedPagableStorage {
         lock.pending.len()
     }
 
-    /// Serialize `PagableData` into the on-disk byte format and insert into sled.
-    /// Returns the content-addressable `DataKey`.
-    fn store_data(&self, data: PagableData) -> DataKey {
-        let key = data.compute_key();
-        let db_key = bytemuck::bytes_of(&key);
-        if self
-            .db
-            .contains_key(db_key)
-            .expect("sled contains_key failed")
-        {
-            return key;
-        }
-
-        let bytes_size = 8 + 8 + data.data.len() + data.arcs.len() * 16;
-        let mut bytes = Vec::with_capacity(bytes_size);
-        bytes.extend_from_slice(&(data.data.len() as u64).to_le_bytes());
-        bytes.extend_from_slice(&(data.arcs.len() as u64).to_le_bytes());
-        bytes.extend_from_slice(&data.data);
-        bytes.extend_from_slice(bytemuck::cast_slice(&data.arcs));
-        assert_eq!(bytes.len(), bytes_size);
-
-        self.db
-            .insert(db_key, sled::IVec::from(bytes))
-            .expect("sled insert failed");
-        key
-    }
-
     /// Recursively serialize a set of arcs and their dependencies, storing each
     /// into sled. Updates `finished` with the identity -> DataKey mapping for
     /// each processed arc.
@@ -109,8 +86,8 @@ impl SledBackedPagableStorage {
         &self,
         roots: Vec<Box<dyn ArcEraseDyn>>,
         finished: &mut HashMap<usize, DataKey>,
-        session_context: &mut SessionContext,
-    ) {
+        session_context: &SessionContext,
+    ) -> anyhow::Result<()> {
         enum Task {
             Start(Box<dyn ArcEraseDyn>),
             Finish((Box<dyn ArcEraseDyn>, Vec<u8>, Vec<Box<dyn ArcEraseDyn>>)),
@@ -126,7 +103,7 @@ impl SledBackedPagableStorage {
                     }
 
                     let mut serializer = SerializerForPaging::new(session_context);
-                    v.serialize(&mut serializer).unwrap();
+                    v.serialize(&mut serializer)?;
                     let (data, arcs) = serializer.finish();
 
                     let subtasks: Vec<_> = arcs
@@ -148,12 +125,13 @@ impl SledBackedPagableStorage {
                         })
                         .collect();
 
-                    let key = self.store_data(PagableData { data, arcs });
+                    let key = self.store_data(PagableData { data, arcs })?;
                     finished.insert(arc.identity(), key);
                     arc.set_data_key(key);
                 }
             }
         }
+        Ok(())
     }
 
     /// Processes all pending arcs, recursively serializing them and their dependencies.
@@ -164,13 +142,8 @@ impl SledBackedPagableStorage {
     /// 3. Computes content-addressable `DataKey`s via blake3 hashing
     /// 4. Stores the serialized data and updates arcs with their keys
     ///
-    /// # Panics
-    ///
-    /// Panics if serialization of any arc fails. This should only occur if there's
-    /// a bug in the implementation of `PagableSerialize` for a type.
-    ///
     /// This is typically called explicitly in tests or by a background thread in production.
-    pub fn page_out_pending(&self) {
+    pub fn page_out_pending(&self) -> anyhow::Result<()> {
         loop {
             // Drain the channel and pop one item while holding the pending lock,
             // then drop it before acquiring session_context to avoid deadlock.
@@ -185,49 +158,13 @@ impl SledBackedPagableStorage {
             match item {
                 Some(v) if v.needs_paging_out() => {
                     let mut finished: HashMap<usize, DataKey> = HashMap::new();
-                    let mut session_context = self.session_context.lock().expect("lock poisoned");
-                    self.serialize_arcs(vec![v], &mut finished, &mut session_context);
+                    self.serialize_arcs(vec![v], &mut finished, &self.session_context)?;
                 }
                 Some(_) => continue,
                 None => break,
             }
         }
-    }
-
-    pub fn page_out_item_cache(&self) -> HashMap<usize, DataKey> {
-        HashMap::new()
-    }
-
-    pub fn serializer_for_page_out_item<'a>(
-        &self,
-        session_context: &'a mut SessionContext,
-    ) -> SerializerForPaging<'a> {
-        SerializerForPaging::new(session_context)
-    }
-
-    pub fn page_out_item(
-        &self,
-        item_data: Vec<u8>,
-        item_arcs: Vec<Box<dyn ArcEraseDyn>>,
-        finished: &mut HashMap<usize, DataKey>,
-        session_context: &mut SessionContext,
-    ) -> DataKey {
-        let roots = item_arcs.iter().map(|arc| arc.clone_dyn()).collect();
-        self.serialize_arcs(roots, finished, session_context);
-
-        let arcs = item_arcs
-            .iter()
-            .map(|arc| {
-                *finished
-                    .get(&arc.identity())
-                    .expect("nested arc should have been serialized first")
-            })
-            .collect();
-
-        self.store_data(PagableData {
-            data: item_data,
-            arcs,
-        })
+        Ok(())
     }
 
     pub fn write_bytes<T: bytemuck::Pod>(&self, key: &str, data: T) {
@@ -349,7 +286,28 @@ impl PagableStorage for SledBackedPagableStorage {
         drop(self.sender.send(arc));
     }
 
-    fn session_context(&self) -> &Mutex<SessionContext> {
+    fn session_context(&self) -> &SessionContext {
         &self.session_context
+    }
+
+    /// Serialize `PagableData` into the on-disk byte format and insert into sled.
+    /// Returns the content-addressable `DataKey`.
+    fn store_data(&self, data: PagableData) -> anyhow::Result<DataKey> {
+        let key = data.compute_key();
+        let db_key = bytemuck::bytes_of(&key);
+        if self.db.contains_key(db_key)? {
+            return Ok(key);
+        }
+
+        let bytes_size = 8 + 8 + data.data.len() + data.arcs.len() * 16;
+        let mut bytes = Vec::with_capacity(bytes_size);
+        bytes.extend_from_slice(&(data.data.len() as u64).to_le_bytes());
+        bytes.extend_from_slice(&(data.arcs.len() as u64).to_le_bytes());
+        bytes.extend_from_slice(&data.data);
+        bytes.extend_from_slice(bytemuck::cast_slice(&data.arcs));
+        assert_eq!(bytes.len(), bytes_size);
+
+        self.db.insert(db_key, sled::IVec::from(bytes))?;
+        Ok(key)
     }
 }

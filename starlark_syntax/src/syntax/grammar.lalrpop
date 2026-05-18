@@ -221,7 +221,7 @@ LoadStmtSyms: (AstAssignIdent, AstString) = <id:LoadStmtBindingName?> <n:string>
 };
 
 // Expression
-L<E>: AstExpr = <l:@L> <v:(<E> ",")*> <e:E> <f:","?> <r:@R>
+ParenTuple<E>: AstExpr = <l:@L> <v:(<E> ",")*> <e:E> <f:","?> <r:@R>
     => {
         if f.is_some() || !v.is_empty() {
             Expr::Tuple(v.into_iter().chain(vec![e].into_iter()).collect())
@@ -231,9 +231,19 @@ L<E>: AstExpr = <l:@L> <v:(<E> ",")*> <e:E> <f:","?> <r:@R>
         }
     };
 
-ExprList: AstExpr = L<Expr>;
+UnparenTuple<E>: AstExpr = {
+    <l:@L> <e:E> "," <r:@R>
+        =>? Ok(grammar_util::reject_unparenthesized_tuple_trailing_comma(state.codemap, l, r)?),
+    <l:@L> <v:(<E> ",")+> <e:E> "," <r:@R>
+        =>? Ok(grammar_util::reject_unparenthesized_tuple_trailing_comma(state.codemap, l, r)?),
+    <l:@L> <v:(<E> ",")+> <e:E> <r:@R>
+        => Expr::Tuple(v.into_iter().chain(vec![e].into_iter()).collect()).ast(l, r),
+    E,
+};
 
-TestList: AstExpr = L<Test>;
+ExprList: AstExpr = UnparenTuple<Expr>;
+
+TestList: AstExpr = UnparenTuple<Test>;
 
 
 PrimaryExpr: AstExpr = {
@@ -282,7 +292,7 @@ Operand: AstExpr = {
     <l:@L> "{" <e:COMMA<DictEntry>> "}" <r:@R>
         => Expr::Dict(e).ast(l, r),
     DictComp,
-    <l:@L> "(" <e:TestList?> ")" <r:@R>
+    <l:@L> "(" <e:ParenTuple<Test>?> ")" <r:@R>
         => match e {
             Some(t) => t,
             None => Expr::Tuple(vec![]).ast(l, r)
