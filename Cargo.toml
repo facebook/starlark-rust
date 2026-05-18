@@ -37,44 +37,44 @@ starlark_lsp = { version = "0.13", path = "starlark_lsp" }
 starlark_map = { version = "0.13", path = "starlark_map" }
 starlark_syntax = { version = "0.13", path = "starlark_syntax" }
 
-anyhow = "1.0.65"
+anyhow = "1.0.102"
 ctor = "1.0.5"
 derivative = "2.2"
 derive_more = { version = "1.0.0", features = ["full"] }
 either = "1.8"
-equivalent = "1.0.0"
-erased-serde = "0.3.20"
-indenter = "0.3.3"
-inventory = "0.3.8"
-memchr = "2.4.1"
-num-bigint = { version = "0.4.3", features = ["serde"] }
-proc-macro2 = "1.0"
-quote = "1.0.3"
-ref-cast = "1.0.0"
+equivalent = "1.0.2"
+erased-serde = "0.4.10"
+indenter = "0.3.4"
+inventory = "0.3.24"
+memchr = "2.8.0"
+num-bigint = { version = "0.4.6", features = ["serde"] }
+proc-macro2 = "1.0.106"
+quote = "1.0.45"
+ref-cast = "1.0.18"
 relative-path = { version = "1.7.0", features = ["serde"] }
-syn = "2"
+syn = "2.0.117"
 
 pagable = { path = "pagable", features = ["tokio"] }
 pagable_derive = { path = "pagable_derive" }
 # dependencies of pagable
-async-trait = "0.1.24"
-blake3 = { version = "1.8.2", features = ["default", "rayon", "std", "traits-preview"] }
-bytemuck = { version = "1.24", features = ["const_zeroed", "derive", "min_const_generics", "must_cast", "nightly_stdsimd"] }
+async-trait = "0.1.86"
+blake3 = { version = "=1.8.2", features = ["default", "rayon", "std", "traits-preview"] }
+bytemuck = { version = "1.25", features = ["const_zeroed", "derive", "min_const_generics", "must_cast", "nightly_stdsimd"] }
 dashmap = "6.1.0"
-indexmap = { version = "2.12.1", features = ["serde"] }
-once_cell = "1.8"
+indexmap = { version = "2.14.0", features = ["serde"] }
+once_cell = "1.21.4"
 parking_lot = { version = "0.12.1", features = ["send_guard"] }
 postcard = { version = "1.0.8", features = ["use-crc", "use-std"] }
-regex = "1.12.2"
+regex = "1.12.3"
 sequence_trie = "0.3.6"
-serde = { version = "1.0", features = ["derive", "rc"] }
-serde_json = { version = "1.0.48", features = ["raw_value"] }
-sled = "0.34"
-smallvec = "1.10"
+serde = { version = "1.0.219", features = ["derive", "rc"] }
+serde_json = { version = "1.0.140", features = ["raw_value"] }
+sled = "0.34.7"
+smallvec = { version = "1.15", features = ["const_generics"] }
 sorted_vector_map.git = "https://github.com/facebookexperimental/rust-shed"
 sorted_vector_map.version = "0.2"
 static_assertions = "1.1.0"
 static_interner = "0.1.2"
-take_mut = "0.2.2"
-tokio = { version = "1.25.0", features = ["full", "test-util", "tracing"] }
+take_mut = "0.2"
+tokio = { version = "1.52.1", features = ["full", "test-util", "tracing"] }
 triomphe = "0.1.11"
