@@ -55,6 +55,9 @@ pub struct Dialect {
     /// Enabled by default,
     /// but may change in future definitions of the standard.
     pub enable_load_reexport: bool,
+    /// Are `load` statements allowed after other top-level statements.
+    /// Disabled by default.
+    pub enable_load_after_statement: bool,
     /// Are `for`, `if` and other statements allowed at the top level.
     /// Disabled by default.
     pub enable_top_level_stmt: bool,
@@ -91,6 +94,7 @@ impl Dialect {
         enable_positional_only_arguments: false,
         enable_types: DialectTypes::Disable,
         enable_load_reexport: true, // But they plan to change it
+        enable_load_after_statement: false,
         enable_top_level_stmt: false,
         enable_f_strings: false,
         _non_exhaustive: (),
@@ -106,6 +110,7 @@ impl Dialect {
         enable_positional_only_arguments: false,
         enable_types: DialectTypes::Enable,
         enable_load_reexport: true,
+        enable_load_after_statement: false,
         enable_top_level_stmt: true,
         enable_f_strings: false,
         _non_exhaustive: (),
@@ -121,6 +126,7 @@ impl Dialect {
         enable_positional_only_arguments: true,
         enable_types: DialectTypes::Enable,
         enable_load_reexport: true,
+        enable_load_after_statement: false,
         enable_top_level_stmt: true,
         enable_f_strings: true,
         _non_exhaustive: (),

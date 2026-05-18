@@ -15,8 +15,6 @@
  * limitations under the License.
  */
 
-use std::path::Path;
-
 use starlark_syntax::syntax::ast::AstExpr;
 use starlark_syntax::syntax::ast::AstLiteral;
 use starlark_syntax::syntax::ast::AstStmt;
@@ -273,18 +271,7 @@ fn redundant(codemap: &CodeMap, x: &AstStmt, res: &mut Vec<LintT<FlowIssue>>) {
     x.visit_stmt(|x| f(codemap, x, res));
 }
 
-fn is_workspace_file(filename: &str) -> bool {
-    Path::new(filename)
-        .file_name()
-        .and_then(|name| name.to_str())
-        .is_some_and(|name| matches!(name, "WORKSPACE" | "WORKSPACE.bazel"))
-}
-
 fn misplaced_load(codemap: &CodeMap, x: &AstStmt, res: &mut Vec<LintT<FlowIssue>>) {
-    if is_workspace_file(codemap.filename()) {
-        return;
-    }
-
     // accumulate all statements at the top-level
     fn top_statements<'a>(x: &'a AstStmt, stmts: &mut Vec<&'a AstStmt>) {
         match &**x {
@@ -334,7 +321,9 @@ pub(crate) fn lint(module: &AstModule) -> Vec<LintT<FlowIssue>> {
     stmt(module.codemap(), module.statement(), &mut res);
     reachable(module.codemap(), module.statement(), &mut res);
     redundant(module.codemap(), module.statement(), &mut res);
-    misplaced_load(module.codemap(), module.statement(), &mut res);
+    if !module.dialect().enable_load_after_statement {
+        misplaced_load(module.codemap(), module.statement(), &mut res);
+    }
     no_effect(module.codemap(), module.statement(), &mut res);
     res
 }
@@ -346,8 +335,12 @@ mod tests {
     use super::*;
     use crate::syntax::Dialect;
 
+    fn module_with_dialect(name: &str, x: &str, dialect: &Dialect) -> AstModule {
+        AstModule::parse(name, x.to_owned(), dialect).unwrap()
+    }
+
     fn module_with_name(name: &str, x: &str) -> AstModule {
-        AstModule::parse(name, x.to_owned(), &Dialect::AllOptionsInternal).unwrap()
+        module_with_dialect(name, x, &Dialect::AllOptionsInternal)
     }
 
     fn module(x: &str) -> AstModule {
@@ -517,35 +510,26 @@ load("c", "b")
     }
 
     #[test]
-    fn test_lint_misplaced_load_workspace() {
-        let m = module_with_name(
-            "WORKSPACE",
-            r#"
-http_archive(
-    name = "x",
-)
-load("//:defs.bzl", "defs")
-"#,
-        );
-        let mut res = Vec::new();
-        misplaced_load(m.codemap(), m.statement(), &mut res);
-        assert!(res.is_empty());
-    }
-
-    #[test]
-    fn test_lint_misplaced_load_workspace_bazel() {
-        let m = module_with_name(
-            "/repo/WORKSPACE.bazel",
+    fn test_lint_misplaced_load_allowed_by_dialect() {
+        let dialect = Dialect {
+            enable_load_after_statement: true,
+            ..Dialect::AllOptionsInternal
+        };
+        let m = module_with_dialect(
+            "X",
             r#"
 local_repository(
     name = "x",
 )
 load("//:defs.bzl", "defs")
 "#,
+            &dialect,
         );
-        let mut res = Vec::new();
-        misplaced_load(m.codemap(), m.statement(), &mut res);
-        assert!(res.is_empty());
+        assert!(
+            lint(&m)
+                .into_iter()
+                .all(|lint| !matches!(lint.problem, FlowIssue::MisplacedLoad))
+        );
     }
 
     #[test]
