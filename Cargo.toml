@@ -52,7 +52,7 @@ proc-macro2 = "1.0.106"
 quote = "1.0.45"
 ref-cast = "1.0.18"
 relative-path = { version = "1.7.0", features = ["serde"] }
-syn = "2.0.117"
+syn = { version = "2.0.117", features = ["full"] }
 
 pagable = { path = "pagable", features = ["tokio"] }
 pagable_derive = { path = "pagable_derive" }
