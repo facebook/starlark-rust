@@ -29,7 +29,7 @@ cmp_any = { version = "0.8.1", path = "gazebo/cmp_any" }
 display_container = { version = "0.9.0", path = "gazebo/display_container" }
 dupe = { version = "0.9.1", path = "gazebo/dupe" }
 gazebo = { path = "gazebo/gazebo" }
-strong_hash = { path = "gazebo/strong_hash" }
+strong_hash = { version = "0.1.0", path = "gazebo/strong_hash" }
 
 starlark_lsp = { version = "0.14", path = "starlark_lsp" }
 starlark_map = { version = "0.14", path = "starlark_map" }
