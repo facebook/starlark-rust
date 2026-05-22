@@ -42,6 +42,7 @@ derive_more = { version = "1.0.0", features = ["full"] }
 either = "1.8"
 equivalent = "1.0.2"
 erased-serde = "0.4.10"
+fancy-regex = "0.16.2"
 indenter = "0.3.4"
 inventory = "0.3.24"
 memchr = "2.8.0"
