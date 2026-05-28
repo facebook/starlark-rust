@@ -53,7 +53,7 @@ ref-cast = "1.0.18"
 relative-path = { version = "1.7.0", features = ["serde"] }
 syn = { version = "2.0.117", features = ["full"] }
 
-pagable = { version = "0.3.3", path = "pagable", features = ["tokio"] }
+pagable = { version = "0.3.3", path = "pagable" }
 # dependencies of pagable
 async-trait = "0.1.86"
 blake3 = { version = "=1.8.2", features = ["default", "rayon", "std", "traits-preview"] }
@@ -67,7 +67,6 @@ regex = "1.12.3"
 sequence_trie = "0.3.6"
 serde = { version = "1.0.219", features = ["derive", "rc"] }
 serde_json = { version = "1.0.140", features = ["raw_value"] }
-sled = "0.34.7"
 smallvec = { version = "1.15", features = ["const_generics"] }
 sorted_vector_map.git = "https://github.com/facebookexperimental/rust-shed"
 sorted_vector_map.version = "0.2"
