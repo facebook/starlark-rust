@@ -133,8 +133,8 @@ use crate::values::types::tuple::value::FrozenTuple;
 use crate::values::types::tuple::value::Tuple;
 
 // We already import another `ValueError`, hence the odd name.
-#[derive(Debug, thiserror::Error)]
-enum ValueValueError {
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+pub(crate) enum ValueValueError {
     #[error("Expected value of type `{0}` but got `{1}`")]
     WrongType(&'static str, String),
 }

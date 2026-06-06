@@ -492,8 +492,9 @@ register_starlark_any!(FrozenValueTyped<'static, StarlarkStr>);
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use starlark_derive::starlark_module;
-
+    use crate::values::bool::StarlarkBool;
     use crate as starlark;
     use crate::assert::Assert;
     use crate::environment::GlobalsBuilder;
@@ -504,10 +505,19 @@ mod tests {
     use crate::values::int::pointer_i32::PointerI32;
     use crate::values::none::NoneType;
 
-    #[test]
-    fn int() {
-        let v = FrozenValueTyped::<PointerI32>::new(FrozenValue::testing_new_int(17)).unwrap();
-        assert_eq!(17, v.as_ref().get().to_i32());
+    fn assert_type_error(err: crate::Error, expected_type: &'static str, got_value: &str) {
+        let err_kind = err.into_kind();
+        if let crate::ErrorKind::Value(anyhow_err) = err_kind {
+            let val_err = anyhow_err
+                .downcast_ref::<crate::values::layout::value::ValueValueError>()
+                .unwrap();
+            assert_eq!(
+                val_err,
+                &crate::values::layout::value::ValueValueError::WrongType(expected_type, got_value.to_owned())
+            );
+            return;
+        }
+        panic!("Expected ValueError(WrongType), got {:#}", err_kind);
     }
 
     #[test]
@@ -537,5 +547,66 @@ mod tests {
             "takes_frozen_value_typed(mutable())",
             "Expected frozen value",
         );
+    }
+
+    #[test]
+    fn test_value_typed() {
+        crate::environment::Module::with_temp_heap(|module| {
+            let heap = module.heap();
+            let val_str = heap.alloc("hello");
+            let val_int = heap.alloc(42);
+            let val_bool = heap.alloc(true);
+            let val_none = Value::new_none();
+            let val_custom = heap.alloc(TestComplexValue(val_none));
+
+            // strings
+            let typed_str = crate::values::ValueTyped::<StarlarkStr>::new_err(val_str).unwrap();
+            assert_eq!(typed_str.as_ref().as_str(), "hello");
+            let err_str = crate::values::ValueTyped::<StarlarkStr>::new_err(val_int).unwrap_err();
+            assert_type_error(err_str, "string", "int (repr: 42)");
+
+            // i32s
+            let typed_int = crate::values::ValueTyped::<PointerI32>::new_err(val_int).unwrap();
+            assert_eq!(typed_int.as_ref().get().to_i32(), 42);
+            let err_int = crate::values::ValueTyped::<PointerI32>::new_err(val_str).unwrap_err();
+            assert_type_error(err_int, "int", "string (repr: \"hello\")");
+
+            // bools
+            let typed_bool = crate::values::ValueTyped::<StarlarkBool>::new_err(val_bool).unwrap();
+            assert!(typed_bool.as_ref().to_bool());
+            let err_bool = crate::values::ValueTyped::<StarlarkBool>::new_err(val_str).unwrap_err();
+            assert_type_error(err_bool, "bool", "string (repr: \"hello\")");
+
+            // None
+            let typed_none = crate::values::ValueTyped::<NoneType>::new_err(val_none).unwrap();
+            let _none: &NoneType = typed_none.as_ref();
+            let err_none = crate::values::ValueTyped::<NoneType>::new_err(val_str).unwrap_err();
+            assert_type_error(err_none, "NoneType", "string (repr: \"hello\")");
+
+            // Custom types implementing StarlarkValue
+            let typed = crate::values::ValueTyped::<TestComplexValue<Value>>::new_err(val_custom).unwrap();
+            let _custom: &TestComplexValue<Value> = typed.as_ref();
+            let err = crate::values::ValueTyped::<TestComplexValue<FrozenValue>>::new_err(val_int).unwrap_err();
+            assert_type_error(err, "TestComplexValue", "int (repr: 42)");
+            let err = crate::values::ValueTyped::<StarlarkStr>::new_err(val_custom).unwrap_err();
+            assert_type_error(err, "string", "TestComplexValue (repr: TestComplexValue<None>)");
+        });
+    }
+
+    #[test]
+    fn test_frozen_value_typed() {
+        crate::environment::Module::with_temp_heap(|_module| {
+            let frozen_heap = crate::values::FrozenHeap::new();
+            let frozen_str = frozen_heap.alloc("hello");
+            let frozen_int = frozen_heap.alloc(42);
+
+            // Just one quick test case to validate that FrozenValueTyped works as well.
+            // Don't bother with a full round of tests - the vast majority of the logic is
+            // common to ValueTyped.
+            let typed_str = crate::values::FrozenValueTyped::<StarlarkStr>::new_err(frozen_str).unwrap();
+            assert_eq!(typed_str.as_ref().as_str(), "hello");
+            let err_str = crate::values::FrozenValueTyped::<StarlarkStr>::new_err(frozen_int).unwrap_err();
+            assert_type_error(err_str, "string", "int (repr: 42)");
+        });
     }
 }
