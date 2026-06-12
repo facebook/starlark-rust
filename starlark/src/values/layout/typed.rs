@@ -490,11 +490,27 @@ impl AllocFrozenStringValue for FrozenStringValue {
 // Register FrozenValueTyped<StarlarkStr> for use with alloc_any_slice in pagable mode.
 register_starlark_any!(FrozenValueTyped<'static, StarlarkStr>);
 
+impl<'v, T: StarlarkValue<'v>> TryFrom<Value<'v>> for ValueTyped<'v, T> {
+    type Error = crate::Error;
+
+    #[inline]
+    fn try_from(value: Value<'v>) -> crate::Result<Self> {
+        Self::new_err(value)
+    }
+}
+
+impl<'v, T: StarlarkValue<'v>> TryFrom<FrozenValue> for FrozenValueTyped<'v, T> {
+    type Error = crate::Error;
+
+    #[inline]
+    fn try_from(value: FrozenValue) -> crate::Result<Self> {
+        Self::new_err(value)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use starlark_derive::starlark_module;
-    use crate::values::bool::StarlarkBool;
     use crate as starlark;
     use crate::assert::Assert;
     use crate::environment::GlobalsBuilder;
@@ -502,8 +518,10 @@ mod tests {
     use crate::values::FrozenValue;
     use crate::values::FrozenValueTyped;
     use crate::values::Value;
+    use crate::values::bool::StarlarkBool;
     use crate::values::int::pointer_i32::PointerI32;
     use crate::values::none::NoneType;
+    use starlark_derive::starlark_module;
 
     fn assert_type_error(err: crate::Error, expected_type: &'static str, got_value: &str) {
         let err_kind = err.into_kind();
@@ -513,7 +531,10 @@ mod tests {
                 .unwrap();
             assert_eq!(
                 val_err,
-                &crate::values::layout::value::ValueValueError::WrongType(expected_type, got_value.to_owned())
+                &crate::values::layout::value::ValueValueError::WrongType(
+                    expected_type,
+                    got_value.to_owned()
+                )
             );
             return;
         }
@@ -584,12 +605,22 @@ mod tests {
             assert_type_error(err_none, "NoneType", "string (repr: \"hello\")");
 
             // Custom types implementing StarlarkValue
-            let typed = crate::values::ValueTyped::<TestComplexValue<Value>>::new_err(val_custom).unwrap();
+            let typed =
+                crate::values::ValueTyped::<TestComplexValue<Value>>::new_err(val_custom).unwrap();
             let _custom: &TestComplexValue<Value> = typed.as_ref();
-            let err = crate::values::ValueTyped::<TestComplexValue<FrozenValue>>::new_err(val_int).unwrap_err();
+            let err = crate::values::ValueTyped::<TestComplexValue<FrozenValue>>::new_err(val_int)
+                .unwrap_err();
             assert_type_error(err, "TestComplexValue", "int (repr: 42)");
             let err = crate::values::ValueTyped::<StarlarkStr>::new_err(val_custom).unwrap_err();
-            assert_type_error(err, "string", "TestComplexValue (repr: TestComplexValue<None>)");
+            assert_type_error(
+                err,
+                "string",
+                "TestComplexValue (repr: TestComplexValue<None>)",
+            );
+
+            // Verify that TryFrom works.
+            let typed_str: crate::values::ValueTyped<StarlarkStr> = val_str.try_into().unwrap();
+            assert_eq!(typed_str.as_ref().as_str(), "hello");
         });
     }
 
@@ -603,10 +634,24 @@ mod tests {
             // Just one quick test case to validate that FrozenValueTyped works as well.
             // Don't bother with a full round of tests - the vast majority of the logic is
             // common to ValueTyped.
-            let typed_str = crate::values::FrozenValueTyped::<StarlarkStr>::new_err(frozen_str).unwrap();
+            let typed_str =
+                crate::values::FrozenValueTyped::<StarlarkStr>::new_err(frozen_str).unwrap();
             assert_eq!(typed_str.as_ref().as_str(), "hello");
-            let err_str = crate::values::FrozenValueTyped::<StarlarkStr>::new_err(frozen_int).unwrap_err();
+            let err_str =
+                crate::values::FrozenValueTyped::<StarlarkStr>::new_err(frozen_int).unwrap_err();
             assert_type_error(err_str, "string", "int (repr: 42)");
+
+            // Verify that TryFrom works.
+            let typed_str: crate::values::FrozenValueTyped<StarlarkStr> =
+                frozen_str.try_into().unwrap();
+            assert_eq!(typed_str.as_ref().as_str(), "hello");
+
+            // Verify that TryFrom works for OwnedFrozenValue.
+            let owner = frozen_heap.into_ref();
+            let owned = unsafe { crate::values::OwnedFrozenValue::new(owner, frozen_str) };
+            let owned_typed: crate::values::OwnedFrozenValueTyped<StarlarkStr> =
+                owned.try_into().unwrap();
+            assert_eq!(owned_typed.as_str(), "hello");
         });
     }
 }
