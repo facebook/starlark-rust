@@ -439,3 +439,16 @@ impl<'de, T: for<'a> StarlarkValue<'a>> PagableDeserialize<'de> for OwnedFrozenV
         }
     }
 }
+
+impl<T: for<'v> StarlarkValue<'v>> TryFrom<OwnedFrozenValue> for OwnedFrozenValueTyped<T> {
+    type Error = crate::Error;
+
+    #[inline]
+    fn try_from(value: OwnedFrozenValue) -> crate::Result<Self> {
+        let OwnedFrozenValue { owner, value } = value;
+        Ok(OwnedFrozenValueTyped {
+            owner,
+            value: FrozenValueTyped::<'_, T>::new_err(value)?,
+        })
+    }
+}
