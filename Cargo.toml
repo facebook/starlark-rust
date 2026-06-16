@@ -72,5 +72,6 @@ sorted_vector_map = "0.2.1"
 static_assertions = "1.1.0"
 static_interner = "0.1.2"
 take_mut = "0.2"
+thiserror = "2.0.18"
 tokio = { version = "1.52.1", features = ["full", "test-util", "tracing"] }
 triomphe = "0.1.11"
