@@ -132,3 +132,37 @@ def foo(x: T): pass
         "String literals are not allowed in type expressions",
     );
 }
+
+#[test]
+fn test_args_kwargs_runtime_type_check() {
+    assert::pass(
+        r#"
+def foo(*args: str, **kwargs: int):
+    pass
+
+foo("a")
+foo("a", "b")
+foo(b=1)
+"#,
+    );
+
+    assert::fail(
+        r#"
+def foo(*args: str, **kwargs: int):
+    pass
+
+foo(1)
+"#,
+        "does not match the type annotation",
+    );
+
+    assert::fail(
+        r#"
+def foo(*args: str, **kwargs: int):
+    pass
+
+foo(b="x")
+"#,
+        "does not match the type annotation",
+    );
+}
