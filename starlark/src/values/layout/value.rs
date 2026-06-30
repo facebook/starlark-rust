@@ -402,6 +402,12 @@ impl<'v> Value<'v> {
         }
     }
 
+    /// Obtain the underlying `bool`.
+    #[inline]
+    pub unsafe fn unpack_bool_unchecked(self) -> bool {
+        self.ptr_eq(Value::new_bool(true))
+    }
+
     /// Obtain the underlying integer if it fits in an `i32`.
     /// Note floats are not considered integers, i. e. `unpack_i32` for `1.0` will return `None`.
     #[inline]
@@ -446,18 +452,21 @@ impl<'v> Value<'v> {
     #[inline]
     pub fn unpack_starlark_str(self) -> Option<&'v StarlarkStr> {
         if self.is_str() {
-            unsafe {
-                Some(
-                    &self
-                        .0
-                        .unpack_ptr_no_int_unchecked()
-                        .unpack_header_unchecked()
-                        .as_repr::<StarlarkStr>()
-                        .payload,
-                )
-            }
+            Some(unsafe { self.unpack_starlark_str_unchecked() })
         } else {
             None
+        }
+    }
+
+    #[inline]
+    unsafe fn unpack_starlark_str_unchecked(self) -> &'v StarlarkStr {
+        unsafe {
+            &self
+                .0
+                .unpack_ptr_no_int_unchecked()
+                .unpack_header_unchecked()
+                .as_repr::<StarlarkStr>()
+                .payload
         }
     }
 
@@ -465,6 +474,12 @@ impl<'v> Value<'v> {
     #[inline]
     pub fn unpack_str(self) -> Option<&'v str> {
         self.unpack_starlark_str().map(|s| s.as_str())
+    }
+
+    /// Obtain the underlying `str`.
+    #[inline]
+    pub unsafe fn unpack_str_unchecked(self) -> &'v str {
+        unsafe { self.unpack_starlark_str_unchecked() }.as_str()
     }
 
     /// Obtain the underlying `str` if it is a string, otherwise return an error for users.
