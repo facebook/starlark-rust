@@ -54,6 +54,7 @@ use crate::util::GenericsUtil;
 
 #[derive(Default)]
 struct FnAttrs {
+    name: Option<syn::LitStr>,
     is_attribute: bool,
     as_type: Option<syn::Path>,
     starlark_ty_custom_function: Option<Expr>,
@@ -194,6 +195,10 @@ fn parse_starlark_fn_attr(tokens: &Attribute, attrs: &mut FnAttrs) -> syn::Resul
                 parser.parse::<Token![=]>()?;
                 attrs.as_type = Some(parser.parse::<syn::Path>()?);
                 continue;
+            } else if ident == "name" {
+                parser.parse::<Token![=]>()?;
+                attrs.name = Some(parser.parse::<syn::LitStr>()?);
+                continue;
             } else if ident == "attribute" {
                 attrs.is_attribute = true;
                 continue;
@@ -212,6 +217,7 @@ fn parse_starlark_fn_attr(tokens: &Attribute, attrs: &mut FnAttrs) -> syn::Resul
             return Err(syn::Error::new(
                 ident.span(),
                 "Expecting \
+                    `#[starlark(name = \"name\")]`, \
                     `#[starlark(as_type = ImplStarlarkValue)]`, \
                     `#[starlark(ty_custom_function = MyTy)]`, \
                     `#[starlark(attribute)]`, \
@@ -293,6 +299,7 @@ pub(crate) fn parse_fun(func: ItemFn, module_kind: ModuleKind) -> syn::Result<St
     let sig_span = func.sig.span();
 
     let FnAttrs {
+        name,
         is_attribute,
         as_type,
         speculative_exec_safe,
@@ -441,6 +448,7 @@ pub(crate) fn parse_fun(func: ItemFn, module_kind: ModuleKind) -> syn::Result<St
 
         let fun = StarFun {
             name: func.sig.ident,
+            name_override: name,
             as_type,
             attrs,
             this,

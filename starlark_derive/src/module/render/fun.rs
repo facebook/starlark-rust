@@ -139,7 +139,10 @@ impl StarFun {
     }
 
     fn name_str(&self) -> String {
-        ident_string(&self.name)
+        self.name_override
+            .as_ref()
+            .map(|lit| lit.value())
+            .unwrap_or_else(|| ident_string(&self.name))
     }
 
     /// Globals builder call to register the function.
