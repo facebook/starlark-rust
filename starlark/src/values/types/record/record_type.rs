@@ -74,7 +74,7 @@ use crate::values::typing::type_compiled::type_matcher_factory::TypeMatcherFacto
 
 #[doc(hidden)]
 pub trait RecordCell: ValueLifetimeless {
-    type TyRecordDataOpt: Debug;
+    type TyRecordDataOpt: Debug + Default;
 
     fn get_or_init_ty(
         ty: &Self::TyRecordDataOpt,
@@ -161,13 +161,28 @@ pub(crate) fn record_fields<'v>(
     x.either(|x| &x.fields, |x| coerce(&x.fields))
 }
 
-impl<'v> RecordType<'v> {
+impl<'v> RecordTypeGen<Value<'v>> {
     /// Creates a new `RecordType`.
     pub fn new(fields: SmallMap<String, FieldGen<Value<'v>>>, id: TypeInstanceId) -> Self {
         Self {
             id,
             fields,
             ty_record_data: OnceCell::new(),
+        }
+    }
+}
+
+impl RecordTypeGen<FrozenValue> {
+    /// Creates a new `FrozenRecordType` with a name assigned.
+    pub fn new(
+        name: &str,
+        fields: SmallMap<String, FieldGen<FrozenValue>>,
+        id: TypeInstanceId,
+    ) -> Self {
+        Self {
+            id,
+            ty_record_data: Some(Self::create_ty_record_data_static(name, id, &fields).unwrap()),
+            fields,
         }
     }
 }
@@ -188,6 +203,11 @@ where
     Self: ProvidesStaticType<'v>,
     FieldGen<V>: ProvidesStaticType<'v>,
 {
+    /// Returns the number of fields in the record type.
+    pub fn len(&self) -> usize {
+        self.fields.len()
+    }
+
     pub(crate) fn ty_record_data(&self) -> Option<&Arc<TyRecordData>> {
         V::get_ty(&self.ty_record_data)
     }
@@ -215,6 +235,61 @@ where
                 )
             }),
         )
+    }
+
+    pub(crate) fn create_ty_record_data_static(
+        name: &str,
+        id: TypeInstanceId,
+        fields: &SmallMap<String, FieldGen<V>>,
+    ) -> crate::Result<Arc<TyRecordData>> {
+        let fields_map: SortedMap<String, Ty> = fields
+            .iter()
+            .map(|(name, field)| (name.clone(), field.ty()))
+            .collect();
+
+        let ty_record = Ty::custom(TyUser::new(
+            name.to_owned(),
+            TyStarlarkValue::new::<Record>(),
+            id,
+            TyUserParams {
+                matcher: Some(TypeMatcherFactory::new(RecordTypeMatcher { id })),
+                fields: TyUserFields {
+                    known: fields_map,
+                    unknown: false,
+                },
+                ..TyUserParams::default()
+            },
+        )?);
+
+        let ty_record_type = Ty::custom(TyUser::new(
+            format!("record[{name}]"),
+            TyStarlarkValue::new::<RecordType>(),
+            TypeInstanceId::from_identity(StarlarkTypeIdDomain::RecordTypeOfType, &id),
+            TyUserParams {
+                callable: Some(TyCallable::new(
+                    ParamSpec::new_named_only(fields.iter().map(|(name, field)| {
+                        (
+                            ArcStr::from(name.as_str()),
+                            if field.default.is_some() {
+                                ParamIsRequired::No
+                            } else {
+                                ParamIsRequired::Yes
+                            },
+                            field.ty(),
+                        )
+                    }))?,
+                    ty_record.dupe(),
+                )),
+                ..TyUserParams::default()
+            },
+        )?);
+
+        Ok(Arc::new(TyRecordData {
+            name: name.to_owned(),
+            ty_record,
+            ty_record_type,
+            parameter_spec: Self::make_parameter_spec(name, fields),
+        }))
     }
 }
 
@@ -304,55 +379,7 @@ where
         _eval: &mut Evaluator<'v, '_, '_>,
     ) -> crate::Result<()> {
         V::get_or_init_ty(&self.ty_record_data, || {
-            let fields: SortedMap<String, Ty> = self
-                .fields
-                .iter()
-                .map(|(name, field)| (name.clone(), field.ty()))
-                .collect();
-
-            let ty_record = Ty::custom(TyUser::new(
-                variable_name.to_owned(),
-                TyStarlarkValue::new::<Record>(),
-                self.id,
-                TyUserParams {
-                    matcher: Some(TypeMatcherFactory::new(RecordTypeMatcher { id: self.id })),
-                    fields: TyUserFields {
-                        known: fields,
-                        unknown: false,
-                    },
-                    ..TyUserParams::default()
-                },
-            )?);
-
-            let ty_record_type = Ty::custom(TyUser::new(
-                format!("record[{variable_name}]"),
-                TyStarlarkValue::new::<RecordType>(),
-                TypeInstanceId::from_identity(StarlarkTypeIdDomain::RecordTypeOfType, &self.id),
-                TyUserParams {
-                    callable: Some(TyCallable::new(
-                        ParamSpec::new_named_only(self.fields.iter().map(|(name, field)| {
-                            (
-                                ArcStr::from(name.as_str()),
-                                if field.default.is_some() {
-                                    ParamIsRequired::No
-                                } else {
-                                    ParamIsRequired::Yes
-                                },
-                                field.ty(),
-                            )
-                        }))?,
-                        ty_record.dupe(),
-                    )),
-                    ..TyUserParams::default()
-                },
-            )?);
-
-            Ok(Arc::new(TyRecordData {
-                name: variable_name.to_owned(),
-                ty_record,
-                ty_record_type,
-                parameter_spec: Self::make_parameter_spec(variable_name, &self.fields),
-            }))
+            Self::create_ty_record_data_static(variable_name, self.id, &self.fields)
         })
     }
 }
