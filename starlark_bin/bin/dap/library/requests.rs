@@ -15,11 +15,14 @@
  * limitations under the License.
  */
 
-use debugserver_types::*;
+use std::num::NonZero;
+
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Map;
 use serde_json::Value;
+
+use starlark::debug::dap::*;
 
 pub(crate) trait DebugServer {
     fn initialize(&self, x: InitializeRequestArguments) -> anyhow::Result<Option<Capabilities>>;
@@ -55,10 +58,10 @@ pub(crate) fn dispatch(server: &impl DebugServer, r: &Request) -> Response {
 
     fn ret<T: Serialize>(r: &Request, v: anyhow::Result<Option<T>>) -> Response {
         Response {
-            type_: "response".to_owned(),
+            type_: ResponseType::Response,
             command: r.command.clone(),
             request_seq: r.seq,
-            seq: 0,
+            seq: NonZero::new(1).unwrap(),
             success: v.is_ok(),
             message: v.as_ref().err().map(|e| format!("{e:#}")),
             body: v.unwrap_or(None).map(|v| serde_json::to_value(v).unwrap()),

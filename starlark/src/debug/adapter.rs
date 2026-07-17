@@ -22,10 +22,10 @@
 use std::fmt::Debug;
 use std::fmt::Display;
 
-use debugserver_types::*;
 use dupe::Dupe;
 
 use crate::codemap::FileSpan;
+use crate::debug::dap::*;
 use crate::eval::Evaluator;
 use crate::syntax::AstModule;
 use crate::values::dict::DictRef;
@@ -150,8 +150,8 @@ impl PathSegment {
 
 impl Variable {
     /// Helper to convert to the DAP Variable type.
-    pub fn to_dap(self) -> debugserver_types::Variable {
-        debugserver_types::Variable {
+    pub fn to_dap(self) -> crate::debug::dap::Variable {
+        crate::debug::dap::Variable {
             name: self.name.to_string(),
             value: self.value,
             type_: Some(self.type_),
@@ -160,6 +160,9 @@ impl Variable {
             named_variables: None,
             presentation_hint: None,
             variables_reference: 0,
+            declaration_location_reference: None,
+            memory_reference: None,
+            value_location_reference: None,
         }
     }
 

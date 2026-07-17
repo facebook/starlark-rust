@@ -21,7 +21,6 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread;
 
-use debugserver_types::*;
 use dupe::Dupe;
 pub(crate) use library::*;
 use serde_json::Map;
@@ -30,6 +29,7 @@ use starlark::StarlarkResultExt;
 use starlark::debug::DapAdapter;
 use starlark::debug::DapAdapterClient;
 use starlark::debug::DapAdapterEvalHook;
+use starlark::debug::dap::*;
 use starlark::debug::dap_capabilities;
 use starlark::debug::prepare_dap_adapter;
 use starlark::debug::resolve_breakpoints;
@@ -60,6 +60,7 @@ impl DapAdapterClient for Client {
             all_threads_stopped: Some(true),
             preserve_focus_hint: None,
             text: None,
+            hit_breakpoint_ids: Vec::new(),
         });
         Ok(())
     }
@@ -104,6 +105,8 @@ impl Backend {
                 line: None,
                 source: None,
                 variables_reference: None,
+                group: None,
+                location_reference: None,
             });
             client2.event_exited(ExitedEventBody {
                 exit_code: if res.is_ok() { 0 } else { 1 },
@@ -180,10 +183,10 @@ impl DebugServer for Backend {
         Ok(ScopesResponseBody {
             scopes: vec![Scope {
                 name: "Locals".to_owned(),
-                named_variables: Some(scopes_info.num_locals as i64),
+                named_variables: Some(scopes_info.num_locals as i32),
                 // Encode frame_id into variables_reference. DAP uses 0 to mean
                 // "no children", so offset by 1.
-                variables_reference: frame_id as i64 + 1,
+                variables_reference: frame_id as i32 + 1,
                 expensive: false,
                 column: None,
                 end_column: None,
@@ -191,6 +194,7 @@ impl DebugServer for Backend {
                 indexed_variables: None,
                 line: None,
                 source: None,
+                presentation_hint: None,
             }],
         })
     }
@@ -222,7 +226,9 @@ impl DebugServer for Backend {
             presentation_hint: None,
             result: expr_result.result,
             type_: Some(expr_result.type_),
-            variables_reference: 0.0,
+            variables_reference: 0,
+            memory_reference: None,
+            value_location_reference: None,
         })
     }
 
@@ -249,6 +255,7 @@ pub(crate) fn server(dialect: Dialect, globals: Globals) {
 #[cfg(test)]
 mod tests {
     use std::hint;
+    use std::num::NonZero;
     use std::sync::atomic::AtomicUsize;
     use std::sync::atomic::Ordering;
     use std::time::Duration;
@@ -320,30 +327,29 @@ mod tests {
         }
     }
 
-    fn breakpoints_args(path: &str, lines: &[(i64, Option<&str>)]) -> SetBreakpointsArguments {
+    fn breakpoints_args(path: &str, lines: &[(u64, Option<&str>)]) -> SetBreakpointsArguments {
         SetBreakpointsArguments {
-            breakpoints: Some(
-                lines
-                    .iter()
-                    .map(|(line, condition)| SourceBreakpoint {
-                        column: None,
-                        condition: condition.map(|v| v.to_owned()),
-                        hit_condition: None,
-                        line: *line,
-                        log_message: None,
-                    })
-                    .collect(),
-            ),
-            lines: None,
+            breakpoints: lines
+                .iter()
+                .map(|(line, condition)| SourceBreakpoint {
+                    column: None,
+                    condition: condition.map(|v| v.to_owned()),
+                    hit_condition: None,
+                    line: *line,
+                    log_message: None,
+                    mode: None,
+                })
+                .collect(),
+            lines: Vec::new(),
             source: Source {
                 adapter_data: None,
-                checksums: None,
+                checksums: Vec::new(),
                 name: None,
                 origin: None,
                 path: Some(path.to_owned()),
                 presentation_hint: None,
                 source_reference: None,
-                sources: None,
+                sources: Vec::new(),
             },
             source_modified: None,
         }
@@ -373,8 +379,8 @@ mod tests {
         Request {
             arguments: Some(serde_json::to_value(args).unwrap()),
             command: command.to_owned(),
-            seq,
-            type_: "request".to_owned(),
+            seq: NonZero::try_from(seq as u32).unwrap(),
+            type_: RequestType::Request,
         }
     }
 
@@ -503,9 +509,10 @@ outer(5)
             assert_eq!("x", vars_2.variables[0].name);
             assert_eq!("5", vars_2.variables[0].value);
 
-            harness
-                .backend
-                .continue_(ContinueArguments { thread_id: 0 })?;
+            harness.backend.continue_(ContinueArguments {
+                thread_id: 0,
+                single_thread: None,
+            })?;
             join_timeout(eval_result, timeout).into_anyhow_result()?;
             Ok(())
         })

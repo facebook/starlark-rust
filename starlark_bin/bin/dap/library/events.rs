@@ -15,10 +15,13 @@
  * limitations under the License.
  */
 
-use debugserver_types::*;
+use std::num::NonZero;
+
 use dupe::Dupe;
 use serde::Serialize;
 use serde_json::Value;
+
+use starlark::debug::dap::*;
 
 use crate::dap::library::stream::log;
 use crate::dap::library::stream::send;
@@ -43,45 +46,45 @@ impl Client {
 
     pub(crate) fn event_stopped(&self, body: StoppedEventBody) {
         self.event(StoppedEvent {
-            type_: "event".to_owned(),
-            seq: 0,
-            event: "stopped".to_owned(),
+            type_: StoppedEventType::Event,
+            seq: NonZero::new(1).unwrap(),
+            event: StoppedEventEvent::Stopped,
             body,
         })
     }
 
     pub(crate) fn event_initialized(&self, body: Option<Value>) {
         self.event(InitializedEvent {
-            type_: "event".to_owned(),
-            seq: 0,
-            event: "initialized".to_owned(),
+            type_: InitializedEventType::Event,
+            seq: NonZero::new(1).unwrap(),
+            event: InitializedEventEvent::Initialized,
             body,
         })
     }
 
     pub(crate) fn event_exited(&self, body: ExitedEventBody) {
         self.event(ExitedEvent {
-            type_: "event".to_owned(),
-            seq: 0,
-            event: "exited".to_owned(),
+            type_: ExitedEventType::Event,
+            seq: NonZero::new(1).unwrap(),
+            event: ExitedEventEvent::Exited,
             body,
         })
     }
 
     pub(crate) fn event_terminated(&self, body: Option<TerminatedEventBody>) {
         self.event(TerminatedEvent {
-            type_: "event".to_owned(),
-            seq: 0,
-            event: "terminated".to_owned(),
+            type_: TerminatedEventType::Event,
+            seq: NonZero::new(1).unwrap(),
+            event: TerminatedEventEvent::Terminated,
             body,
         })
     }
 
     pub(crate) fn event_output(&self, body: OutputEventBody) {
         self.event(OutputEvent {
-            type_: "event".to_owned(),
-            seq: 0,
-            event: "output".to_owned(),
+            type_: OutputEventType::Event,
+            seq: NonZero::new(1).unwrap(),
+            event: OutputEventEvent::Output,
             body,
         })
     }
