@@ -34,6 +34,8 @@ use crate::collections::StarlarkHasher;
 use crate::starlark_complex_value;
 use crate::typing::Ty;
 use crate::values::Freeze;
+use crate::values::FrozenValue;
+use crate::values::FrozenValueTyped;
 use crate::values::Heap;
 use crate::values::StarlarkPagable;
 use crate::values::StarlarkValue;
@@ -41,10 +43,13 @@ use crate::values::Trace;
 use crate::values::Value;
 use crate::values::ValueLifetimeless;
 use crate::values::ValueLike;
+use crate::values::ValueTyped;
 use crate::values::comparison::equals_slice;
 use crate::values::record::field::FieldGen;
 use crate::values::record::record_type::FrozenRecordType;
+use crate::values::record::record_type::RecordCell;
 use crate::values::record::record_type::RecordType;
+use crate::values::record::record_type::RecordTypeGen;
 use crate::values::record::record_type::record_fields;
 use crate::values::types::type_instance_id::TypeInstanceId;
 
@@ -63,6 +68,36 @@ use crate::values::types::type_instance_id::TypeInstanceId;
 pub struct RecordGen<V: ValueLifetimeless> {
     pub(crate) typ: V, // Must be RecordType
     pub(crate) values: Box<[V]>,
+}
+
+impl<'v> RecordGen<Value<'v>> {
+    /// Creates a new `Record` of type `typ`.
+    pub fn new<V: RecordCell + ValueLike<'v> + 'v>(
+        typ: ValueTyped<'v, RecordTypeGen<V>>,
+        values: Box<[Value<'v>]>,
+    ) -> Self
+    where
+        RecordTypeGen<V>: ProvidesStaticType<'v>,
+        <V as ProvidesStaticType<'v>>::StaticType: RecordCell,
+    {
+        Self {
+            typ: typ.to_value(),
+            values,
+        }
+    }
+}
+
+impl RecordGen<FrozenValue> {
+    /// Creates a new `Record` of type `typ`.
+    pub fn new(
+        typ: FrozenValueTyped<'static, FrozenRecordType>,
+        values: Box<[FrozenValue]>,
+    ) -> Self {
+        Self {
+            typ: typ.to_frozen_value(),
+            values,
+        }
+    }
 }
 
 impl<'v, V: ValueLike<'v>> Display for RecordGen<V> {
