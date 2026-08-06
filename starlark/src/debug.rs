@@ -22,3 +22,10 @@ mod evaluate;
 mod inspect;
 
 pub use adapter::*;
+
+// This is public so it can be used by `starlark_bin`, not part of the supported API
+#[doc(hidden)]
+pub mod dap {
+    // Vendored from https://github.com/microsoft/debug-adapter-protocol/blob/main/debugAdapterProtocol.json
+    typify::import_types!("./src/debug/dap.json");
+}

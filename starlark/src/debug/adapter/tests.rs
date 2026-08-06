@@ -17,6 +17,7 @@
 
 #[cfg(test)]
 mod t {
+    use dupe::Dupe;
     use std::collections::HashMap;
     use std::hint;
     use std::sync::Arc;
@@ -27,9 +28,6 @@ mod t {
     use std::time::Duration;
     use std::time::Instant;
 
-    use debugserver_types::*;
-    use dupe::Dupe;
-
     use crate::assert::test_functions;
     use crate::debug::DapAdapter;
     use crate::debug::DapAdapterClient;
@@ -38,6 +36,7 @@ mod t {
     use crate::debug::VariablePath;
     use crate::debug::adapter::implementation::prepare_dap_adapter;
     use crate::debug::adapter::implementation::resolve_breakpoints;
+    use crate::debug::dap::*;
     use crate::environment::GlobalsBuilder;
     use crate::environment::Module;
     use crate::eval::Evaluator;
@@ -132,34 +131,27 @@ mod t {
         }
     }
 
-    fn breakpoint(line: i64, condition: Option<&str>) -> SourceBreakpoint {
+    fn breakpoint(line: u64, condition: Option<&str>) -> SourceBreakpoint {
         SourceBreakpoint {
             column: None,
             condition: condition.map(|v| v.to_owned()),
             hit_condition: None,
             line,
             log_message: None,
+            mode: None,
         }
     }
 
-    fn breakpoints_args(path: &str, lines: &[(i64, Option<&str>)]) -> SetBreakpointsArguments {
+    fn breakpoints_args(path: &str, lines: &[(u64, Option<&str>)]) -> SetBreakpointsArguments {
         SetBreakpointsArguments {
-            breakpoints: Some(
-                lines
-                    .iter()
-                    .map(|(line, condition)| breakpoint(*line, condition.as_deref()))
-                    .collect(),
-            ),
-            lines: None,
+            breakpoints: lines
+                .iter()
+                .map(|(line, condition)| breakpoint(*line, condition.as_deref()))
+                .collect(),
+            lines: Vec::new(),
             source: Source {
-                adapter_data: None,
-                checksums: None,
-                name: None,
-                origin: None,
                 path: Some(path.to_owned()),
-                presentation_hint: None,
-                source_reference: None,
-                sources: None,
+                ..Source::default()
             },
             source_modified: None,
         }

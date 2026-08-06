@@ -25,7 +25,6 @@ use std::sync::mpsc::Receiver;
 use std::sync::mpsc::Sender;
 use std::sync::mpsc::channel;
 
-use debugserver_types::*;
 use dupe::Dupe;
 use starlark_syntax::error::StarlarkResultExt;
 use starlark_syntax::slice_vec_ext::SliceExt;
@@ -44,8 +43,8 @@ use crate::debug::ScopesInfo;
 use crate::debug::StepKind;
 use crate::debug::Variable;
 use crate::debug::VariablesInfo;
-use crate::debug::adapter::Breakpoint;
 use crate::debug::adapter::ResolvedBreakpoints;
+use crate::debug::dap::*;
 use crate::eval::BeforeStmtFuncDyn;
 use crate::eval::Evaluator;
 use crate::eval::runtime::before_stmt::BeforeStmtFunc;
@@ -128,7 +127,7 @@ impl<'e> BeforeStmtFuncDyn<'e> for DapAdapterEvalHookImpl {
             let breaks = self.state.breakpoints.lock().unwrap();
             let breakpoint = breaks.at(span_loc);
             match breakpoint {
-                Some(Breakpoint {
+                Some(crate::debug::adapter::Breakpoint {
                     condition: Some(condition),
                     ..
                 }) => match evaluate_expr(&self.state, eval, condition.to_owned()) {
@@ -202,7 +201,7 @@ impl DapAdapterEvalHook for DapAdapterEvalHookImpl {
 #[derive(Debug)]
 struct BreakpointConfig {
     // maps a source filename to the breakpoint spans for the file
-    breakpoints: HashMap<String, HashMap<Span, Breakpoint>>,
+    breakpoints: HashMap<String, HashMap<Span, crate::debug::adapter::Breakpoint>>,
 }
 
 impl BreakpointConfig {
@@ -212,7 +211,7 @@ impl BreakpointConfig {
         }
     }
 
-    fn at(&self, span_loc: FileSpanRef) -> Option<&Breakpoint> {
+    fn at(&self, span_loc: FileSpanRef) -> Option<&crate::debug::adapter::Breakpoint> {
         self.breakpoints
             .get(span_loc.filename())
             .and_then(|file_breaks| file_breaks.get(&span_loc.span))
@@ -259,7 +258,7 @@ enum Next {
 
 fn convert_frame(id: usize, name: String, location: Option<FileSpan>) -> StackFrame {
     let mut s = StackFrame {
-        id: id as i64,
+        id: id as i32,
         name,
         column: 0,
         line: 0,
@@ -268,13 +267,15 @@ fn convert_frame(id: usize, name: String, location: Option<FileSpan>) -> StackFr
         module_id: None,
         presentation_hint: None,
         source: None,
+        can_restart: None,
+        instruction_pointer_reference: None,
     };
     if let Some(loc) = location {
         let span = loc.resolve_span();
-        s.line = span.begin.line as i64 + 1;
-        s.column = span.begin.column as i64 + 1;
-        s.end_line = Some(span.end.line as i64 + 1);
-        s.end_column = Some(span.end.column as i64 + 1);
+        s.line = span.begin.line as u64 + 1;
+        s.column = span.begin.column as u64 + 1;
+        s.end_line = Some(span.end.line as u64 + 1);
+        s.end_column = Some(span.end.column as u64 + 1);
         s.source = Some(Source {
             path: Some(loc.filename().to_owned()),
             ..Source::default()
@@ -318,7 +319,7 @@ impl DapAdapter for DapAdapterImpl {
             }
             res.push(convert_frame(frames.len(), "Root".to_owned(), next));
             Ok(StackTraceResponseBody {
-                total_frames: Some(res.len() as i64),
+                total_frames: Some(res.len() as u32),
                 stack_frames: res,
             })
         }))?
@@ -437,8 +438,8 @@ impl DapAdapterImpl {
     }
 }
 
-pub(crate) fn breakpoint(verified: bool) -> debugserver_types::Breakpoint {
-    debugserver_types::Breakpoint {
+pub(crate) fn breakpoint(verified: bool) -> crate::debug::dap::Breakpoint {
+    crate::debug::dap::Breakpoint {
         column: None,
         end_column: None,
         end_line: None,
@@ -446,6 +447,9 @@ pub(crate) fn breakpoint(verified: bool) -> debugserver_types::Breakpoint {
         line: None,
         message: None,
         source: None,
+        instruction_reference: None,
+        offset: None,
+        reason: None,
         verified,
     }
 }
@@ -459,17 +463,13 @@ pub(crate) fn resolve_breakpoints(
         .iter()
         .map(|span| (span.resolve_span().begin.line, span.dupe()))
         .collect();
-    Ok(ResolvedBreakpoints(args.breakpoints.as_ref().map_or(
-        Vec::new(),
-        |v| {
-            v.map(|x| {
-                poss.get(&(x.line as usize - 1)).map(|span| Breakpoint {
-                    span: span.clone(),
-                    condition: x.condition.clone(),
-                })
+    Ok(ResolvedBreakpoints(args.breakpoints.map(|x| {
+        poss.get(&(x.line as usize - 1))
+            .map(|span| crate::debug::adapter::Breakpoint {
+                span: span.clone(),
+                condition: x.condition.clone(),
             })
-        },
-    )))
+    })))
 }
 
 pub(crate) fn resolved_breakpoints_to_dap(
