@@ -15,11 +15,10 @@
  * limitations under the License.
  */
 
-use debugserver_types as ds;
-
 use crate::dap::library::events::*;
 use crate::dap::library::requests::*;
 use crate::dap::library::stream::*;
+use starlark::debug::dap::{Request, RequestType};
 
 pub(crate) struct DapService {
     _private: (),
@@ -49,8 +48,8 @@ fn server(dap: impl DebugServer) {
     log("DEBUG ADAPTER STARTING");
     loop {
         let recv = read();
-        let r: ds::Request = serde_json::from_value(recv).unwrap();
-        assert_eq!(r.type_, "request");
+        let r: Request = serde_json::from_value(recv).unwrap();
+        assert_eq!(r.type_, RequestType::Request);
         let resp = dispatch(&dap, &r);
         send(serde_json::to_value(resp).unwrap());
 

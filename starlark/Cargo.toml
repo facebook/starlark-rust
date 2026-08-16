@@ -24,7 +24,6 @@ anyhow = "1.0.65"
 blake3 = { workspace = true }
 bumpalo = "3.8"
 dashmap = "6.1.0"
-debugserver-types = "0.5.0"
 derivative = "2.2"
 derive_more.workspace = true
 display_container = { workspace = true }
@@ -52,6 +51,7 @@ strong_hash = { workspace = true }
 strsim = "0.11.1"
 textwrap = "0.11"
 thiserror = "2.0.18"
+typify = "0.7"
 
 allocative = { workspace = true, features = ["bumpalo", "dashmap", "num-bigint"] }
 cmp_any = { workspace = true }
