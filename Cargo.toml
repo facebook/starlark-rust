@@ -46,7 +46,7 @@ fancy-regex = "0.16.2"
 indenter = "0.3.4"
 inventory = "0.3.24"
 memchr = "2.8.0"
-num-bigint = { version = "0.4.6", features = ["serde"] }
+num-bigint = { version = "0.5.1", features = ["serde"] }
 proc-macro2 = "1.0.106"
 quote = "1.0.45"
 ref-cast = "1.0.18"
