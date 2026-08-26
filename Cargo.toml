@@ -38,7 +38,7 @@ starlark_syntax = { version = "0.14", path = "starlark_syntax" }
 anyhow = "1.0.102"
 ctor = "1.0.5"
 derivative = "2.2"
-derive_more = { version = "1.0.0", features = ["full"] }
+derive_more = { version = "2.1.1", features = ["full"] }
 either = "1.8"
 equivalent = "1.0.2"
 erased-serde = "0.4.10"
