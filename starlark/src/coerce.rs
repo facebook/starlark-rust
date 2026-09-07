@@ -90,6 +90,9 @@ unsafe impl<From1: CoerceKey<To1>, From2: CoerceKey<To2>, To1, To2> CoerceKey<(T
 unsafe impl<From: Coerce<To>, To, const N: usize> Coerce<[To; N]> for [From; N] {}
 unsafe impl<From: CoerceKey<To>, To, const N: usize> CoerceKey<[To; N]> for [From; N] {}
 
+unsafe impl<From: Coerce<To>, To> Coerce<Option<To>> for Option<From> {}
+unsafe impl<From: CoerceKey<To>, To> CoerceKey<Option<To>> for Option<From> {}
+
 unsafe impl<From, To> Coerce<PhantomData<To>> for PhantomData<From> {}
 
 // We can't define a blanket `Coerce<T> for T` because that conflicts with the specific traits above.
