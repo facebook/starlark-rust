@@ -19,6 +19,10 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+    # Cargo checks out facebook/buck2 (a git dependency) with libgit2, which
+    # rejects that repository's deepest paths on Windows unless told otherwise.
+    - if: runner.os == 'Windows'
+      run: git config --global core.longpaths true
     - uses: dtolnay/rust-toolchain@stable
       with:
         toolchain: ${{ matrix.toolchain }}

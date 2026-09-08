@@ -9,6 +9,14 @@ Starlark is currently developed in Meta's internal repositories and then
 exported out to GitHub by a Meta team member; however, we invite you to
 submit pull requests as described below.
 
+## Building
+
+The workspace depends on crates from
+[facebook/buck2](https://github.com/facebook/buck2) through git, so the first
+build fetches that repository. Its tree contains paths longer than Windows
+allows by default; on Windows run `git config --global core.longpaths true`
+before building.
+
 ## Pull Requests
 
 We actively welcome your pull requests.
