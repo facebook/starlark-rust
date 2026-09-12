@@ -32,7 +32,7 @@ derivative = "2.2"
 derive_more = { version = "2.1.1", features = ["full"] }
 display_container = { version = "0.9.0", git = "https://github.com/facebook/buck2.git", branch = "main" }
 dupe = { version = "0.9.1", git = "https://github.com/facebook/buck2.git", branch = "main" }
-either = "1.17.0"
+either = "1.18.0"
 equivalent = "1.0.2"
 erased-serde = "0.4.10"
 globset = { version = "0.4.20", features = ["serde1"] }
