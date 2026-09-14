@@ -68,7 +68,7 @@ static_assertions = "1.1.0"
 strong_hash = { version = "0.1.0", git = "https://github.com/facebook/buck2.git", branch = "main" }
 strsim = "0.11.1"
 syn = { version = "3.0.5", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
-textwrap = { version = "0.16.0", features = ["terminal_size"] }
+textwrap = { version = "0.16.3", features = ["terminal_size"] }
 thiserror = "2.0.20"
 tower-lsp-server = "0.22.1"
 triomphe = { version = "0.1.16", features = ["arc-swap"] }
