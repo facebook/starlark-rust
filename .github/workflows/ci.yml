@@ -33,6 +33,13 @@ jobs:
     - run: cargo clippy
     - run: cargo build
     - run: cargo test
+    # buck2 enables this feature for starlark and cargo unifies it across every
+    # crate there, hiding the APIs that are gated on it being off. Without this
+    # leg, code that only compiles with the feature off passes everything here
+    # and then breaks buck2's CI. Nightly only: buck2 builds on nightly, and one
+    # extra compile of the workspace is enough to cover a feature flag.
+    - run: cargo test --features starlark/pagable
+      if: matrix.os == 'ubuntu-latest' && matrix.toolchain == 'nightly'
     - run: cargo bench
     - run: rustup component add miri rust-src
       if: matrix.toolchain == 'nightly'
