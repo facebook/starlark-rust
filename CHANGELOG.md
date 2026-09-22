@@ -1,5 +1,46 @@
 # Starlark
 
+## Unreleased
+
+### Reworked freezing, values, and lifetimes
+
+`Value<'v>` lifetimes are now *brands* instead of standard regions (see
+`values/layout/heap/branding.rs`) and surrounding infrastructure has been reworked accordingly. The
+APIs offered by starlark here are now almost completely sound and unsafe code to manage frozen value
+lifetimes should generally not be needed anymore.
+
+The biggest user-facing change is changes to the way complex values are defined. General migration
+path is to remove the `<V>` generic in favor of `'v` and `Value<'v>` everywhere, and to remove the
+`Gen` suffix.
+
+There are many breaking changes in support:
+
+- **`FrozenValue` removed** along with many other `Frozen*` analogues to other types
+- **`ValueLike`, `StringValueLike`, `ValueLifetimeless`, `ValueTypedComplex`
+  and `ValueOfUncheckedGeneric` removed**; their methods are inherent on
+  `Value`, `StringValue` and `ValueTyped`.
+- **Frozen heaps are branded handles.** `FrozenHeap` is now `FrozenHeap<'fh>`, a `Copy` handle to an
+  `OwnedFrozenHeap`, similarly to how `Heap<'v>` is a branded handle.
+- **`OwnedFrozen<T>` and `OwnedFrozenRef<T>` replace `OwnedFrozenValue`, `OwnedFrozenValueTyped`,
+  `FrozenHeapRef`, and other APIs for managing heap references. Use with `T = Value<'static>`,
+  `ValueTyped<'static, ...>`, etc.
+- **`Freeze` is branded and has a GAT**. Generally, `impl<'v> Freeze<'v> for MyComplexValue<'v>`,
+  with `type Frozen<'fv> = MyComplexValue<'fv>;`
+- Many, many breaking changes to other APIs downstream of these.
+
+Thanks to @danielhenrymantilla for discussion and feedback on the design of these APIs.
+
+### Breaking changes (not mentioned above)
+
+- `GlobalsStatic::function` returns a `Value<'v>` usable with any heap;
+  `GlobalsBuilder::alloc` is removed in favour of `GlobalsBuilder::frozen_heap`.
+- `StarlarkAttrs` and `starlark_attrs` removed due to perf risks; can be hand-rolled if strongly
+  desired.
+
+### New APIs
+
+- `FreezeDynamic` for value-based freeze
+
 ## 0.14 (May 20, 2026)
 
 There were nearly five hundred commits since the last release. The highlights
