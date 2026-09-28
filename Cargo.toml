@@ -13,10 +13,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.1.0"
 edition = "2024"
-license = "Apache-2.0"
-repository = "https://github.com/facebook/starlark-rust"
 
 [workspace.dependencies]
 allocative = { version = "0.3.6", git = "https://github.com/facebook/buck2.git", branch = "main", features = ["bumpalo", "dashmap", "hashbrown", "num-bigint", "triomphe"] }
