@@ -124,6 +124,16 @@ assert_eq(dir(rec1), ["host", "port"])
     }
 
     #[test]
+    fn test_record_type_name() {
+        assert::pass(
+            r#"
+IpAddress = record(host=str, port=int)
+assert_eq(type(IpAddress(host="localhost", port=80)), "record")
+"#,
+        );
+    }
+
+    #[test]
     fn test_record_fail_0() {
         assert::fails(
             r#"
