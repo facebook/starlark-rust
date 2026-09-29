@@ -858,7 +858,7 @@ pub(crate) type InstrType = InstrUnOp<InstrTypeImpl>;
 impl InstrUnOpImpl for InstrTypeImpl {
     #[inline(always)]
     fn eval<'v>(v: Value<'v>, _heap: Heap<'v>) -> crate::Result<Value<'v>> {
-        Ok(v.get_type_value().at().to_value())
+        Ok(v.get_type_value().to_value())
     }
 }
 
@@ -876,7 +876,7 @@ impl<'v> InstrNoFlowImpl<'v> for InstrTypeIsImpl {
         (arg, t, target): &(BcSlotIn, StringValue<'v>, BcSlotOut),
     ) -> crate::Result<()> {
         let arg = frame.get_bc_slot(*arg);
-        let r = arg.get_type_value().at() == *t;
+        let r = arg.get_type_value() == *t;
         frame.set_bc_slot(*target, Value::new_bool(r));
         Ok(())
     }

@@ -528,6 +528,17 @@ impl<'v> Value<'v> {
         self.vtable().type_name
     }
 
+    /// Dynamic type name of the value.
+    pub fn get_type_dyn(self) -> &'v str {
+        let vtable = self.vtable();
+        match vtable.type_name_dyn {
+            // SAFETY: `vtable` was obtained from `self`, ensuring that `self`'s payload
+            // matches the type expected by `type_name_dyn`.
+            Some(type_name_dyn) => unsafe { type_name_dyn(self) }.as_str(),
+            None => vtable.type_name,
+        }
+    }
+
     /// `bool(x)`.
     pub fn to_bool(self) -> bool {
         // Fast path for the common case
@@ -803,10 +814,15 @@ impl<'v> Value<'v> {
         Ok(())
     }
 
-    /// `type(x)`, at the `'static` brand: the type name is a static, see
-    /// [`StarlarkValue::get_type_value_static`].
-    pub fn get_type_value(self) -> StringValue<'static> {
-        self.vtable().type_value()
+    /// `type(x)`.
+    pub fn get_type_value(self) -> StringValue<'v> {
+        let vtable = self.vtable();
+        match vtable.type_name_dyn {
+            // SAFETY: `vtable` was obtained from `self`, ensuring that `self`'s payload
+            // matches the type expected by `type_name_dyn`.
+            Some(type_name_dyn) => unsafe { type_name_dyn(self) },
+            None => vtable.type_value().at(),
+        }
     }
 
     /// See documentation of [`StarlarkTypeId`].

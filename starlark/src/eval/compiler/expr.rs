@@ -153,7 +153,7 @@ impl<'f> Builtin1<'f> {
             Builtin1::Plus => edge.rebrand(v).plus(ctx.heap()).ok(),
             Builtin1::BitNot => edge.rebrand(v).bit_not(ctx.heap()).ok(),
             Builtin1::Not => Some(Value::new_bool(!v.to_bool())),
-            Builtin1::TypeIs(t) => Some(Value::new_bool(v.get_type_value().at() == *t)),
+            Builtin1::TypeIs(t) => Some(Value::new_bool(v.get_type_value() == *t)),
             Builtin1::FormatOne(before, after) => {
                 Some(format_one(before, edge.rebrand(v), after, ctx.heap()).to_value())
             }
@@ -996,7 +996,7 @@ impl<'f> ExprCompiled<'f> {
 
     pub(crate) fn typ(span: FrameSpan<'f>, v: IrSpanned<'f, ExprCompiled<'f>>) -> ExprCompiled<'f> {
         match &v.node {
-            ExprCompiled::Value(v) => ExprCompiled::Value(v.get_type_value().at().to_value()),
+            ExprCompiled::Value(v) => ExprCompiled::Value(v.get_type_value().to_value()),
             ExprCompiled::Tuple(xs) if xs.iter().all(|e| e.is_pure_infallible()) => {
                 ExprCompiled::Value(Tuple::get_type_value_static().at().to_value())
             }
@@ -1163,9 +1163,11 @@ impl<P: AstPayload> CompilerExprUtil<P> for ExprP<P> {
 #[inline(never)]
 fn get_attr_no_attr_error<'v>(x: Value<'v>, attribute: &Symbol) -> crate::Error {
     match did_you_mean(attribute.as_str(), x.dir_attr().iter().map(|s| s.as_str())) {
-        None => ValueError::NoAttr(x.get_type().to_owned(), attribute.as_str().to_owned()).into(),
+        None => {
+            ValueError::NoAttr(x.get_type_dyn().to_owned(), attribute.as_str().to_owned()).into()
+        }
         Some(better) => ValueError::NoAttrDidYouMean(
-            x.get_type().to_owned(),
+            x.get_type_dyn().to_owned(),
             attribute.as_str().to_owned(),
             better.to_owned(),
         )
