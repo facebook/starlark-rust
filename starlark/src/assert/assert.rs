@@ -321,13 +321,18 @@ impl<'a> Assert<'a> {
         &self,
         func: &str,
         program: &str,
-        module: &Module<'v>,
+        module: Module<'v>,
         gc: GcStrategy,
     ) -> crate::Error {
-        match self.execute("assert.bzl", program, module, gc) {
-            Ok(v) => {
-                panic!("starlark::assert::{func}, didn't fail!\nCode:\n{program}\nResult:\n{v}\n")
-            }
+        match self.execute("assert.bzl", program, &module, gc) {
+            Ok(v) => match module.freeze_named(StarlarkTestHeapName::frozen_heap_name()) {
+                Ok(_) => {
+                    panic!(
+                        "starlark::assert::{func}, didn't fail!\nCode:\n{program}\nResult:\n{v}\n"
+                    )
+                }
+                Err(e) => e.into(),
+            },
             Err(e) => e,
         }
     }
@@ -433,7 +438,7 @@ impl<'a> Assert<'a> {
     fn fails_with_name(&self, func: &str, program: &str, msgs: &[&str]) -> crate::Error {
         self.with_gc(|gc| {
             Module::with_temp_heap(|module_env| {
-                let original = self.execute_fail(func, program, &module_env, gc);
+                let original = self.execute_fail(func, program, module_env, gc);
                 // We really want to check the error message, but if in our doc tests we do:
                 // fail("bad") # error: magic
                 // Then when we print the source code, magic is contained in the error message.
