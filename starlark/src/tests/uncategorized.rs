@@ -660,7 +660,7 @@ fn test_getattr_did_you_mean_custom() {
     );
     assert::fail(
         "Rec = record(grey=int); Rec(grey=1).gray",
-        "Object of type `record` has no attribute `gray`, did you mean `grey`?",
+        "Object of type `Rec` has no attribute `gray`, did you mean `grey`?",
     );
 }
 

@@ -22,12 +22,15 @@ use triomphe::Arc;
 use crate as starlark;
 use crate::eval::runtime::params::spec::ParametersSpecPrototype;
 use crate::typing::Ty;
+use crate::values::OwnedFrozen;
+use crate::values::StringValue;
 
 #[derive(Allocative, Debug, StarlarkPagable)]
 #[doc(hidden)]
 pub struct TyRecordData {
-    /// Name of the record type.
-    pub(crate) name: String,
+    /// Pre-allocated frozen string value of the name.
+    #[starlark_pagable(pagable)]
+    pub(crate) name_value: OwnedFrozen<StringValue<'static>>,
     /// Type of record instance.
     #[starlark_pagable(pagable)]
     pub(crate) ty_record: Ty,
@@ -39,6 +42,13 @@ pub struct TyRecordData {
     /// profiles, so it is built once here and instantiated at the brand of each call.
     #[starlark_pagable(pagable)]
     pub(crate) parameter_spec_prototype: Arc<ParametersSpecPrototype>,
+}
+
+impl TyRecordData {
+    /// Name of the record type.
+    pub(crate) fn name(&self) -> &str {
+        self.name_value.as_ref().value().as_str()
+    }
 }
 
 #[cfg(test)]

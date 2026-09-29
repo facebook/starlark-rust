@@ -128,7 +128,7 @@ assert_eq(dir(rec1), ["host", "port"])
         assert::pass(
             r#"
 IpAddress = record(host=str, port=int)
-assert_eq(type(IpAddress(host="localhost", port=80)), "record")
+assert_eq(type(IpAddress(host="localhost", port=80)), "IpAddress")
 "#,
         );
     }

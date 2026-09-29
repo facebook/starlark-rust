@@ -36,6 +36,7 @@ use crate::values::Freeze;
 use crate::values::Heap;
 use crate::values::StarlarkPagable;
 use crate::values::StarlarkValue;
+use crate::values::StringValue;
 use crate::values::Trace;
 use crate::values::UnpackValue;
 use crate::values::Value;
@@ -124,8 +125,8 @@ impl<'v> Record<'v> {
 
     fn record_type_name(&self) -> Option<&'v str> {
         match self.get_record_type() {
-            Either::Left(x) => Some(&x.ty_record_data.get_ty()?.name),
-            Either::Right(x) => Some(&x.ty_record_data.get_ty()?.name),
+            Either::Left(x) => Some(x.ty_record_data.get_ty()?.name()),
+            Either::Right(x) => Some(x.ty_record_data.get_ty()?.name()),
         }
     }
 
@@ -154,6 +155,17 @@ impl<'v> Record<'v> {
 
 #[starlark_value(type = Record::TYPE)]
 impl<'v> StarlarkValue<'v> for Record<'v> {
+    fn get_type_value_dyn<'a>(&'a self) -> StringValue<'v> {
+        match self.get_record_type() {
+            Either::Left(x) => x.ty_record_data.get_ty(),
+            Either::Right(x) => x.ty_record_data.get_ty(),
+        }
+        .expect("Record can only be created from an exported RecordType")
+        .name_value
+        .as_ref()
+        .value()
+    }
+
     fn equals(&self, other: Value<'v>) -> crate::Result<bool> {
         match Record::from_value(other) {
             Some(other) if self.typ.equals(other.typ)? => {
