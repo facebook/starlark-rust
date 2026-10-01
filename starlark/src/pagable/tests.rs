@@ -1728,7 +1728,9 @@ fn test_frozen_record_type_round_trip() -> crate::Result<()> {
     // allocations — this exercises Arc identity preservation through pagable's
     // dedup mechanism (TyRecordData routes through `#[starlark_pagable(pagable)]`).
     let shared = Arc::new(TyRecordData {
-        name: "MyRec".to_owned(),
+        name_value: OwnedFrozen::build(FrozenHeapName::user("MyRec"), |heap| {
+            heap.alloc_str("MyRec")
+        }),
         ty_record: Ty::any(),
         ty_record_type: Ty::any(),
         parameter_spec_prototype: ParametersSpec::<()>::new_named_only(
@@ -1813,7 +1815,7 @@ fn test_frozen_record_type_round_trip() -> crate::Result<()> {
         .ty
         .as_ref()
         .expect("ty_record_data restored");
-    assert_eq!(data_a.name, "MyRec");
+    assert_eq!(data_a.name(), "MyRec");
     assert_eq!(data_a.ty_record, Ty::any());
     assert_eq!(data_a.ty_record_type, Ty::any());
     assert_eq!(data_a.parameter_spec_prototype.len(), 2);

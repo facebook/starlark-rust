@@ -198,7 +198,7 @@ pub(crate) fn register_other(builder: &mut GlobalsBuilder) {
             Some(v) => Ok(v),
             None => match default {
                 Some(x) => Ok(x),
-                None => ValueError::unsupported_owned(a.get_type(), &format!(".{attr}"), None),
+                None => ValueError::unsupported_owned(a.get_type_dyn(), &format!(".{attr}"), None),
             },
         }
     }
@@ -389,8 +389,8 @@ pub(crate) fn register_other(builder: &mut GlobalsBuilder) {
     /// # "#);
     /// ```
     #[starlark(speculative_exec_safe, as_type = AbstractType)]
-    fn r#type<'v>(#[starlark(require = pos)] a: Value) -> anyhow::Result<StringValue<'v>> {
-        Ok(a.get_type_value().at())
+    fn r#type<'v>(#[starlark(require = pos)] a: Value<'v>) -> anyhow::Result<StringValue<'v>> {
+        Ok(a.get_type_value())
     }
 }
 
