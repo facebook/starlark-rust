@@ -230,6 +230,18 @@ pub trait StarlarkValue<'v>:
         panic!("This function is implemented by #[starlark_value] proc macro")
     }
 
+    /// Return the type string as a `StringValue<'v>`.
+    /// This is used for:
+    /// * The `type()` function
+    /// * Error messages in type errors.
+    ///
+    /// Override this when creating your own custom type.
+    /// You probably also want to override typechecker_ty.
+    #[starlark_internal_vtable(skip)]
+    fn get_type_value_dyn<'a>(&'a self) -> StringValue<'v> {
+        Self::get_type_value_static().at()
+    }
+
     /// Return a string that is the representation of a type that a user would use in
     /// type annotations. This often will be the same as [`Self::TYPE`], but in
     /// some instances it might be slightly different than what is returned by `TYPE`.

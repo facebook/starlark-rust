@@ -36,10 +36,14 @@ Thanks to @danielhenrymantilla for discussion and feedback on the design of thes
   `GlobalsBuilder::alloc` is removed in favour of `GlobalsBuilder::frozen_heap`.
 - `StarlarkAttrs` and `starlark_attrs` removed due to perf risks; can be hand-rolled if strongly
   desired.
+- Custom record types (`MyType = record(...)`) support dynamic typing -
+  `type(MyType(...))` now returns `MyType` instead of `record`
 
 ### New APIs
 
 - `FreezeDynamic` for value-based freeze
+- The trait `get_type_value_dyn` can be implemented for a type to override the
+  behaviour of `type(x)`
 
 ## 0.14 (May 20, 2026)
 
