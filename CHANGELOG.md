@@ -36,6 +36,9 @@ Thanks to @danielhenrymantilla for discussion and feedback on the design of thes
   `GlobalsBuilder::alloc` is removed in favour of `GlobalsBuilder::frozen_heap`.
 - `StarlarkAttrs` and `starlark_attrs` removed due to perf risks; can be hand-rolled if strongly
   desired.
+- `Heap::alloc_simple` requires a value that is simple at every brand (`for<'a>`), which is what
+  lets it be moved to the frozen heap as it is; every type defined with `#[starlark_value]` and no
+  lifetime already qualifies.
 
 ### New APIs
 
