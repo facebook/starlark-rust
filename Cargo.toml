@@ -68,6 +68,7 @@ strum = { version = "0.28.0", features = ["derive"] }
 syn = { version = "3.0.6", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
 textwrap = { version = "0.16.3", features = ["terminal_size"] }
 thiserror = "2.0.21"
+tokio = { version = "1.53.1", features = ["full", "test-util", "tracing"] }
 tower-lsp-server = "0.22.1"
 triomphe = { version = "0.1.16", features = ["arc-swap"] }
 walkdir = "2.3"
