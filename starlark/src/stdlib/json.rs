@@ -244,6 +244,26 @@ mod tests {
         a.eq("'9223372036854775807'", "json.encode(9223372036854775807)");
     }
 
+    /// JSON has no `nan` or `inf`; `serde_json` writes them as `null`, so the float came
+    /// back as `None`. They are reported now, like a non-finite float used as a dict key.
+    #[test]
+    fn test_json_encode_non_finite_float() {
+        let a = Assert::new();
+
+        a.fail("json.encode(float('nan'))", "non-finite float");
+        a.fail("json.encode(float('inf'))", "non-finite float");
+        a.fail("json.encode(float('-inf'))", "non-finite float");
+        a.fail("json.encode(1e308 * 10)", "non-finite float");
+        a.fail("json.encode([1.0, float('inf')])", "non-finite float");
+        a.fail("json.encode({'a': float('nan')})", "non-finite float");
+        a.fail("json.encode(struct(a = float('inf')))", "non-finite float");
+
+        // Finite floats are unchanged.
+        a.eq("'1.5'", "json.encode(1.5)");
+        a.eq("'0.0'", "json.encode(0.0)");
+        a.eq("'1e+308'", "json.encode(1e308)");
+    }
+
     #[test]
     fn test_json_encode_deeply_nested() {
         let a = Assert::new();
