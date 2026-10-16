@@ -86,6 +86,9 @@ impl<A, B> Vec2Layout<A, B> {
     unsafe fn alloc(&self) -> NonNull<B> {
         unsafe {
             let ptr: *mut u8 = alloc::alloc(self.layout);
+            if ptr.is_null() {
+                alloc::handle_alloc_error(self.layout);
+            }
             let bbb_ptr: *mut B = ptr.add(self.offset_of_bbb).cast();
             NonNull::new_unchecked(bbb_ptr)
         }
