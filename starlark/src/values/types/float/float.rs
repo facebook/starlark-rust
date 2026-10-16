@@ -197,11 +197,9 @@ pub(crate) fn write_compact<W: fmt::Write>(
     Copy,
     Debug,
     ProvidesStaticType,
-    Serialize,
     Allocative,
     StarlarkPagable
 )]
-#[serde(transparent)]
 pub struct StarlarkFloat(pub f64);
 
 impl StarlarkFloat {
@@ -287,6 +285,23 @@ impl<'v> UnpackValue<'v> for StarlarkFloat {
 impl Display for StarlarkFloat {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write_compact(f, self.0, 'e')
+    }
+}
+
+impl Serialize for StarlarkFloat {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        if !self.0.is_finite() {
+            // JSON has no `nan` or `inf`, and `serde_json` writes them as `null`, which
+            // turns a float into `None` on the way back. Report it like a non-finite
+            // float key, which `serde_json` already rejects.
+            return Err(serde::ser::Error::custom(format!(
+                "Cannot serialize non-finite float `{self}`"
+            )));
+        }
+        serializer.serialize_f64(self.0)
     }
 }
 
