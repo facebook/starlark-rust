@@ -116,6 +116,7 @@ pub(crate) struct SpecialParam {
 #[derive(Debug)]
 pub(crate) struct StarFun {
     pub name: Ident,
+    pub name_override: Option<syn::LitStr>,
     pub as_type: Option<syn::Path>,
     pub attrs: Vec<Attribute>,
     pub this: Option<ThisParam>,
