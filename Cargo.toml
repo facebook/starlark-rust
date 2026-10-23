@@ -54,7 +54,7 @@ ref-cast = "1.0.27"
 regex = "1.13.1"
 rustyline = { version = "18.0.1", features = ["derive"] }
 serde = { version = "1.0.229", features = ["derive", "rc"] }
-serde_json = { version = "1.0.151", features = ["alloc", "float_roundtrip", "raw_value", "unbounded_depth"] }
+serde_json = { version = "1.0.154", features = ["alloc", "float_roundtrip", "raw_value", "unbounded_depth"] }
 stacker = "0.1.25"
 starlark = { version = "0.14.2", path = "starlark" }
 starlark_derive = { version = "0.14.2", path = "starlark_derive" }
