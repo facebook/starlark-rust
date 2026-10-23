@@ -35,10 +35,15 @@ use pagable::PagableSerializer;
 use starlark_map::Equivalent;
 
 use crate::any::IsStaticType;
+use crate::typing::Ty;
+use crate::values::type_repr::StarlarkTypeRepr;
+use crate::values::AllocFrozenValue;
+use crate::values::AllocValue;
 use crate::values::FrozenHeap;
 use crate::values::Heap;
 use crate::values::HeapSendable;
 use crate::values::OwnedFrozenHeap;
+use crate::values::Value;
 use crate::values::layout::heap::branding::rebrand_ref_unchecked;
 use crate::values::layout::heap::branding::rebrand_unchecked;
 use crate::values::layout::heap::edge::HeapEdge;
@@ -228,6 +233,14 @@ where
     /// When `to` is frozen, the reference is carried into its sealed heap, so the resulting
     /// `FrozenModule` keeps `from`'s heap alive too. The `branding` module explains the brand.
     pub fn add_to_heap<'v>(self, heap: Heap<'v>) -> T::Reinfect<'v> {
+        heap.add_reference(self.owner());
+
+        // SAFETY: The heap we just added the reference to keeps this alive for `'v`
+        unsafe { Self::restore_brand(self.v) }
+    }
+
+    /// Like [`add_to_heap`](OwnedFrozen::add_to_heap), but for a frozen heap
+    pub fn add_to_frozen_heap<'v>(self, heap: FrozenHeap<'v>) -> T::Reinfect<'v> {
         heap.add_reference(self.owner());
 
         // SAFETY: The heap we just added the reference to keeps this alive for `'v`
@@ -717,6 +730,32 @@ where
             heap_ref: &self.heap_ref,
             v: self.v,
         }
+    }
+}
+
+impl<T: StarlarkTypeRepr> StarlarkTypeRepr for OwnedFrozen<T> {
+    type Canonical = T::Canonical;
+
+    fn starlark_type_repr() -> Ty {
+        T::starlark_type_repr()
+    }
+}
+
+impl<'v, T: IsStaticType + StarlarkTypeRepr> AllocFrozenValue<'v> for OwnedFrozen<T>
+where
+    for<'fv> T::Reinfect<'fv>: AllocFrozenValue<'fv> + Sized,
+{
+    fn alloc_frozen_value(self, heap: FrozenHeap<'v>) -> Value<'v> {
+        self.add_to_frozen_heap(heap).alloc_frozen_value(heap)
+    }
+}
+
+impl<'v, T: IsStaticType + StarlarkTypeRepr> AllocValue<'v> for OwnedFrozen<T>
+where
+    for<'fv> T::Reinfect<'fv>: AllocValue<'fv> + Sized,
+{
+    fn alloc_value(self, heap: Heap<'v>) -> Value<'v> {
+        self.add_to_heap(heap).alloc_value(heap)
     }
 }
 
