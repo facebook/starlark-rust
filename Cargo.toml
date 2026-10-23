@@ -34,7 +34,7 @@ equivalent = "1.0.2"
 erased-serde = "0.4.10"
 globset = { version = "0.4.20", features = ["serde1"] }
 hashbrown = "0.17.1"
-inventory = "0.3.24"
+inventory = "0.3.25"
 itertools = "0.15.0"
 logos = "0.16.1"
 lsp-server = "0.10.0"
