@@ -70,7 +70,7 @@ textwrap = { version = "0.16.3", features = ["terminal_size"] }
 thiserror = "2.0.21"
 tokio = { version = "1.53.2", features = ["full", "test-util", "tracing"] }
 tower-lsp-server = "0.22.1"
-triomphe = { version = "0.1.16", features = ["arc-swap"] }
+triomphe = { version = "0.1.17", features = ["arc-swap"] }
 walkdir = "2.3"
 
 [workspace.lints.clippy]
