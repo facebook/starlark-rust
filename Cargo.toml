@@ -17,7 +17,7 @@ edition = "2024"
 
 [workspace.dependencies]
 allocative = { version = "0.3.6", git = "https://github.com/facebook/buck2.git", branch = "main", features = ["bumpalo", "dashmap", "hashbrown", "num-bigint", "triomphe"] }
-annotate-snippets = "0.12.16"
+annotate-snippets = "0.12.17"
 anyhow = "1.0.104"
 argfile = "1.0.0"
 blake3 = { version = "1.8", features = ["mmap", "rayon", "traits-preview"] }
