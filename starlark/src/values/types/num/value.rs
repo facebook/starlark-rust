@@ -21,6 +21,8 @@ use std::ops::Mul;
 use std::ops::Sub;
 
 use dupe::Dupe;
+use num_bigint::BigInt;
+use num_traits::FromPrimitive;
 
 use crate as starlark;
 use crate::collections::StarlarkHashValue;
@@ -95,6 +97,29 @@ impl<'v> NumRef<'v> {
         match self {
             Self::Int(i) => i.to_i32(),
             Self::Float(f) => Self::f64_to_i32_exact(f.0),
+        }
+    }
+
+    /// Compare an int with a float exactly, as the spec requires, rather than
+    /// rounding the int to a float first.
+    fn cmp_int_float(i: StarlarkIntRef, f: f64) -> Ordering {
+        match i {
+            // An `i32` converts to `f64` exactly, so comparing the floats is exact.
+            StarlarkIntRef::Small(i) => StarlarkFloat::compare_impl(i.to_f64(), f),
+            StarlarkIntRef::Big(b) => {
+                if !f.is_finite() {
+                    // Every int is above `-inf` and below `+inf` and NaN.
+                    return StarlarkFloat::compare_impl(0.0, f);
+                }
+                let floor = f.floor();
+                // `floor` is finite and integral, so the conversion is exact.
+                let floor_int = BigInt::from_f64(floor).expect("finite float converts to BigInt");
+                match b.get().cmp(&floor_int) {
+                    // `floor < f`, so an int equal to `floor` is below `f`.
+                    Ordering::Equal if floor != f => Ordering::Less,
+                    ord => ord,
+                }
+            }
         }
     }
 
@@ -180,11 +205,7 @@ impl<'v> From<f64> for NumRef<'v> {
 /// This is total eq per starlark spec, not Rust's partial eq.
 impl<'v> PartialEq for NumRef<'v> {
     fn eq(&self, other: &Self) -> bool {
-        if let (NumRef::Int(a), NumRef::Int(b)) = (self, other) {
-            a == b
-        } else {
-            StarlarkFloat::compare_impl(self.as_float(), other.as_float()) == Ordering::Equal
-        }
+        self.cmp(other) == Ordering::Equal
     }
 }
 
@@ -198,10 +219,11 @@ impl<'v> PartialOrd for NumRef<'v> {
 
 impl<'v> Ord for NumRef<'v> {
     fn cmp(&self, other: &Self) -> Ordering {
-        if let (NumRef::Int(a), NumRef::Int(b)) = (self, other) {
-            a.cmp(b)
-        } else {
-            StarlarkFloat::compare_impl(self.as_float(), other.as_float())
+        match (self, other) {
+            (NumRef::Int(a), NumRef::Int(b)) => a.cmp(b),
+            (NumRef::Int(a), NumRef::Float(b)) => Self::cmp_int_float(*a, b.0),
+            (NumRef::Float(a), NumRef::Int(b)) => Self::cmp_int_float(*b, a.0).reverse(),
+            (NumRef::Float(a), NumRef::Float(b)) => StarlarkFloat::compare_impl(a.0, b.0),
         }
     }
 }
@@ -387,6 +409,55 @@ mod tests {
         assert_eq!(
             NumRef::Int(StarlarkIntRef::Small(InlineInt::testing_new(10))),
             NumRef::Float(StarlarkFloat(10.0))
+        );
+    }
+
+    #[test]
+    fn test_cmp_int_float_exact() {
+        fn big(i: i128) -> StarlarkInt {
+            StarlarkInt::from(BigInt::from(i))
+        }
+        let p53 = 1i128 << 53;
+        // `p53 + 1` rounds to `p53` as a float, but is not equal to it.
+        assert_eq!(
+            NumRef::Int(big(p53 + 1).as_ref()).cmp(&NumRef::Float(StarlarkFloat(p53 as f64))),
+            Ordering::Greater
+        );
+        assert_eq!(
+            NumRef::Float(StarlarkFloat(p53 as f64)).cmp(&NumRef::Int(big(p53 + 1).as_ref())),
+            Ordering::Less
+        );
+        assert_eq!(
+            NumRef::Int(big(p53).as_ref()),
+            NumRef::Float(StarlarkFloat(p53 as f64))
+        );
+        assert_eq!(
+            NumRef::Int(big(-p53 - 1).as_ref()).cmp(&NumRef::Float(StarlarkFloat(-(p53 as f64)))),
+            Ordering::Less
+        );
+        // A fraction puts the float strictly between two ints.
+        assert_eq!(
+            NumRef::Int(big(p53).as_ref()).cmp(&NumRef::Float(StarlarkFloat(1e15 + 0.5))),
+            Ordering::Greater
+        );
+        assert_eq!(
+            NumRef::Int(big(-p53).as_ref()).cmp(&NumRef::Float(StarlarkFloat(-1e15 - 0.5))),
+            Ordering::Less
+        );
+        // No int is equal to a non-finite float.
+        let huge = big(1 << 100);
+        let huge = huge.as_ref();
+        assert_eq!(
+            NumRef::Int(huge).cmp(&NumRef::Float(StarlarkFloat(f64::INFINITY))),
+            Ordering::Less
+        );
+        assert_eq!(
+            NumRef::Int(huge).cmp(&NumRef::Float(StarlarkFloat(f64::NEG_INFINITY))),
+            Ordering::Greater
+        );
+        assert_eq!(
+            NumRef::Int(huge).cmp(&NumRef::Float(StarlarkFloat(f64::NAN))),
+            Ordering::Less
         );
     }
 }
